@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZionCast - Church Presentation Control Desk</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ================= TOP HEADER CONTROL BAR ================= -->
+  <header class="top-header">
+    <div class="brand-section">
+      <img src="assets/icon.png" alt="ZionCast Logo" class="brand-real-logo">
+      <span class="brand-name">ZionCast</span>
+    </div>
+
+    <!-- Quick Frictionless Typography & Styling Bar -->
+    <div class="quick-control-bar">
+      <!-- Font Size Slider -->
+      <div class="toolbar-group">
+        <span class="toolbar-label" title="Dynamic Font Size (16px - 84px)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 7 4 4 20 4 20 7"></polyline>
+            <line x1="9" y1="20" x2="15" y2="20"></line>
+            <line x1="12" y1="4" x2="12" y2="20"></line>
+          </svg>
+          Size
+        </span>
+        <input type="range" id="toolbar-font-size" class="range-slider" min="16" max="84" value="44" step="2">
+        <span id="badge-font-size" class="badge-value">44px</span>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <!-- Font Family -->
+      <div class="toolbar-group">
+        <select id="toolbar-font-family" class="select-custom" style="padding: 3px 6px; font-size: 0.76rem;">
+          <option value="Outfit">Outfit (Modern)</option>
+          <option value="Inter">Inter (Clean)</option>
+          <option value="Cinzel">Cinzel (Hymnal)</option>
+          <option value="Playfair Display">Playfair (Majestic)</option>
+        </select>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <!-- Font Color -->
+      <div class="toolbar-group">
+        <span class="toolbar-label" title="Font Color">Color</span>
+        <div class="color-picker-wrapper">
+          <input type="color" id="toolbar-font-color" class="color-input" value="#ffffff" title="Text Color">
+        </div>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <!-- Stroke / Outline Slider -->
+      <div class="toolbar-group">
+        <span class="toolbar-label" title="Text Outline/Stroke (Ensures legibility on camera feeds)">Outline</span>
+        <input type="range" id="toolbar-stroke-width" class="range-slider" style="width: 60px;" min="0" max="8" value="0" step="1">
+        <span id="badge-stroke-width" class="badge-value" style="min-width: 28px;">0px</span>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <!-- Drop Shadow Toggle -->
+      <div class="toolbar-group">
+        <button id="btn-toggle-shadow" class="btn-fast" title="Toggle High-Contrast Shadow">
+          Shadow
+        </button>
+      </div>
+
+      <div class="toolbar-divider"></div>
+
+      <!-- Alignment Toggle -->
+      <div class="toolbar-group">
+        <button id="btn-align-left" class="btn-icon-action" style="width: 26px; height: 26px;" title="Align Left">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+        </button>
+        <button id="btn-align-center" class="btn-icon-action" style="width: 26px; height: 26px; border-color: var(--accent-cyan);" title="Align Center">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Fast Action Controls (OpenLP Friction Reducers) -->
+    <div class="fast-actions">
+      <button id="btn-fast-blackout" class="btn-fast" title="Shortcut: Press 'B'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect width="18" height="18" x="3" y="3" rx="2"></rect></svg>
+        Blackout (B)
+      </button>
+
+      <button id="btn-fast-theme" class="btn-fast" title="Shortcut: Press 'T'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+        Theme Only (T)
+      </button>
+
+      <button id="btn-fast-clear" class="btn-fast" title="Shortcut: Press 'C'">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+        Clear Text (C)
+      </button>
+
+      <button id="btn-open-banner" class="btn-fast" title="Nursery / Car / Church Live Ticker Banner">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+        Alert Banner
+      </button>
+    </div>
+
+    <!-- Multi-Screen Launch TV Output Button & Screen Selector -->
+    <div class="tv-output-section">
+      <select id="select-target-screen" class="select-custom" style="padding: 4px 6px; font-size: 0.74rem; background: var(--bg-deep); max-width: 150px;" title="Select which physical screen to project on">
+        <option value="">Auto-Detect TV / Projector</option>
+      </select>
+
+      <button id="btn-identify-screens" class="btn-fast" style="padding: 5px 8px; font-size: 0.74rem;" title="Show large numbers on each display to identify laptop vs projector">
+        Identify
+      </button>
+
+      <button id="btn-snap-laptop" class="btn-fast" style="padding: 5px 8px; font-size: 0.74rem;" title="If ZionCast Control Desk ever shows on the TV, click here to snap it back to your Laptop screen">
+        💻 Desk to Laptop
+      </button>
+
+      <div id="tv-status-dot" class="status-dot" title="Projector / TV Output Status"></div>
+      <button id="btn-launch-tv" class="btn-launch-tv" title="Toggle Audience Projector / TV Window">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+        <span id="btn-tv-label">Projector Output</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ================= MAIN OPENLP 3-PANEL WORKSPACE ================= -->
+  <main class="main-workspace">
+    
+    <!-- ================= 1. LEFT PANEL: LIBRARY ================= -->
+    <section class="panel panel-left">
+      <div class="panel-header">
+        <div class="panel-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+          Media Library
+        </div>
+      </div>
+
+      <!-- Tabs Navigation -->
+      <div class="library-tabs">
+        <button class="lib-tab-btn active" data-tab="tab-songs">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+          Songs
+        </button>
+        <button class="lib-tab-btn" data-tab="tab-bibles">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+          Bibles
+        </button>
+        <button class="lib-tab-btn" data-tab="tab-media">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+          Media
+        </button>
+        <button class="lib-tab-btn" data-tab="tab-themes">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>
+          Themes
+        </button>
+        <button class="lib-tab-btn" data-tab="tab-camera">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+          DroidCam
+        </button>
+      </div>
+
+      <!-- TAB 1: SONGS -->
+      <div id="tab-songs" class="tab-pane-content active">
+        <div class="search-bar-wrap">
+          <input type="text" id="songs-search-input" class="input-search" placeholder="Search worship songs, lyrics, author...">
+          <button id="btn-add-song-modal" class="btn-icon-action" title="Create New Song">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+          <button id="btn-import-song-modal" class="btn-icon-action" title="Import OpenLP / Text Song">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          </button>
+        </div>
+        <div id="songs-list-container" class="library-scroll-list">
+          <!-- Populated dynamically via renderer.js -->
+        </div>
+      </div>
+
+      <!-- TAB 2: SCRIPTURES (BIBLES - KJV, RSV, GNT) -->
+      <div id="tab-bibles" class="tab-pane-content">
+        <div class="bible-controls-wrap">
+          <div class="bible-version-row" style="margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+              <span style="font-size: 0.76rem; font-weight: 700; color: var(--accent-gold); display: flex; align-items: center; gap: 5px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                Bible Version (3 Translations)
+              </span>
+              <span id="bible-version-badge" class="lib-item-badge" style="background: rgba(245, 158, 11, 0.2); color: var(--accent-gold); font-size: 0.72rem; padding: 2px 7px;">KJV</span>
+            </div>
+            <select id="bible-version-select" class="select-custom" style="width: 100%; font-weight: 600; background: var(--bg-deep); border-color: var(--accent-gold);">
+              <option value="kjv" selected>King James Version (KJV)</option>
+              <option value="rsv">Revised Standard Version (RSV)</option>
+              <option value="gnt">Good News Bible (GNT / Good News)</option>
+            </select>
+          </div>
+          <div class="bible-select-grid">
+            <select id="bible-book-select" class="select-custom"></select>
+            <select id="bible-chapter-select" class="select-custom"></select>
+            <select id="bible-verse-select" class="select-custom"></select>
+          </div>
+          <div class="bible-quick-search-box">
+            <input type="text" id="bible-quick-search" class="input-search" placeholder="Quick e.g. 'John 3:16', 'Psalm 23', or 'Rom 8:28 rsv'">
+            <button id="btn-bible-lookup" class="btn-primary" style="padding: 6px 12px; font-size: 0.78rem;">Lookup</button>
+          </div>
+        </div>
+        <div id="bible-verses-list" class="library-scroll-list">
+          <!-- Scripture verses rendered here -->
+        </div>
+      </div>
+
+      <!-- TAB 3: MEDIA (IMAGES, VIDEOS, PRESENTATIONS) -->
+      <div id="tab-media" class="tab-pane-content">
+        <div class="media-header-actions">
+          <button id="btn-upload-image" class="btn-primary" style="padding: 6px 10px; font-size: 0.75rem;">
+            + Upload Image
+          </button>
+          <button id="btn-upload-video" class="btn-secondary" style="padding: 6px 10px; font-size: 0.75rem;">
+            + Upload Video
+          </button>
+          <button id="btn-add-custom-modal" class="btn-secondary" style="padding: 6px 10px; font-size: 0.75rem;">
+            + Announcement Slide
+          </button>
+        </div>
+        <div class="search-bar-wrap" style="padding: 6px 10px;">
+          <input type="text" id="media-search-input" class="input-search" placeholder="Filter media files & announcements...">
+        </div>
+        <div id="media-gallery-grid" class="media-gallery-grid">
+          <!-- Media items rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- TAB 4: THEMES & STYLES (CUSTOM THEME CREATOR) -->
+      <div id="tab-themes" class="tab-pane-content">
+        <div style="padding: 10px 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-bright);">Sanctuary Themes</span>
+          <button id="btn-open-theme-builder" class="btn-primary" style="padding: 5px 10px; font-size: 0.74rem;">
+            + Create Custom Theme
+          </button>
+        </div>
+        <div class="library-scroll-list" style="padding: 10px;">
+          <div class="themes-grid" id="themes-preset-container">
+            <!-- Theme cards rendered dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: DROIDCAM & LIVE CAMERA STUDIO -->
+      <div id="tab-camera" class="tab-pane-content">
+        <div class="camera-hardware-pane">
+          <!-- DroidCam Quick Studio Card -->
+          <div class="droidcam-hero-box">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 0.85rem; font-weight: 800; color: var(--accent-gold); display: flex; align-items: center; gap: 6px;">
+                📱 DroidCam Studio
+              </span>
+              <span id="droidcam-status-badge" class="droidcam-status-pill">
+                Checking devices...
+              </span>
+            </div>
+
+            <p style="font-size: 0.74rem; color: var(--text-dim); line-height: 1.4;">
+              Broadcast phone camera directly to TV or project beneath lyrics with zero standalone receiver windows.
+            </p>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <button id="btn-project-preacher" class="btn-droidcam-live">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                Project Preacher
+              </button>
+              <button id="btn-project-worship-bg" class="btn-fast" style="background: var(--bg-card); border-color: var(--accent-cyan); color: #fff;">
+                🎵 Worship Bg
+              </button>
+            </div>
+            <button id="btn-camera-off" class="btn-secondary" style="font-size: 0.72rem; padding: 4px;">
+              Turn Camera Off
+            </button>
+          </div>
+
+          <!-- Video Hardware Selector -->
+          <div class="hardware-card">
+            <div class="hardware-card-title">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+              Select Hardware Camera Source
+            </div>
+            
+            <div class="form-group">
+              <div style="display: flex; gap: 6px;">
+                <select id="camera-device-select" class="select-custom" style="flex: 1;">
+                  <option value="">Scanning hardware devices...</option>
+                </select>
+                <button id="btn-refresh-devices" class="btn-icon-action" title="Refresh Camera Devices">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Lyrics Scrim Dimmer (Protects Text Readability)</label>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="range" id="camera-dimmer-slider" class="range-slider" style="flex: 1;" min="0.1" max="0.95" step="0.05" value="0.75">
+                <span id="badge-camera-dimmer" class="badge-value">75%</span>
+              </div>
+            </div>
+
+            <!-- DroidCam Quick Help Guide -->
+            <div style="background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); padding: 8px; font-size: 0.7rem; color: var(--text-dim); line-height: 1.4;">
+              <strong style="color: var(--accent-gold);">Easy DroidCam Connection:</strong><br>
+              1. Open DroidCam on Phone (Android/iPhone)<br>
+              2. Open DroidCam Client on PC and click <strong>Start</strong> (WiFi or USB)<br>
+              3. ZionCast automatically selects <strong>DroidCam Source</strong> above!
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 2. CENTER PANEL: DUAL MONITORS & LIVE TILES ================= -->
+    <section class="panel-center">
+      <!-- TOP: Side-by-Side Dual Monitors -->
+      <div class="dual-monitors-row">
+        
+        <!-- OPERATOR PREVIEW MONITOR -->
+        <div class="monitor-frame preview-monitor">
+          <div class="monitor-header-bar">
+            <span>Operator Preview</span>
+            <span class="badge-tag badge-preview">OFF-AIR</span>
+          </div>
+          <div class="monitor-screen-area" id="preview-screen-box">
+            <canvas id="preview-canvas" class="monitor-bg-canvas"></canvas>
+            <video id="preview-video-stream" class="monitor-video-stream" autoplay playsinline muted></video>
+            <div class="monitor-dark-scrim"></div>
+            <div class="monitor-slide-text-wrap">
+              <div id="preview-text-title" class="monitor-slide-title">Preview Ready</div>
+              <div id="preview-text-body" class="monitor-slide-body">Select any song, scripture, or announcement to preview</div>
+            </div>
+            <button id="btn-push-live" class="btn-go-live-floating" title="Push this preview directly to Live TV">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              GO LIVE
+            </button>
+          </div>
+        </div>
+
+        <!-- AUDIENCE LIVE TV OUTPUT MONITOR (EXACT MIRROR) -->
+        <div class="monitor-frame live-monitor">
+          <div class="monitor-header-bar">
+            <span>Live TV Output</span>
+            <span class="badge-tag badge-live">LIVE ON-AIR</span>
+          </div>
+          <div class="monitor-screen-area" id="live-screen-box">
+            <canvas id="live-canvas" class="monitor-bg-canvas"></canvas>
+            <video id="live-video-stream" class="monitor-video-stream" autoplay playsinline muted></video>
+            <div class="monitor-dark-scrim"></div>
+            <div class="monitor-slide-text-wrap">
+              <div id="live-text-title" class="monitor-slide-title">ZIONCAST BROADCAST</div>
+              <div id="live-text-body" class="monitor-slide-body">Ready for Service</div>
+            </div>
+            <div id="live-blackout-overlay" class="monitor-blackout-curtain">
+              BLACKOUT ACTIVE
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- BOTTOM: Interactive Grid of Slide Tiles -->
+      <div class="center-tiles-section">
+        <div class="tiles-toolbar">
+          <div class="tiles-info-heading">
+            <span id="active-item-title" class="current-item-name">No Presentation Selected</span>
+            <span id="active-item-meta" class="current-item-meta">0 slides available</span>
+          </div>
+          <div class="tiles-nav-controls">
+            <button id="btn-slide-prev" class="btn-nav-step" title="Previous Slide (Arrow Left)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              Prev
+            </button>
+            <button id="btn-slide-next" class="btn-nav-step" title="Next Slide (Arrow Right or Spacebar)">
+              Next
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Grid of Auto-Wrapping Cards -->
+        <div id="slide-tiles-grid" class="tiles-grid-scrollable">
+          <!-- Tiles generated dynamically -->
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 3. RIGHT PANEL: SERVICE ORDER TIMELINE ================= -->
+    <section class="panel panel-right">
+      <div class="panel-header">
+        <div class="panel-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+          Order of Service
+        </div>
+      </div>
+
+      <!-- Service Controls Bar -->
+      <div class="service-order-actions-bar">
+        <input type="text" id="service-title-input" class="input-search" value="Sunday Morning Worship" style="font-weight: 700;">
+        <button id="btn-save-service" class="btn-icon-action" title="Save Service Order">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+        </button>
+        <button id="btn-load-service" class="btn-icon-action" title="Load Service Order">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+        </button>
+      </div>
+
+      <!-- Service Timeline Queue -->
+      <div id="service-order-list" class="service-timeline-list">
+        <!-- Reorderable Service Items populated dynamically -->
+      </div>
+
+      <!-- Timeline Reorder & Manipulation Tools -->
+      <div class="timeline-reorder-bar">
+        <button id="btn-service-move-up" class="btn-timeline-tool" title="Move Selected Item Up">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg>
+          Up
+        </button>
+        <button id="btn-service-move-down" class="btn-timeline-tool" title="Move Selected Item Down">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          Down
+        </button>
+        <button id="btn-service-remove" class="btn-timeline-tool danger" title="Remove Item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          Remove
+        </button>
+        <button id="btn-service-clear" class="btn-timeline-tool danger" title="Clear All Service Items">
+          Clear
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ================= BOTTOM STATUS BAR ================= -->
+  <footer class="bottom-status-bar">
+    <div class="status-item" id="status-display-info">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+      <span id="label-display-status">Detecting displays...</span>
+    </div>
+    <div class="status-item" id="status-camera-info">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+      <span id="label-camera-status">Camera: Standby</span>
+    </div>
+    <div class="status-item">
+      <span>Active: <strong id="label-active-slide-ref" style="color: var(--accent-gold);">None</strong></span>
+    </div>
+    <div class="status-item">
+      <span class="hotkeys-helper-badge">[Space/→] Next</span>
+      <span class="hotkeys-helper-badge">[←] Prev</span>
+      <span class="hotkeys-helper-badge">[B] Blackout</span>
+      <span class="hotkeys-helper-badge">[C] Clear</span>
+      <span class="hotkeys-helper-badge">[T] Theme</span>
+      <span class="hotkeys-helper-badge">[F11] Fullscreen</span>
+    </div>
+  </footer>
+
+  <!-- ================= MODALS ================= -->
+
+  <!-- 1. Song Editor / Creator Modal -->
+  <div id="modal-song" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <span class="modal-title" id="modal-song-title">Create Worship Song</span>
+        <button class="modal-close-btn" data-close="modal-song">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Song Title *</label>
+          <input type="text" id="song-form-title" class="form-input" placeholder="e.g. Way Maker">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label">Author / Artist</label>
+            <input type="text" id="song-form-author" class="form-input" placeholder="e.g. Sinach">
+          </div>
+          <div class="form-group">
+            <label class="form-label">CCLI License / Tag</label>
+            <input type="text" id="song-form-ccli" class="form-input" placeholder="e.g. #7115744">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Lyrics (Use [Verse 1], [Chorus], [Verse 2], [Bridge] tags or double enters to split slides)</label>
+          <textarea id="song-form-lyrics" class="form-textarea" placeholder="[Verse 1]
+You are here, moving in our midst
+I worship You, I worship You
+
+[Chorus]
+Way Maker, Miracle Worker, Promise Keeper
+Light in the darkness, my God, that is who You are"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close="modal-song">Cancel</button>
+        <button id="btn-save-song" class="btn-primary">Save Song to Library</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. OpenLP Importer Modal -->
+  <div id="modal-import" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <span class="modal-title">Import OpenLP / Plain Text Lyrics</span>
+        <button class="modal-close-btn" data-close="modal-import">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.8rem; color: var(--text-dim);">
+          Paste OpenLP export format, CCLI song sheets, or raw lyrics with verse labels (Verse 1, Chorus, etc.)
+        </p>
+        <div class="form-group">
+          <label class="form-label">Paste Raw Song Text or OpenLP Format</label>
+          <textarea id="import-raw-text" class="form-textarea" style="min-height: 220px;" placeholder="Title: Amazing Grace
+Author: John Newton
+
+[Verse 1]
+Amazing grace! How sweet the sound
+That saved a wretch like me!
+I once was lost, but now am found;
+Was blind, but now I see.
+
+[Chorus]
+My chains are gone, I've been set free..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close="modal-import">Cancel</button>
+        <button id="btn-parse-import" class="btn-primary">Parse & Import into Library</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Dedicated Custom Slide Builder Modal (Eliminating OpenLP Friction) -->
+  <div id="modal-custom" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <span class="modal-title">Custom Slide Builder (Announcements & Sermon Points)</span>
+        <button class="modal-close-btn" data-close="modal-custom">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Slide Title</label>
+          <input type="text" id="custom-form-title" class="form-input" placeholder="e.g. WELCOME TO ZION CHURCH">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Subtitle / Event Time</label>
+          <input type="text" id="custom-form-subtitle" class="form-input" placeholder="e.g. Sunday 10:00 AM • Sanctuary & Online">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Slide Content / Bullet Points (Double empty line creates multiple slide tiles)</label>
+          <textarea id="custom-form-content" class="form-textarea" placeholder="• We are thrilled to worship with you today!
+• Join us for fellowship in the foyer immediately after service.
+• Midweek Bible Study resumes this Wednesday at 7:00 PM."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Slide Background Style</label>
+          <select id="custom-form-theme" class="select-custom">
+            <option value="celestial-clouds">Celestial Clouds (Atmospheric)</option>
+            <option value="deep-gradient-pulse">Deep Gradient Pulse (Modern Worship)</option>
+            <option value="worship-particles">Worship Particles (Sanctuary)</option>
+            <option value="golden-sanctuary">Golden Sanctuary (Majestic Praise)</option>
+            <option value="midnight-praise">Midnight Praise (Intimate Aurora)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close="modal-custom">Cancel</button>
+        <button id="btn-save-custom-slide" class="btn-primary">Save to Custom Library</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Nursery / Alert Ticker Banner Modal -->
+  <div id="modal-banner" class="modal-overlay">
+    <div class="modal-container" style="width: 500px;">
+      <div class="modal-header">
+        <span class="modal-title">Broadcast Live Alert Banner</span>
+        <button class="modal-close-btn" data-close="modal-banner">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.8rem; color: var(--text-dim);">
+          Broadcasts a prominent, non-intrusive alert across the bottom of the TV/Projector display (e.g. nursery alerts, vehicle registration notes).
+        </p>
+        <div class="form-group">
+          <label class="form-label">Alert Message</label>
+          <input type="text" id="banner-input-text" class="form-input" placeholder="e.g. Parent of Tag #42 needed in the Nursery please.">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="btn-clear-banner" class="btn-secondary" style="color: var(--accent-red);">Clear / Hide Banner</button>
+        <button id="btn-publish-banner" class="btn-primary">Broadcast Banner Live</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Custom Theme Builder Modal -->
+  <div id="modal-theme-builder" class="modal-overlay">
+    <div class="modal-container" style="width: 680px;">
+      <div class="modal-header">
+        <span class="modal-title">Create Custom Sanctuary Theme</span>
+        <button class="modal-close-btn" data-close="modal-theme-builder">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Theme Name *</label>
+          <input type="text" id="theme-form-name" class="form-input" placeholder="e.g. Sunday Morning Majestic, Youth Night Neon">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label">Background Type</label>
+            <select id="theme-form-bg-type" class="select-custom">
+              <option value="procedural">Procedural Motion Canvas</option>
+              <option value="image">Custom Uploaded Image</option>
+              <option value="video">Custom Uploaded Video (MP4)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Procedural Preset</label>
+            <select id="theme-form-preset" class="select-custom">
+              <option value="celestial-clouds">Celestial Clouds</option>
+              <option value="deep-gradient-pulse">Deep Gradient Pulse</option>
+              <option value="worship-particles">Worship Particles</option>
+              <option value="golden-sanctuary">Golden Sanctuary</option>
+              <option value="midnight-praise">Midnight Praise</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Custom Media File for Theme -->
+        <div class="form-group" id="theme-custom-file-row" style="display: none;">
+          <label class="form-label">Choose Local Background Media File (JPG, PNG, MP4)</label>
+          <div style="display: flex; gap: 6px;">
+            <input type="text" id="theme-form-file-path" class="form-input" style="flex: 1;" placeholder="Select or browse image/video file..." readonly>
+            <button id="btn-browse-theme-file" class="btn-secondary" style="font-size: 0.75rem;">Browse PC...</button>
+          </div>
+        </div>
+
+        <!-- Typography & Contrast settings -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label">Font Family</label>
+            <select id="theme-form-font-family" class="select-custom">
+              <option value="Outfit">Outfit (Modern)</option>
+              <option value="Inter">Inter (Clean)</option>
+              <option value="Cinzel">Cinzel (Hymnal)</option>
+              <option value="Playfair Display">Playfair (Serif)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Font Color</label>
+            <input type="color" id="theme-form-font-color" class="color-input" style="width: 100%; height: 34px;" value="#ffffff">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Default Size</label>
+            <input type="number" id="theme-form-font-size" class="form-input" min="20" max="84" value="48">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Background Scrim / Contrast Dimmer</label>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="range" id="theme-form-scrim" class="range-slider" style="flex: 1;" min="0.1" max="0.9" step="0.05" value="0.45">
+            <span id="badge-theme-scrim" class="badge-value">45%</span>
+          </div>
+        </div>
+
+        <!-- Real-time Theme Preview Box -->
+        <div class="form-group">
+          <label class="form-label">Live Theme Preview</label>
+          <div id="theme-preview-box" style="height: 120px; border-radius: var(--radius-md); border: 1px solid var(--border-medium); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #1a0b2e;">
+            <div id="theme-preview-scrim" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.45);"></div>
+            <div id="theme-preview-text" style="position: relative; z-index: 5; font-size: 1.1rem; font-weight: 700; color: #ffffff; text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,0.9); paint-order: stroke fill;">
+              Amazing Grace, how sweet the sound<br>
+              <span style="font-size: 0.75rem; color: var(--accent-gold); text-transform: uppercase;">Zion Sanctuary Theme</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close="modal-theme-builder">Cancel</button>
+        <button id="btn-save-custom-theme" class="btn-primary">Save Theme to Library</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. Upload Media Modal (Images, Videos, Presentations) -->
+  <div id="modal-upload-media" class="modal-overlay">
+    <div class="modal-container" style="width: 540px;">
+      <div class="modal-header">
+        <span class="modal-title" id="upload-media-title">Upload Church Media File</span>
+        <button class="modal-close-btn" data-close="modal-upload-media">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Media Title *</label>
+          <input type="text" id="upload-form-title" class="form-input" placeholder="e.g. Sunday Worship Flyer, Countdown Video">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Media Type</label>
+          <select id="upload-form-type" class="select-custom">
+            <option value="image">Image / Flyer Poster (JPG, PNG, WEBP)</option>
+            <option value="video">Video Loop / Clip (MP4, WEBM)</option>
+            <option value="presentation">Presentation / Slide Deck (Images/Slides)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Choose Local File</label>
+          <div style="display: flex; gap: 6px;">
+            <input type="text" id="upload-form-file-path" class="form-input" style="flex: 1;" placeholder="Select file..." readonly>
+            <button id="btn-browse-upload-file" class="btn-secondary" style="font-size: 0.78rem;">Browse PC...</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close="modal-upload-media">Cancel</button>
+        <button id="btn-confirm-upload-media" class="btn-primary">Add to Media Library</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

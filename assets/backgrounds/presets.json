@@ -1,0 +1,59 @@
+{
+  "presets": [
+    {
+      "id": "celestial-clouds",
+      "name": "Celestial Clouds",
+      "category": "Atmospheric",
+      "description": "Slowly drifting ethereal purple and deep midnight blue sanctuary clouds with volumetric lighting.",
+      "type": "procedural-canvas",
+      "renderer": "clouds",
+      "primaryColor": "#1a0b2e",
+      "secondaryColor": "#4b1b7a",
+      "accentColor": "#a855f7"
+    },
+    {
+      "id": "deep-gradient-pulse",
+      "name": "Deep Gradient Pulse",
+      "category": "Modern Worship",
+      "description": "Smooth 60fps organic gradient mesh pulsing with royal indigo, cyan, and amethyst tones.",
+      "type": "procedural-canvas",
+      "renderer": "gradient-pulse",
+      "primaryColor": "#0b132b",
+      "secondaryColor": "#1c2541",
+      "accentColor": "#3a86ff"
+    },
+    {
+      "id": "worship-particles",
+      "name": "Worship Particles",
+      "category": "Sanctuary",
+      "description": "Gentle glowing celestial embers and soft bokeh orbs rising heavenward across a dark starry firmament.",
+      "type": "procedural-canvas",
+      "renderer": "particles",
+      "primaryColor": "#08070d",
+      "secondaryColor": "#1f1738",
+      "accentColor": "#f59e0b"
+    },
+    {
+      "id": "golden-sanctuary",
+      "name": "Golden Sanctuary",
+      "category": "Majestic",
+      "description": "Warm golden sanctuary rays and subtle radiant ripples designed for high-energy praise and glory.",
+      "type": "procedural-canvas",
+      "renderer": "golden-rays",
+      "primaryColor": "#1a1205",
+      "secondaryColor": "#3d2a09",
+      "accentColor": "#fbbf24"
+    },
+    {
+      "id": "midnight-praise",
+      "name": "Midnight Praise",
+      "category": "Deep Intimate",
+      "description": "Deep obsidian and sapphire aurora curtains with serene shimmering undertones.",
+      "type": "procedural-canvas",
+      "renderer": "aurora",
+      "primaryColor": "#030712",
+      "secondaryColor": "#0f172a",
+      "accentColor": "#06b6d4"
+    }
+  ]
+}

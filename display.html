@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZionCast - Live Projector / TV Output</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Display-specific full screen overrides */
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #000000;
+      cursor: none !important;
+    }
+  </style>
+</head>
+<body class="display-root">
+
+  <!-- 1. Procedural Motion Background Layer (Canvas) -->
+  <canvas id="display-canvas" class="display-bg-canvas"></canvas>
+
+  <!-- 2. Hardware Direct Camera Layer (DroidCam / OBS / Preacher) -->
+  <video id="display-camera-layer" class="display-camera-layer" autoplay playsinline muted></video>
+
+  <!-- 3. Local Custom Video & Image Backgrounds -->
+  <video id="display-video-bg" class="display-media-bg" autoplay loop muted playsinline></video>
+  <img id="display-img-bg" class="display-media-bg" alt="Custom background">
+
+  <!-- 4. Contrast Scrim Layer (Protects Lyric Legibility) -->
+  <div id="display-scrim" class="display-scrim-layer"></div>
+
+  <!-- 5. Slide Lyrics / Scripture Text Container -->
+  <div id="display-text-container" class="display-text-wrapper">
+    <div id="display-badge" class="display-title-badge"></div>
+    <div id="display-body" class="display-body-text"></div>
+  </div>
+
+  <!-- 6. Nursery / Congregation Alert Ticker Banner -->
+  <div id="display-ticker" class="display-ticker-banner"></div>
+
+  <!-- 7. Instant Blackout Curtain (Pure Black Fade) -->
+  <div id="display-blackout" class="display-blackout-curtain"></div>
+
+  <script src="display.js"></script>
+</body>
+</html>

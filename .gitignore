@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Production Electron builds
+dist/
+dist-native/
+*.asar
+
+# Large binaries in website downloads (Protects against Vercel 50MB and GitHub 100MB limits)
+website/downloads/*.exe
+website/downloads/*.zip
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor Files
+.vscode/
+.idea/

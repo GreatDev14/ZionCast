@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZionCast — Free Church Presentation & Live Video Software</title>
+  <meta name="description" content="The modern OpenLP alternative. Built-in DroidCam & camera backgrounds, instant font resizing, 3 offline Bibles, and seamless dual-screen HDMI projection for worship services.">
+  <meta name="keywords" content="church presentation software, openlp alternative, church lyrics projection, droidcam church, free church software, worship projection, easyworship alternative, dual screen church software">
+  <link rel="icon" type="image/png" href="./assets/icon.png">
+
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+  <!-- ==========================================================================
+       1. Header & Navigation
+       ========================================================================== -->
+  <header class="site-header">
+    <div class="container nav-wrapper">
+      <a href="#" class="brand-logo" aria-label="ZionCast Home">
+        <img src="./assets/icon.png" alt="ZionCast Logo" class="brand-icon">
+        <span class="brand-name">ZionCast</span>
+        <span class="brand-badge">v1.0</span>
+      </a>
+
+      <!-- Desktop Nav Links -->
+      <nav class="nav-links" id="navLinks" aria-label="Main Navigation">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#compare" class="nav-link">OpenLP vs ZionCast</a>
+        <a href="#setup" class="nav-link">TV Setup</a>
+        <a href="#faq" class="nav-link">FAQ</a>
+      </nav>
+
+      <!-- Nav Actions (Sign In + Download CTA) -->
+      <div class="nav-actions">
+        <div id="authNavContainer">
+          <button class="btn btn-glass btn-sm open-auth-modal" data-tab="signin" aria-label="Sign In to your church account">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            Sign In
+          </button>
+        </div>
+
+        <a href="#downloads" class="btn btn-gold btn-sm">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Download App
+        </a>
+
+        <button class="mobile-menu-btn" id="mobileMenuToggle" aria-label="Toggle Navigation Menu" aria-expanded="false">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==========================================================================
+       2. Hero Section
+       ========================================================================== -->
+  <section class="hero-section">
+    <div class="container">
+      <div class="hero-content">
+        <div class="badge-pill">
+          <span class="badge-gold" style="padding: 2px 8px; border-radius: 999px; margin-right: 4px;">Free & Open Source</span>
+          The Modern Church Presentation Standard
+        </div>
+
+        <h1 class="hero-headline">
+          Worship Presentation & Live Video. <br>
+          <span class="gradient-text">Simplified.</span>
+        </h1>
+
+        <p class="hero-subtitle">
+          The modern OpenLP alternative. Built-in DroidCam & live camera integration, real-time font scaling, and zero-headache dual-screen TV projection.
+        </p>
+
+        <div class="hero-cta-group">
+          <a href="./downloads/ZionCast-Setup-1.0.0.exe" download="ZionCast-Setup-1.0.0.exe" class="btn btn-gold btn-lg">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.951-1.801"/>
+            </svg>
+            Download for Windows (.exe)
+          </a>
+
+          <a href="#downloads" class="btn btn-glass btn-lg">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+            View Linux Packages
+          </a>
+        </div>
+
+        <div class="hero-meta">
+          <div class="hero-meta-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Windows 10 / 11 & Linux</span>
+          </div>
+          <div class="hero-meta-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>100% Free Forever</span>
+          </div>
+          <div class="hero-meta-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Full Offline Scripture Search</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Mock UI Showcase: 3-Panel Layout -->
+      <div class="showcase-wrapper">
+        <div class="mock-window">
+          <!-- Window Titlebar -->
+          <div class="mock-titlebar">
+            <div class="window-dots">
+              <span class="window-dot dot-red"></span>
+              <span class="window-dot dot-yellow"></span>
+              <span class="window-dot dot-green"></span>
+            </div>
+            <div class="mock-window-title">
+              <img src="./assets/icon.png" width="16" height="16" alt="ZionCast" style="border-radius: 4px;">
+              <span>ZionCast v1.0 — Sunday Morning Service</span>
+            </div>
+            <div class="mock-status-pill">
+              <span class="pulse-dot"></span>
+              <span>HDMI TV Output: Active (Display 2)</span>
+            </div>
+          </div>
+
+          <!-- 3-Panel Mock Body -->
+          <div class="mock-body">
+            <!-- Panel 1: Library Tabs (Left) -->
+            <div class="mock-panel-library mock-panel-side">
+              <div class="mock-panel-header">
+                <span>Library</span>
+                <span style="font-size: 0.7rem; color: #a5b4fc;">+ Add New</span>
+              </div>
+              <div class="mock-tabs">
+                <div class="mock-tab active">🎵 Songs</div>
+                <div class="mock-tab">📖 Bible</div>
+                <div class="mock-tab">📷 Video</div>
+                <div class="mock-tab">📢 Slides</div>
+              </div>
+              <div class="mock-search-box">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <span>Search lyrics or scriptures...</span>
+              </div>
+              <div class="mock-list">
+                <div class="mock-list-item selected" data-title="Way Maker (Sinach)" data-lyric="You are here, moving in our midst&#10;I worship You, I worship You&#10;You are here, working in this place">
+                  <span>Way Maker</span>
+                  <span class="mock-list-badge">Chorus</span>
+                </div>
+                <div class="mock-list-item" data-title="10,000 Reasons (Matt Redman)" data-lyric="Bless the Lord, O my soul&#10;O my soul, worship His holy name&#10;Sing like never before, O my soul">
+                  <span>10,000 Reasons</span>
+                  <span class="mock-list-badge">Verse 1</span>
+                </div>
+                <div class="mock-list-item" data-title="What A Beautiful Name (Hillsong)" data-lyric="What a beautiful Name it is&#10;What a beautiful Name it is&#10;The Name of Jesus Christ my King">
+                  <span>What A Beautiful Name</span>
+                  <span class="mock-list-badge">Chorus</span>
+                </div>
+                <div class="mock-list-item" data-title="Psalm 91:1-2 (KJV)" data-lyric="He that dwelleth in the secret place of the most High&#10;shall abide under the shadow of the Almighty.">
+                  <span>Psalm 91:1-2 (KJV)</span>
+                  <span class="mock-list-badge" style="color: #7dd3fc; background: rgba(6, 182, 212, 0.15);">Bible</span>
+                </div>
+                <div class="mock-list-item" data-title="Sunday Welcome (Notice)" data-lyric="WELCOME TO CHURCH!&#10;We are honored to worship with you today.&#10;Connect Card & Prayer at zioncast.org">
+                  <span>Sunday Welcome</span>
+                  <span class="mock-list-badge" style="color: #a7f3d0; background: rgba(16, 185, 129, 0.15);">Slide</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel 2: Center Controls & Dual Monitors -->
+            <div class="mock-panel-center">
+              <!-- Toolbar -->
+              <div class="mock-toolbar">
+                <div class="mock-toolbar-group">
+                  <span>Font Size:</span>
+                  <div class="mock-slider-wrap">
+                    <input type="range" class="mock-slider" id="mockFontSlider" min="28" max="64" value="48">
+                    <span id="mockFontVal" style="font-weight: 700; color: #fbbf24;">48px</span>
+                  </div>
+                </div>
+
+                <div class="mock-toolbar-group">
+                  <span>Background:</span>
+                  <select class="mock-select" aria-label="Select Video Background">
+                    <option>DroidCam Wireless (1080p)</option>
+                    <option>USB Webcam (Front View)</option>
+                    <option>HDMI Video Capture Card</option>
+                    <option>Deep Navy Motion Loop</option>
+                  </select>
+                </div>
+
+                <div class="mock-toolbar-group">
+                  <span style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #34d399;">
+                    <span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>
+                    TV Connected
+                  </span>
+                </div>
+              </div>
+
+              <!-- Dual Monitors: Operator Preview & Live on TV -->
+              <div class="mock-monitors-row">
+                <!-- Left Monitor: Preview -->
+                <div class="mock-screen mock-screen-preview">
+                  <div class="mock-screen-header">
+                    <span style="color: #a5b4fc;">OPERATOR PREVIEW</span>
+                    <span style="font-size: 0.65rem; color: var(--text-dim);">Single Click to Preview</span>
+                  </div>
+                  <div class="mock-screen-content">
+                    <div class="lyric-title" id="mockPreviewTitle">Way Maker (Sinach)</div>
+                    <div class="lyric-text" id="mockPreviewText">
+                      You are here, moving in our midst<br>
+                      I worship You, I worship You<br>
+                      You are here, working in this place
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Center Transfer Button -->
+                <div class="mock-transfer-action">
+                  <button class="btn-golive-glow" id="btnMockGoLive" title="Click to send Operator Preview to Live Screen">
+                    <span>▶ GO LIVE</span>
+                  </button>
+                  <span style="font-size: 0.65rem; color: var(--text-dim); text-align: center;">Double click or tap Go Live</span>
+                </div>
+
+                <!-- Right Monitor: Live on TV (Display 2) -->
+                <div class="mock-screen mock-screen-live">
+                  <div class="mock-screen-header">
+                    <span style="color: #f87171;">LIVE TV OUTPUT (HDMI)</span>
+                    <div class="badge-live-tag">
+                      <span class="pulse-dot" style="background: #ef4444;"></span>
+                      ON AIR
+                    </div>
+                  </div>
+                  <div class="mock-screen-content screen-bg-live">
+                    <div class="lyric-title" id="mockLiveTitle" style="color: #fbbf24;">Way Maker (Sinach)</div>
+                    <div class="lyric-text" id="mockLiveText">
+                      You are here, moving in our midst<br>
+                      I worship You, I worship You<br>
+                      You are here, working in this place
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel 3: Order of Service (Right) -->
+            <div class="mock-panel-order mock-panel-side">
+              <div class="mock-panel-header">
+                <span>Order of Service</span>
+                <span style="font-size: 0.7rem; color: #fbbf24;">Sun Oct 26</span>
+              </div>
+              <div class="mock-list">
+                <div class="order-step">
+                  <span class="order-index">1</span>
+                  <div>
+                    <div style="font-weight: 600; color: #fff;">Opening Prayer</div>
+                    <div style="font-size: 0.7rem; color: var(--text-dim);">Pastor David</div>
+                  </div>
+                </div>
+                <div class="order-step current">
+                  <span class="order-index" style="background: #f59e0b; color: #000;">2</span>
+                  <div>
+                    <div style="font-weight: 700; color: #fbbf24;">Praise & Worship</div>
+                    <div style="font-size: 0.7rem; color: #fde68a;">3 Songs • Live Video Active</div>
+                  </div>
+                </div>
+                <div class="order-step">
+                  <span class="order-index">3</span>
+                  <div>
+                    <div style="font-weight: 600; color: #fff;">Scripture Reading</div>
+                    <div style="font-size: 0.7rem; color: var(--text-dim);">Psalm 91:1-4 (KJV)</div>
+                  </div>
+                </div>
+                <div class="order-step">
+                  <span class="order-index">4</span>
+                  <div>
+                    <div style="font-weight: 600; color: #fff;">Weekly Announcements</div>
+                    <div style="font-size: 0.7rem; color: var(--text-dim);">Custom Slide Deck (4 cards)</div>
+                  </div>
+                </div>
+                <div class="order-step">
+                  <span class="order-index">5</span>
+                  <div>
+                    <div style="font-weight: 600; color: #fff;">Sermon & Ministry</div>
+                    <div style="font-size: 0.7rem; color: var(--text-dim);">"Walking in Kingdom Authority"</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       3. Feature Highlights
+       ========================================================================== -->
+  <section class="section-padding" id="features">
+    <div class="container">
+      <div class="section-header">
+        <div class="badge-pill">Built for Churches by Worship Technicians</div>
+        <h2 class="section-title">Everything Your AV Ministry Needs. Nothing It Doesn't.</h2>
+        <p class="section-desc">
+          Stop struggling with overcomplicated software wizards or clunky window-routing plugins. ZionCast gives you lightning-fast control over live lyrics, scriptures, and camera feeds.
+        </p>
+      </div>
+
+      <div class="features-grid">
+        <!-- Feature 1 -->
+        <div class="feature-card cyan-theme">
+          <div class="feature-icon-wrap">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 7l-7 5 7 5V7z"></path>
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+            </svg>
+          </div>
+          <h3 class="feature-title">Native Camera & DroidCam Input</h3>
+          <p class="feature-desc">
+            Seamlessly select USB webcams, DroidCam wireless phone video, or HDMI capture cards directly inside the software without running separate receiver windows.
+          </p>
+          <div class="feature-tags">
+            <span class="feature-tag">DroidCam Wireless</span>
+            <span class="feature-tag">USB Webcams</span>
+            <span class="feature-tag">Zero External OBS</span>
+          </div>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="feature-card gold-theme">
+          <div class="feature-icon-wrap">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="4 7 4 4 20 4 20 7"></polyline>
+              <line x1="9" y1="20" x2="15" y2="20"></line>
+              <line x1="12" y1="4" x2="12" y2="20"></line>
+            </svg>
+          </div>
+          <h3 class="feature-title">Instant Typography Controls</h3>
+          <p class="feature-desc">
+            Adjust live font sizes dynamically with an on-screen slider, eliminating multi-step theme wizards. Resize text on the fly when lyrics wrap unexpectedly.
+          </p>
+          <div class="feature-tags">
+            <span class="feature-tag">On-Screen Slider</span>
+            <span class="feature-tag">Instant Live Scaling</span>
+            <span class="feature-tag">Zero Theme Reloads</span>
+          </div>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="9" y1="3" x2="9" y2="21"></line>
+              <line x1="15" y1="3" x2="15" y2="21"></line>
+            </svg>
+          </div>
+          <h3 class="feature-title">Preserved OpenLP Workflow</h3>
+          <p class="feature-desc">
+            Retains the familiar 3-panel interface (Library, Dual Preview/Live Monitors, Sunday Order) so church volunteers need zero retraining.
+          </p>
+          <div class="feature-tags">
+            <span class="feature-tag">Familiar 3-Panel</span>
+            <span class="feature-tag">Zero Retraining</span>
+            <span class="feature-tag">Volunteer Friendly</span>
+          </div>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="feature-card cyan-theme">
+          <div class="feature-icon-wrap">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+          </div>
+          <h3 class="feature-title">Automated TV Display</h3>
+          <p class="feature-desc">
+            Detects extended monitors (Display 2) via HDMI and projects full-screen with one click. No more dragging windows across dual-monitor edges.
+          </p>
+          <div class="feature-tags">
+            <span class="feature-tag">One-Click TV Popout</span>
+            <span class="feature-tag">Win + P Extend Support</span>
+            <span class="feature-tag">Auto Resolution Lock</span>
+          </div>
+        </div>
+
+        <!-- Feature 5 -->
+        <div class="feature-card gold-theme">
+          <div class="feature-icon-wrap">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
+          </div>
+          <h3 class="feature-title">3 Complete Offline Bibles</h3>
+          <p class="feature-desc">
+            Includes King James Version (KJV), Revised Standard Version (RSV), and Good News Translation (GNT) bundled inside. Zero internet needed during service.
+          </p>
+          <div class="feature-tags">
+            <span class="feature-tag">KJV • RSV • GNT</span>
+            <span class="feature-tag">Instant Verse Lookup</span>
+            <span class="feature-tag">100% Offline Ready</span>
+          </div>
+        </div>
+
+        <!-- Feature 6 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+          </div>
+          <h3 class="feature-title">Visual Announcement Builder</h3>
+          <p class="feature-desc">
+            Create clean sermon title cards, church welcome notices, and weekly ministry bulletin slides with custom backgrounds, bold typography, and instant live broadcast.
+          </p>
+          <div class="feature-tags">
+            <span class="feature-tag">Sermon Title Slides</span>
+            <span class="feature-tag">Welcome Notices</span>
+            <span class="feature-tag">Custom Backgrounds</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       4. ZionCast vs. OpenLP Comparison Grid
+       ========================================================================== -->
+  <section class="section-padding comparison-section" id="compare">
+    <div class="container">
+      <div class="section-header">
+        <div class="badge-pill badge-gold">The OpenLP Upgrade</div>
+        <h2 class="section-title">Why Churches Are Switching to ZionCast</h2>
+        <p class="section-desc">
+          Compare ZionCast side-by-side with OpenLP. ZionCast solves the top pain points church technicians face every Sunday morning.
+        </p>
+      </div>
+
+      <div class="table-responsive-wrapper">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th class="col-feature">Capability & Workflow</th>
+              <th class="col-zioncast">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <img src="./assets/icon.png" width="22" height="22" alt="ZionCast" style="border-radius: 4px;">
+                  <span>ZionCast (Modern Standard)</span>
+                </div>
+              </th>
+              <th class="col-openlp">OpenLP (Legacy)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <span class="feature-cell-title">Live Font Resizing</span>
+                <span class="feature-cell-desc">Quickly adjust typography during live worship</span>
+              </td>
+              <td class="col-zioncast">
+                <div class="status-badge win">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span>Real-time toolbar slider (0 seconds delay)</span>
+                </div>
+              </td>
+              <td class="col-openlp">
+                <div class="status-badge loss">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  <span>5-step modal Theme Wizard (requires closing live)</span>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span class="feature-cell-title">Phone & Live Camera Input</span>
+                <span class="feature-cell-desc">Project lyrics over live camera or mobile phone feed</span>
+              </td>
+              <td class="col-zioncast">
+                <div class="status-badge win">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span>Built-in DroidCam & HDMI capture background layer</span>
+                </div>
+              </td>
+              <td class="col-openlp">
+                <div class="status-badge loss">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  <span>Requires external OBS / NDI virtual camera routing</span>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span class="feature-cell-title">Custom Announcement Slide Builder</span>
+                <span class="feature-cell-desc">Create sermon notes and bulletin announcements</span>
+              </td>
+              <td class="col-zioncast">
+                <div class="status-badge win">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span>Visual card builder with instant live preview</span>
+                </div>
+              </td>
+              <td class="col-openlp">
+                <div class="status-badge loss">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  <span>Raw text format with limited styling options</span>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span class="feature-cell-title">Dual-Screen Pop-Out Management</span>
+                <span class="feature-cell-desc">Managing output window on church projector or TV</span>
+              </td>
+              <td class="col-zioncast">
+                <div class="status-badge win">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span>Auto-detects Display 2 with 1-click full-screen lock</span>
+                </div>
+              </td>
+              <td class="col-openlp">
+                <div class="status-badge loss">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  <span>Prone to window resolution stretching & mouse drag bugs</span>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span class="feature-cell-title">Included Offline Scripture</span>
+                <span class="feature-cell-desc">Out-of-the-box translations ready to project</span>
+              </td>
+              <td class="col-zioncast">
+                <div class="status-badge win">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span>3 Complete 66-Book Translations (KJV, RSV, GNT)</span>
+                </div>
+              </td>
+              <td class="col-openlp">
+                <div class="status-badge loss">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  <span>Empty by default; requires manual XML / SQLite import</span>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td>
+                <span class="feature-cell-title">UI Design & Dark Booth Ergonomics</span>
+                <span class="feature-cell-desc">Visual contrast and clarity in low-light AV booths</span>
+              </td>
+              <td class="col-zioncast">
+                <div class="status-badge win">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  <span>High-contrast dark navy theme with glowing live indicators</span>
+                </div>
+              </td>
+              <td class="col-openlp">
+                <div class="status-badge loss">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  <span>Legacy Qt desktop GUI styling</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       5. Dedicated Download Hub
+       ========================================================================== -->
+  <section class="section-padding download-section" id="downloads">
+    <div class="container">
+      <div class="section-header">
+        <div class="badge-pill badge-gold">Official Downloads Hub</div>
+        <h2 class="section-title">Get ZionCast For Your Church Today</h2>
+        <p class="section-desc">
+          Download the latest stable release for Windows and Linux. No subscriptions, no ads, no watermarks, and no sign-up required.
+        </p>
+      </div>
+
+      <!-- Trust Banner -->
+      <div class="download-banner">
+        <div class="download-banner-text">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+          <div>
+            <p>Targeting Windows & Linux. 100% Free & Open Source.</p>
+            <span>No subscriptions, no ads, no watermarks, no registration lock.</span>
+          </div>
+        </div>
+        <button class="btn btn-glass btn-sm open-auth-modal" data-tab="register">
+          Save Church Cloud Profile (Optional)
+        </button>
+      </div>
+
+      <div class="download-cards-grid">
+        <!-- Windows Download Card -->
+        <div class="download-card highlight">
+          <div class="download-card-badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3);">
+            Most Popular
+          </div>
+
+          <div class="download-card-header">
+            <div class="os-icon-wrap" style="color: #60a5fa;">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.951-1.801"/>
+              </svg>
+            </div>
+            <div>
+              <h3 class="os-name">Windows</h3>
+              <p class="os-specs">Windows 10 / 11 (64-bit)</p>
+            </div>
+          </div>
+
+          <p style="color: var(--text-muted); font-size: 0.925rem; line-height: 1.6;">
+            Self-updating desktop application with native hardware acceleration, automatic HDMI output detection, and DroidCam compatibility.
+          </p>
+
+          <div class="download-actions">
+            <a href="./downloads/ZionCast-Setup-1.0.0.exe" download="ZionCast-Setup-1.0.0.exe" class="btn btn-gold btn-lg">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Download Installer (.exe)
+            </a>
+
+            <a href="./downloads/ZionCast-Portable-1.0.0.zip" download="ZionCast-Portable-1.0.0.zip" class="btn btn-outline">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              </svg>
+              Download Portable (.zip)
+            </a>
+          </div>
+
+          <div class="download-specs-list">
+            <div class="download-specs-item">
+              <span>Version:</span>
+              <strong style="color: #fff;">1.0.0 (Stable Release)</strong>
+            </div>
+            <div class="download-specs-item">
+              <span>Requirements:</span>
+              <span>4GB RAM • DirectX 11+ • DisplayPort/HDMI</span>
+            </div>
+            <div class="download-specs-item">
+              <span>Security:</span>
+              <span style="color: #34d399;">SHA-256 Verified • Clean</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Linux Download Card -->
+        <div class="download-card">
+          <div class="download-card-badge" style="background: rgba(6, 182, 212, 0.15); color: #7dd3fc; border: 1px solid rgba(6, 182, 212, 0.3);">
+            Cross-Platform
+          </div>
+
+          <div class="download-card-header">
+            <div class="os-icon-wrap" style="color: #fde68a;">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+              </svg>
+            </div>
+            <div>
+              <h3 class="os-name">Linux</h3>
+              <p class="os-specs">Ubuntu, Debian, Fedora, Arch (64-bit)</p>
+            </div>
+          </div>
+
+          <p style="color: var(--text-muted); font-size: 0.925rem; line-height: 1.6;">
+            Universal AppImage and native Debian (.deb) packages. Designed for lightweight church sanctuary Linux laptops and workstations.
+          </p>
+
+          <div class="download-actions">
+            <a href="./downloads/ZionCast-1.0.0.AppImage" download="ZionCast-1.0.0.AppImage" class="btn btn-cyan btn-lg">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Download AppImage
+            </a>
+
+            <a href="./downloads/zioncast_1.0.0_amd64.deb" download="zioncast_1.0.0_amd64.deb" class="btn btn-outline">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="16 16 12 12 8 16"></polyline>
+                <line x1="12" y1="12" x2="12" y2="21"></line>
+                <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path>
+              </svg>
+              Download Debian / Ubuntu (.deb)
+            </a>
+          </div>
+
+          <div class="download-specs-list">
+            <div class="download-specs-item">
+              <span>Package Type:</span>
+              <strong style="color: #fff;">AppImage / Debian .deb</strong>
+            </div>
+            <div class="download-specs-item">
+              <span>Desktop Env:</span>
+              <span>GNOME, KDE Plasma, XFCE, Cinnamon</span>
+            </div>
+            <div class="download-specs-item">
+              <span>License:</span>
+              <span style="color: #a5b4fc;">GNU GPL v3 • Open Source</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       6. 3-Step Setup Guide
+       ========================================================================== -->
+  <section class="section-padding" id="setup">
+    <div class="container">
+      <div class="section-header">
+        <div class="badge-pill badge-cyan">Zero Headache Setup</div>
+        <h2 class="section-title">Ready in Under 60 Seconds</h2>
+        <p class="section-desc">
+          Follow these 3 straightforward steps to configure your sanctuary projector or TV display with ZionCast.
+        </p>
+      </div>
+
+      <div class="setup-guide-grid">
+        <!-- Step 1 -->
+        <div class="setup-card">
+          <div class="step-num-pill">1</div>
+          <h3 class="step-title">Connect TV via HDMI</h3>
+          <p class="step-desc">
+            Plug your HDMI or DisplayPort cable into your church TV or projector. Press <span class="kbd-shortcut">Win + P</span> on your keyboard and choose <strong>"Extend"</strong> so the TV acts as a second monitor.
+          </p>
+          <div style="font-size: 0.8rem; color: #a5b4fc;">
+            💡 Pro Tip: Never duplicate screens. Extending allows your operator to work unseen.
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="setup-card">
+          <div class="step-num-pill" style="background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));">2</div>
+          <h3 class="step-title">Select Video Input</h3>
+          <p class="step-desc">
+            Launch ZionCast and navigate to the <strong>Live Video</strong> tab. Select your USB webcam, DroidCam wireless mobile camera, or HDMI capture card directly from the dropdown.
+          </p>
+          <div style="font-size: 0.8rem; color: #7dd3fc;">
+            📱 DroidCam connects over Wi-Fi or USB tethering for high-definition mobile streaming.
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="setup-card">
+          <div class="step-num-pill" style="background: linear-gradient(135deg, var(--accent-gold), #ea580c);">3</div>
+          <h3 class="step-title">Launch TV Output</h3>
+          <p class="step-desc">
+            Click <strong>"Launch TV Output"</strong> on the top toolbar. ZionCast automatically opens the live display window on Display 2 full-screen. Select any song or scripture and tap <strong>▶ GO LIVE</strong>.
+          </p>
+          <div style="font-size: 0.8rem; color: #fde68a;">
+            ✨ Real-time font slider lets you adjust lyrics dynamically on the live TV.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       7. FAQ & Accordion
+       ========================================================================== -->
+  <section class="section-padding" id="faq">
+    <div class="container">
+      <div class="section-header">
+        <div class="badge-pill">Common Questions</div>
+        <h2 class="section-title">Frequently Asked Questions</h2>
+        <p class="section-desc">
+          Everything you need to know about migrating from OpenLP, setting up camera video feeds, and running church services.
+        </p>
+      </div>
+
+      <div class="faq-wrapper">
+        <!-- Item 1 -->
+        <div class="accordion-item">
+          <button class="accordion-trigger" aria-expanded="false">
+            <span>Can I import my existing OpenLP songs and database?</span>
+            <span class="accordion-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </span>
+          </button>
+          <div class="accordion-content">
+            <div class="accordion-body">
+              Yes, absolutely! ZionCast includes native OpenLP database importing. You can easily import your existing <code>songs.sqlite</code> database or OpenLP export files directly into ZionCast with titles, verses, choruses, and author credits preserved.
+            </div>
+          </div>
+        </div>
+
+        <!-- Item 2 -->
+        <div class="accordion-item">
+          <button class="accordion-trigger" aria-expanded="false">
+            <span>How do I connect my phone camera with DroidCam?</span>
+            <span class="accordion-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </span>
+          </button>
+          <div class="accordion-content">
+            <div class="accordion-body">
+              Download the free DroidCam app on your Android or iPhone device. Ensure your phone and church laptop are connected to the same Wi-Fi router (or connect via USB cable for zero latency). Start DroidCam on your phone, then open ZionCast and choose DroidCam from the video input selector. The live video feed will render directly as your sanctuary background!
+            </div>
+          </div>
+        </div>
+
+        <!-- Item 3 -->
+        <div class="accordion-item">
+          <button class="accordion-trigger" aria-expanded="false">
+            <span>Does ZionCast work completely offline?</span>
+            <span class="accordion-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </span>
+          </button>
+          <div class="accordion-content">
+            <div class="accordion-body">
+              Yes, 100%! Church presentations must never depend on unreliable sanctuary internet connections. ZionCast runs entirely locally on your machine, with three complete 66-book offline Bibles (KJV, RSV, GNT) bundled directly into the installation package.
+            </div>
+          </div>
+        </div>
+
+        <!-- Item 4 -->
+        <div class="accordion-item">
+          <button class="accordion-trigger" aria-expanded="false">
+            <span>Which Bible translations are included out of the box?</span>
+            <span class="accordion-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </span>
+          </button>
+          <div class="accordion-content">
+            <div class="accordion-body">
+              ZionCast includes three complete, public-domain and freely distributable versions pre-installed: King James Version (KJV), Revised Standard Version (RSV), and Good News Translation (GNT). You can search by book name, chapter, and verse with sub-millisecond offline indexing.
+            </div>
+          </div>
+        </div>
+
+        <!-- Item 5 -->
+        <div class="accordion-item">
+          <button class="accordion-trigger" aria-expanded="false">
+            <span>Is ZionCast truly 100% free with no hidden subscriptions?</span>
+            <span class="accordion-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </span>
+          </button>
+          <div class="accordion-content">
+            <div class="accordion-body">
+              Yes. ZionCast is built as free, open-source ministry software under the GNU General Public License. There are no subscriptions, no locked features, no advertisements, and no watermarks projected on your sanctuary displays.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       Footer
+       ========================================================================== -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a href="#" class="brand-logo">
+            <img src="./assets/icon.png" alt="ZionCast Logo" class="brand-icon">
+            <span class="brand-name">ZionCast</span>
+          </a>
+          <p>
+            Modern church presentation desktop software. Empowering ministries worldwide with free, powerful, and intuitive worship projection.
+          </p>
+        </div>
+
+        <div>
+          <h4 class="footer-col-title">Navigation</h4>
+          <ul class="footer-nav-list">
+            <li><a href="#features" class="footer-nav-link">Features</a></li>
+            <li><a href="#compare" class="footer-nav-link">OpenLP Comparison</a></li>
+            <li><a href="#setup" class="footer-nav-link">TV Setup Guide</a></li>
+            <li><a href="#downloads" class="footer-nav-link">Download Packages</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 class="footer-col-title">Resources</h4>
+          <ul class="footer-nav-list">
+            <li><a href="#faq" class="footer-nav-link">FAQ & Help</a></li>
+            <li><a href="#downloads" class="footer-nav-link">Windows 10/11 Installer</a></li>
+            <li><a href="#downloads" class="footer-nav-link">Linux AppImage & .deb</a></li>
+            <li><a href="#" class="footer-nav-link open-auth-modal" data-tab="signin">Church Sign In</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 class="footer-col-title">Open Source</h4>
+          <p style="font-size: 0.88rem; color: var(--text-muted); line-height: 1.6; margin-bottom: 14px;">
+            Targeting Windows & Linux. Built with modern web technologies, Electron, and open-source love for ministries everywhere.
+          </p>
+          <div style="font-size: 0.82rem; color: #fbbf24;">
+            ★ 100% Free • No Watermarks • No Ads
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>
+          &copy; 2026 ZionCast Team. Free & Open Source Church Software. Released under the GPL License.
+        </div>
+        <div style="display: flex; gap: 20px;">
+          <a href="#setup" style="color: var(--text-dim);">Quickstart Guide</a>
+          <a href="#downloads" style="color: var(--text-dim);">Release Notes</a>
+          <a href="#" class="open-auth-modal" data-tab="signin" style="color: var(--text-dim);">Account Portal</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==========================================================================
+       8. Authentication Modal (Sign In & Register)
+       ========================================================================== -->
+  <div class="modal-overlay" id="authModalOverlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card">
+      <button class="modal-close-btn" id="closeAuthModal" aria-label="Close dialog">&times;</button>
+
+      <div class="modal-header">
+        <img src="./assets/icon.png" width="44" height="44" alt="ZionCast" style="margin: 0 auto 10px auto; border-radius: 10px;">
+        <h3 class="modal-title" id="modalTitle">ZionCast Church Portal</h3>
+        <p class="modal-subtitle">Access your church profile, song cloud backups, and custom settings.</p>
+      </div>
+
+      <div class="modal-tabs">
+        <button class="modal-tab-btn active" id="tabSignIn">Sign In</button>
+        <button class="modal-tab-btn" id="tabRegister">Create Account</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Sign In Form -->
+        <form class="auth-form" id="formSignIn">
+          <div class="form-group">
+            <label class="form-label" for="signInEmail">Church / User Email</label>
+            <input type="email" id="signInEmail" class="form-input" placeholder="pastor@churchname.org" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="signInPassword">Password</label>
+            <input type="password" id="signInPassword" class="form-input" placeholder="••••••••••••" required>
+          </div>
+
+          <div class="form-row-checkbox">
+            <label class="checkbox-label">
+              <input type="checkbox" id="rememberMe" checked>
+              <span>Remember me on this PC</span>
+            </label>
+            <a href="#" style="color: var(--text-gold); font-size: 0.8rem;" onclick="showToast('Password Reset', 'Password reset instructions have been sent to your email.', 'indigo'); return false;">Forgot password?</a>
+          </div>
+
+          <button type="submit" class="btn btn-gold" style="width: 100%;">
+            Sign In to Sanctuary Workspace
+          </button>
+        </form>
+
+        <!-- Register Form -->
+        <form class="auth-form" id="formRegister" style="display: none;">
+          <div class="form-group">
+            <label class="form-label" for="regChurchName">Church / Ministry Name</label>
+            <input type="text" id="regChurchName" class="form-input" placeholder="e.g. Grace Sanctuary City" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="regFullName">Technician / Leader Name</label>
+            <input type="text" id="regFullName" class="form-input" placeholder="e.g. Bro. David" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="regEmail">Email Address</label>
+            <input type="email" id="regEmail" class="form-input" placeholder="tech@gracesanctuary.org" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="regPassword">Create Password</label>
+            <input type="password" id="regPassword" class="form-input" placeholder="••••••••••••" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="regConfirmPassword">Confirm Password</label>
+            <input type="password" id="regConfirmPassword" class="form-input" placeholder="••••••••••••" required>
+          </div>
+
+          <button type="submit" class="btn btn-gold" style="width: 100%;">
+            Create Free Church Account
+          </button>
+        </form>
+
+        <!-- Quick Social Auth Button -->
+        <div class="auth-divider">or continue with</div>
+
+        <button type="button" class="btn btn-glass" id="btnGoogleAuth" style="width: 100%; gap: 10px;">
+          <svg width="18" height="18" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          Continue with Google
+        </button>
+
+        <!-- Guest Bypass Notice -->
+        <div class="guest-notice-box">
+          <span style="color: var(--text-muted);">Want to download immediately?</span>
+          <span class="guest-link" id="btnGuestContinue">Continue as Guest &rarr;</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+{
+  "name": "zioncast",
+  "version": "1.0.0",
+  "description": "Production-Grade Church Presentation Desktop Application",
+  "main": "main.js",
+  "author": "ZionCast Team",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack:fast": "node scripts/pack-asar.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:win:portable": "electron-builder --win portable",
+    "dist:linux": "electron-builder --linux",
+    "dist:linux:appimage": "electron-builder --linux AppImage",
+    "dist:linux:deb": "electron-builder --linux deb"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "org.zioncast.presentation",
+    "productName": "ZionCast",
+    "copyright": "Copyright © 2026 ZionCast Presentation Systems",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "display.html",
+      "styles.css",
+      "renderer.js",
+      "display.js",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ZionCast Church Presentation"
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}.exe"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "AudioVideo",
+      "icon": "assets/icon.png",
+      "synopsis": "Production Church Presentation System",
+      "description": "Modern church presentation software with dual-screen projector output, camera background support, and offline scriptures."
+    }
+  }
+}
