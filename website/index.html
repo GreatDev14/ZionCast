@@ -28,17 +28,26 @@
         <span class="brand-badge">v1.0</span>
       </a>
 
-      <!-- Desktop Nav Links -->
+      <!-- Desktop Nav Links & Mobile Drawer -->
       <nav class="nav-links" id="navLinks" aria-label="Main Navigation">
         <a href="#features" class="nav-link">Features</a>
         <a href="#compare" class="nav-link">OpenLP vs ZionCast</a>
         <a href="#setup" class="nav-link">TV Setup</a>
         <a href="#faq" class="nav-link">FAQ</a>
+        <div class="mobile-nav-auth" id="mobileAuthNavContainer">
+          <button class="btn btn-glass btn-sm open-auth-modal" data-tab="signin" style="width: 100%;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            Church Sign In
+          </button>
+        </div>
       </nav>
 
-      <!-- Nav Actions (Sign In + Download CTA) -->
+      <!-- Nav Actions (Sign In on desktop + Download CTA + Hamburger) -->
       <div class="nav-actions">
-        <div id="authNavContainer">
+        <div id="authNavContainer" class="desktop-auth-container">
           <button class="btn btn-glass btn-sm open-auth-modal" data-tab="signin" aria-label="Sign In to your church account">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -48,17 +57,17 @@
           </button>
         </div>
 
-        <a href="#downloads" class="btn btn-gold btn-sm">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <a href="#downloads" class="btn btn-gold btn-sm nav-btn-download">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
           </svg>
-          Download App
+          <span>Download<span class="btn-text-app"> App</span></span>
         </a>
 
         <button class="mobile-menu-btn" id="mobileMenuToggle" aria-label="Toggle Navigation Menu" aria-expanded="false">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="3" y1="12" x2="21" y2="12"></line>
             <line x1="3" y1="6" x2="21" y2="6"></line>
             <line x1="3" y1="18" x2="21" y2="18"></line>

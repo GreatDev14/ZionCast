@@ -384,50 +384,56 @@ function checkPersistedAuth() {
 }
 
 function updateNavbarUser(user) {
-  const authNavContainer = document.getElementById('authNavContainer');
-  if (!authNavContainer) return;
+  const containers = [
+    document.getElementById('authNavContainer'),
+    document.getElementById('mobileAuthNavContainer')
+  ].filter(Boolean);
 
-  if (user) {
-    const initial = user.name ? user.name.charAt(0).toUpperCase() : 'Z';
-    authNavContainer.innerHTML = `
-      <div class="user-pill" title="${user.email} (${user.church || 'Church Leader'})">
-        <div class="user-avatar">${initial}</div>
-        <span>${user.name}</span>
-        <button id="btnSignOut" class="btn btn-outline btn-sm" style="padding: 2px 8px; font-size: 0.72rem; margin-left: 4px;" title="Sign Out">Logout</button>
-      </div>
-    `;
+  containers.forEach(container => {
+    const isMobile = container.id === 'mobileAuthNavContainer';
+    if (user) {
+      const initial = user.name ? user.name.charAt(0).toUpperCase() : 'Z';
+      container.innerHTML = `
+        <div class="user-pill" style="${isMobile ? 'width: 100%; justify-content: center;' : ''}" title="${user.email} (${user.church || 'Church Leader'})">
+          <div class="user-avatar">${initial}</div>
+          <span>${user.name}</span>
+          <button class="btn btn-outline btn-sm btn-signout-trigger" style="padding: 2px 8px; font-size: 0.72rem; margin-left: 6px;" title="Sign Out">Logout</button>
+        </div>
+      `;
+    } else {
+      container.innerHTML = `
+        <button class="btn btn-glass btn-sm open-auth-modal" data-tab="signin" style="${isMobile ? 'width: 100%;' : ''}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          ${isMobile ? 'Church Sign In' : 'Sign In'}
+        </button>
+      `;
+    }
+  });
 
-    const btnSignOut = document.getElementById('btnSignOut');
-    if (btnSignOut) {
-      btnSignOut.addEventListener('click', () => {
-        localStorage.removeItem('zioncast_user');
-        updateNavbarUser(null);
-        showToast('Signed Out', 'You have been logged out.', 'indigo');
-      });
-    }
-  } else {
-    authNavContainer.innerHTML = `
-      <button class="btn btn-glass btn-sm open-auth-modal" data-tab="signin">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-          <circle cx="12" cy="7" r="4"></circle>
-        </svg>
-        Sign In
-      </button>
-    `;
-    // Re-bind modal open event
-    const btn = authNavContainer.querySelector('.open-auth-modal');
-    if (btn) {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const modal = document.getElementById('authModalOverlay');
-        if (modal) {
-          modal.classList.add('active');
-          document.body.style.overflow = 'hidden';
-        }
-      });
-    }
-  }
+  // Re-bind sign out buttons
+  document.querySelectorAll('.btn-signout-trigger').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      localStorage.removeItem('zioncast_user');
+      updateNavbarUser(null);
+      showToast('Signed Out', 'You have been logged out.', 'indigo');
+    });
+  });
+
+  // Re-bind modal open event
+  document.querySelectorAll('.open-auth-modal').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const modal = document.getElementById('authModalOverlay');
+      if (modal) {
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+      }
+    });
+  });
 }
 
 /* ==========================================================================

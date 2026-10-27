@@ -333,6 +333,14 @@ img {
   gap: 12px;
 }
 
+.mobile-nav-auth {
+  display: none;
+  width: 100%;
+  margin-top: 10px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .user-pill {
   display: flex;
   align-items: center;
@@ -1681,26 +1689,51 @@ img {
 /* Tablet & Mobile Nav Breakpoint (<= 880px) */
 @media (max-width: 880px) {
   .nav-wrapper {
-    height: 68px;
+    height: 66px;
+  }
+
+  /* Unclutter mobile navbar: hide desktop auth button, keep only download + hamburger */
+  .desktop-auth-container {
+    display: none !important;
+  }
+
+  .mobile-nav-auth {
+    display: block;
+  }
+
+  .brand-badge {
+    display: none;
+  }
+
+  .nav-actions {
+    gap: 8px;
+  }
+
+  .nav-btn-download {
+    padding: 7px 13px;
+    font-size: 0.84rem;
+    gap: 5px;
   }
 
   .mobile-menu-btn {
     display: flex;
+    width: 38px;
+    height: 38px;
   }
 
   .nav-links {
     position: absolute;
-    top: 68px;
+    top: 66px;
     left: 0;
     right: 0;
     background: rgba(7, 11, 20, 0.98);
     backdrop-filter: blur(24px);
     border-bottom: 1px solid var(--border-glow);
     flex-direction: column;
-    padding: 20px 24px;
+    padding: 20px 24px 24px 24px;
     gap: 12px;
     display: none;
-    box-shadow: 0 20px 35px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 20px 35px rgba(0, 0, 0, 0.85);
     z-index: 99;
   }
 
@@ -1815,6 +1848,39 @@ img {
 
 /* Mobile Devices (<= 640px) */
 @media (max-width: 640px) {
+  .nav-wrapper {
+    height: 60px;
+  }
+
+  .brand-logo {
+    gap: 8px;
+  }
+
+  .brand-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .brand-name {
+    font-size: 1.22rem;
+  }
+
+  .btn-text-app {
+    display: none; /* Leaves just "Download" with icon for maximum breathing room */
+  }
+
+  .nav-btn-download {
+    padding: 6px 11px;
+    font-size: 0.82rem;
+    gap: 5px;
+  }
+
+  .mobile-menu-btn {
+    width: 34px;
+    height: 34px;
+    padding: 6px;
+  }
+
   .container {
     padding: 0 16px;
   }
