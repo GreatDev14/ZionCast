@@ -80,4 +80,4 @@ for filepath in files_to_upload:
     if res.returncode != 0:
         print('Curl Error:', res.stderr.strip())
 
-print("\n✓ Release asset updates completed successfully!")
+print("\n[OK] Release asset updates completed successfully!")
