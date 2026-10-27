@@ -245,13 +245,17 @@
       return;
     }
 
-    // If device hasn't changed and stream is still alive, just update visibility
-    if (activeCameraStream && activeCameraDeviceId === deviceId) {
+    // If device hasn't changed and stream is still alive, keep playing without re-negotiating
+    const isStreamAlive = activeCameraStream && activeCameraStream.getVideoTracks().some(t => t.readyState === 'live');
+    if (isStreamAlive && activeCameraDeviceId === deviceId) {
       cameraVideo.style.display = 'block';
+      if (cameraVideo.paused) {
+        cameraVideo.play().catch(e => console.warn('Camera video play error:', e));
+      }
       return;
     }
 
-    // Stop previous stream
+    // Stop previous stream if device changed or dead
     if (activeCameraStream) {
       activeCameraStream.getTracks().forEach(track => track.stop());
       activeCameraStream = null;
@@ -269,17 +273,24 @@
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       cameraVideo.srcObject = stream;
+      cameraVideo.muted = true;
       cameraVideo.style.display = 'block';
       activeCameraStream = stream;
       activeCameraDeviceId = deviceId;
+      cameraVideo.play().catch(e => console.warn('Camera play error:', e));
     } catch (err) {
-      console.warn('Failed to access camera device directly:', err);
-      // Fallback without exact constraint if needed
+      console.warn('Failed to access camera device with exact constraints, falling back:', err);
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: deviceId },
+          audio: false
+        });
         cameraVideo.srcObject = stream;
+        cameraVideo.muted = true;
         cameraVideo.style.display = 'block';
         activeCameraStream = stream;
+        activeCameraDeviceId = deviceId;
+        cameraVideo.play().catch(e => console.warn('Fallback camera play error:', e));
       } catch (e) {
         console.error('All camera initialization attempts failed:', e);
       }

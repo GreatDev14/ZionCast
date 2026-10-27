@@ -359,6 +359,204 @@
   const btnBrowseUploadFile = document.getElementById('btn-browse-upload-file');
   const btnConfirmUploadMedia = document.getElementById('btn-confirm-upload-media');
 
+  let saveDebounceTimer = null;
+
+  function triggerAutoSave() {
+    if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = setTimeout(() => {
+      persistAllData();
+    }, 200);
+  }
+
+  // Alias for backward compatibility
+  function saveStoredLibrary() {
+    triggerAutoSave();
+  }
+
+  async function persistAllData() {
+    const bundle = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      songs: songsLibrary,
+      customSlides: customSlidesLibrary,
+      media: mediaLibrary,
+      customThemes: customThemes,
+      serviceOrder: serviceOrder,
+      serviceTitle: serviceTitleInput ? serviceTitleInput.value : 'Sunday Worship Service',
+      settings: {
+        fontSize: state.fontSize,
+        fontFamily: state.fontFamily,
+        fontColor: state.fontColor,
+        strokeWidth: state.strokeWidth,
+        strokeColor: state.strokeColor,
+        dropShadow: state.dropShadow,
+        textAlign: state.textAlign,
+        backgroundType: state.backgroundType,
+        backgroundId: state.backgroundId,
+        customBgUrl: state.customBgUrl,
+        cameraMode: state.cameraMode,
+        cameraDeviceId: state.cameraDeviceId,
+        cameraOpacity: state.cameraOpacity,
+        currentBibleVersion: currentBibleVersion,
+        bannerText: state.bannerText,
+        activeItemId: state.activeItem ? state.activeItem.id : null,
+        activeItemSource: state.activeItemSource,
+        activeSlideIndex: state.activeSlideIndex
+      }
+    };
+
+    // 1. Immediate localStorage cache
+    try {
+      localStorage.setItem('zioncast_database', JSON.stringify(bundle));
+      localStorage.setItem('zioncast_songs', JSON.stringify(songsLibrary));
+      localStorage.setItem('zioncast_custom', JSON.stringify(customSlidesLibrary));
+      localStorage.setItem('zioncast_media', JSON.stringify(mediaLibrary));
+      localStorage.setItem('zioncast_themes', JSON.stringify(customThemes));
+      localStorage.setItem('zioncast_service', JSON.stringify(serviceOrder));
+      localStorage.setItem('zioncast_settings', JSON.stringify(bundle.settings));
+    } catch (e) {
+      console.warn('localStorage save warning:', e);
+    }
+
+    // 2. Guaranteed native file write on PC disk via Electron
+    if (window.zionApi && window.zionApi.saveUserData) {
+      try {
+        await window.zionApi.saveUserData(bundle);
+      } catch (e) {
+        console.warn('Native disk save error:', e);
+      }
+    }
+  }
+
+  async function loadAllPersistedData() {
+    let bundle = null;
+
+    // 1. Try reading from native disk JSON file first
+    if (window.zionApi && window.zionApi.loadUserData) {
+      try {
+        bundle = await window.zionApi.loadUserData();
+      } catch (e) {
+        console.warn('Could not read user data from disk:', e);
+      }
+    }
+
+    // 2. Fallback to unified localStorage database
+    if (!bundle) {
+      try {
+        const stored = localStorage.getItem('zioncast_database');
+        if (stored) {
+          bundle = JSON.parse(stored);
+        }
+      } catch (e) {
+        console.warn('Could not read user database from localStorage:', e);
+      }
+    }
+
+    // 3. Fallback to individual legacy localStorage keys
+    if (!bundle) {
+      try {
+        const storedSongs = localStorage.getItem('zioncast_songs');
+        const storedCustom = localStorage.getItem('zioncast_custom');
+        const storedMedia = localStorage.getItem('zioncast_media');
+        const storedThemes = localStorage.getItem('zioncast_themes');
+        const storedService = localStorage.getItem('zioncast_service');
+        const storedSettings = localStorage.getItem('zioncast_settings');
+
+        if (storedSongs || storedCustom || storedService || storedSettings) {
+          bundle = {
+            songs: storedSongs ? JSON.parse(storedSongs) : null,
+            customSlides: storedCustom ? JSON.parse(storedCustom) : null,
+            media: storedMedia ? JSON.parse(storedMedia) : null,
+            customThemes: storedThemes ? JSON.parse(storedThemes) : null,
+            serviceOrder: storedService ? JSON.parse(storedService) : null,
+            settings: storedSettings ? JSON.parse(storedSettings) : null
+          };
+        }
+      } catch (e) {
+        console.warn('Individual localStorage fallback error:', e);
+      }
+    }
+
+    // Apply loaded bundle into state
+    if (bundle) {
+      if (Array.isArray(bundle.songs) && bundle.songs.length > 0) {
+        songsLibrary = bundle.songs;
+      }
+      if (Array.isArray(bundle.customSlides) && bundle.customSlides.length > 0) {
+        customSlidesLibrary = bundle.customSlides;
+      }
+      if (Array.isArray(bundle.media) && bundle.media.length > 0) {
+        mediaLibrary = bundle.media;
+      }
+      if (Array.isArray(bundle.customThemes) && bundle.customThemes.length > 0) {
+        customThemes = bundle.customThemes;
+      }
+      if (Array.isArray(bundle.serviceOrder)) {
+        serviceOrder = bundle.serviceOrder;
+      }
+      if (bundle.serviceTitle && serviceTitleInput) {
+        serviceTitleInput.value = bundle.serviceTitle;
+      }
+
+      // Restore user preferences & styles
+      if (bundle.settings) {
+        const s = bundle.settings;
+        if (s.fontSize !== undefined) {
+          state.fontSize = s.fontSize;
+          if (toolbarFontSize) toolbarFontSize.value = s.fontSize;
+          if (badgeFontSize) badgeFontSize.textContent = `${s.fontSize}px`;
+        }
+        if (s.fontFamily) {
+          state.fontFamily = s.fontFamily;
+          if (toolbarFontFamily) toolbarFontFamily.value = s.fontFamily;
+        }
+        if (s.fontColor) {
+          state.fontColor = s.fontColor;
+          if (toolbarFontColor) toolbarFontColor.value = s.fontColor;
+        }
+        if (s.strokeWidth !== undefined) {
+          state.strokeWidth = s.strokeWidth;
+          if (toolbarStrokeWidth) toolbarStrokeWidth.value = s.strokeWidth;
+          if (badgeStrokeWidth) badgeStrokeWidth.textContent = `${s.strokeWidth}px`;
+        }
+        if (s.dropShadow !== undefined) {
+          state.dropShadow = s.dropShadow;
+          if (btnToggleShadow) {
+            btnToggleShadow.style.borderColor = s.dropShadow ? 'var(--accent-gold)' : 'var(--border-subtle)';
+            btnToggleShadow.style.color = s.dropShadow ? 'var(--accent-gold)' : 'var(--text-main)';
+          }
+        }
+        if (s.textAlign) {
+          state.textAlign = s.textAlign;
+          if (btnAlignLeft && btnAlignCenter) {
+            btnAlignLeft.style.borderColor = s.textAlign === 'left' ? 'var(--accent-cyan)' : 'var(--border-subtle)';
+            btnAlignCenter.style.borderColor = s.textAlign === 'center' ? 'var(--accent-cyan)' : 'var(--border-subtle)';
+          }
+        }
+        if (s.backgroundType) state.backgroundType = s.backgroundType;
+        if (s.backgroundId) state.backgroundId = s.backgroundId;
+        if (s.customBgUrl) state.customBgUrl = s.customBgUrl;
+        if (s.cameraDeviceId) state.cameraDeviceId = s.cameraDeviceId;
+        if (s.cameraMode) state.cameraMode = s.cameraMode;
+        if (s.cameraOpacity !== undefined) {
+          state.cameraOpacity = s.cameraOpacity;
+          if (cameraDimmerSlider) cameraDimmerSlider.value = s.cameraOpacity;
+          if (badgeCameraDimmer) badgeCameraDimmer.textContent = `${Math.round(s.cameraOpacity * 100)}%`;
+        }
+        if (s.currentBibleVersion) {
+          currentBibleVersion = s.currentBibleVersion;
+          if (bibleVersionSelect) bibleVersionSelect.value = s.currentBibleVersion;
+          if (bibleVersionBadge) bibleVersionBadge.textContent = s.currentBibleVersion.toUpperCase();
+        }
+        if (s.bannerText) {
+          state.bannerText = s.bannerText;
+          const bannerInput = document.getElementById('banner-input-text');
+          if (bannerInput) bannerInput.value = s.bannerText;
+        }
+      }
+    }
+  }
+
   // =========================================================================
   // 3. INITIALIZATION
   // =========================================================================
@@ -367,8 +565,10 @@
     attachEventListeners();
     attachKeyboardShortcuts();
 
-    // 2. Load stored library from localStorage
-    loadStoredLibrary();
+    // 2. Load stored library & all settings from native disk / localStorage
+    await loadAllPersistedData();
+    // Flush initial state to disk so database file is guaranteed to exist
+    persistAllData().catch(console.warn);
 
     // 3. Setup procedural canvases for dual preview monitors
     setupMonitorCanvases();
@@ -387,51 +587,43 @@
 
     // 6. Asynchronous hardware and database populating in background
     loadBackgroundPresets().catch(console.warn);
-    loadBibleData().catch(console.warn);
-    enumerateVideoDevices().catch(console.warn);
+    loadBibleData(currentBibleVersion).catch(console.warn);
+    enumerateVideoDevices().then(() => {
+      // Re-apply persisted camera device & mode if previously configured
+      if (state.cameraDeviceId && cameraDeviceSelect) {
+        cameraDeviceSelect.value = state.cameraDeviceId;
+      }
+      if (state.cameraMode && state.cameraMode !== 'none') {
+        updateCameraMode(state.cameraMode);
+      }
+    }).catch(console.warn);
     queryDisplays().catch(console.warn);
 
     // Initial sync
     broadcastDisplayState();
 
-    // Auto-detect HDMI plug/unplug and display metrics every 3 seconds
+    // Listen for displays changed event via IPC instead of aggressive polling
+    if (window.zionApi && window.zionApi.onDisplaysChanged) {
+      window.zionApi.onDisplaysChanged(() => {
+        queryDisplays();
+      });
+    }
+
+    // Periodic check every 5 seconds without DOM thrashing
     setInterval(() => {
       queryDisplays();
-    }, 3000);
-  }
+    }, 5000);
 
-  function loadStoredLibrary() {
-    try {
-      const storedSongs = localStorage.getItem('zioncast_songs');
-      if (storedSongs) songsLibrary = JSON.parse(storedSongs);
-      const storedCustom = localStorage.getItem('zioncast_custom');
-      if (storedCustom) customSlidesLibrary = JSON.parse(storedCustom);
-      const storedMedia = localStorage.getItem('zioncast_media');
-      if (storedMedia) mediaLibrary = JSON.parse(storedMedia);
-      const storedThemes = localStorage.getItem('zioncast_themes');
-      if (storedThemes) customThemes = JSON.parse(storedThemes);
-      const storedService = localStorage.getItem('zioncast_service');
-      if (storedService) serviceOrder = JSON.parse(storedService);
-    } catch (e) {
-      console.warn('Could not load stored library:', e);
-    }
-  }
-
-  function saveStoredLibrary() {
-    try {
-      localStorage.setItem('zioncast_songs', JSON.stringify(songsLibrary));
-      localStorage.setItem('zioncast_custom', JSON.stringify(customSlidesLibrary));
-      localStorage.setItem('zioncast_media', JSON.stringify(mediaLibrary));
-      localStorage.setItem('zioncast_themes', JSON.stringify(customThemes));
-      localStorage.setItem('zioncast_service', JSON.stringify(serviceOrder));
-    } catch (e) {
-      console.warn('Could not save to localStorage:', e);
-    }
+    // Auto-save on window close or unload
+    window.addEventListener('beforeunload', () => {
+      persistAllData();
+    });
   }
 
   // =========================================================================
   // 4. MULTI-SCREEN & DISPLAY MANAGEMENT (Display 2 Output)
   // =========================================================================
+  let lastDisplaySummary = '';
   async function queryDisplays() {
     if (!window.zionApi) {
       labelDisplayStatus.textContent = 'Display: Web Mode (Single Screen)';
@@ -442,30 +634,34 @@
     state.displays = info.displays;
     state.primaryDisplayId = info.primaryId;
 
-    // Populate Target Screen Selector (OpenLP style)
-    if (selectTargetScreen) {
-      const currentVal = selectTargetScreen.value;
-      selectTargetScreen.innerHTML = '<option value="">Auto-Detect TV / Projector</option>';
-      info.displays.forEach(d => {
-        const opt = document.createElement('option');
-        opt.value = d.id;
-        const role = d.isPrimary ? 'Laptop' : 'Projector/TV';
-        opt.textContent = `Screen ${d.index}: ${role} (${d.bounds.width}x${d.bounds.height})`;
-        if (info.selectedTargetId && (d.id === info.selectedTargetId || d.id === Number(info.selectedTargetId))) {
-          opt.selected = true;
+    const displaySummary = info.displays.map(d => `${d.id}:${d.bounds.width}x${d.bounds.height}`).join(',');
+    if (displaySummary !== lastDisplaySummary) {
+      lastDisplaySummary = displaySummary;
+      // Populate Target Screen Selector (OpenLP style)
+      if (selectTargetScreen) {
+        const currentVal = selectTargetScreen.value;
+        selectTargetScreen.innerHTML = '<option value="">Auto-Detect TV / Projector</option>';
+        info.displays.forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.id;
+          const role = d.isPrimary ? 'Laptop' : 'Projector/TV';
+          opt.textContent = `Screen ${d.index}: ${role} (${d.bounds.width}x${d.bounds.height})`;
+          if (info.selectedTargetId && (d.id === info.selectedTargetId || d.id === Number(info.selectedTargetId))) {
+            opt.selected = true;
+          }
+          selectTargetScreen.appendChild(opt);
+        });
+        if (currentVal && !info.selectedTargetId) {
+          selectTargetScreen.value = currentVal;
         }
-        selectTargetScreen.appendChild(opt);
-      });
-      if (currentVal && !info.selectedTargetId) {
-        selectTargetScreen.value = currentVal;
       }
-    }
 
-    const secondary = info.displays.find(d => d.id !== info.primaryId);
-    if (secondary) {
-      labelDisplayStatus.innerHTML = `Projector: <strong style="color: var(--accent-green);">Ready on Screen ${secondary.index} (${secondary.bounds.width}x${secondary.bounds.height})</strong>`;
-    } else {
-      labelDisplayStatus.innerHTML = `Projector: <strong style="color: var(--accent-gold);">1 Screen (Press Win+P to Extend)</strong>`;
+      const secondary = info.displays.find(d => d.id !== info.primaryId);
+      if (secondary) {
+        labelDisplayStatus.innerHTML = `Projector: <strong style="color: var(--accent-green);">Ready on Screen ${secondary.index} (${secondary.bounds.width}x${secondary.bounds.height})</strong>`;
+      } else {
+        labelDisplayStatus.innerHTML = `Projector: <strong style="color: var(--accent-gold);">1 Screen (Press Win+P to Extend)</strong>`;
+      }
     }
 
     // Check if display window is currently open
@@ -581,19 +777,33 @@
     });
 
     if (state.cameraEnabled && state.cameraDeviceId) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: state.cameraDeviceId } },
-          audio: false
-        });
-        previewVideoStream.srcObject = stream;
-        liveVideoStream.srcObject = stream;
-        previewVideoStream.style.display = 'block';
-        liveVideoStream.style.display = 'block';
-        labelCameraStatus.textContent = `Camera: ${mode.toUpperCase()} Live`;
-      } catch (e) {
-        console.warn('Could not bind monitor camera streams:', e);
+      const isAlreadyActive = previewVideoStream.srcObject &&
+        previewVideoStream.srcObject.getVideoTracks().some(t => t.readyState === 'live');
+
+      if (!isAlreadyActive) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: state.cameraDeviceId } },
+            audio: false
+          });
+          previewVideoStream.srcObject = stream;
+          liveVideoStream.srcObject = stream;
+          previewVideoStream.play().catch(e => console.warn('Preview video play error:', e));
+          liveVideoStream.play().catch(e => console.warn('Live video play error:', e));
+        } catch (e) {
+          console.warn('Could not bind monitor camera streams with exact ID, trying fallback:', e);
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            previewVideoStream.srcObject = stream;
+            liveVideoStream.srcObject = stream;
+          } catch (err) {
+            console.error('All operator camera binding attempts failed:', err);
+          }
+        }
       }
+      previewVideoStream.style.display = 'block';
+      liveVideoStream.style.display = 'block';
+      labelCameraStatus.textContent = `Camera: ${mode.toUpperCase()} Live`;
     } else {
       if (previewVideoStream.srcObject) {
         previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
@@ -606,6 +816,7 @@
     }
 
     broadcastDisplayState();
+    triggerAutoSave();
   }
 
   // =========================================================================
@@ -696,17 +907,42 @@
     const ctxPrev = previewCanvas.getContext('2d');
     const ctxLive = liveCanvas.getContext('2d');
     let t = 0;
+    let prevW = 0, prevH = 0, liveW = 0, liveH = 0;
+
+    function resizeCanvases() {
+      const p1 = previewCanvas.parentElement;
+      const p2 = liveCanvas.parentElement;
+      if (p1) {
+        const nw = p1.clientWidth || 320;
+        const nh = p1.clientHeight || 180;
+        if (nw !== prevW || nh !== prevH) {
+          prevW = previewCanvas.width = nw;
+          prevH = previewCanvas.height = nh;
+        }
+      }
+      if (p2) {
+        const nw = p2.clientWidth || 320;
+        const nh = p2.clientHeight || 180;
+        if (nw !== liveW || nh !== liveH) {
+          liveW = liveCanvas.width = nw;
+          liveH = liveCanvas.height = nh;
+        }
+      }
+    }
+
+    window.addEventListener('resize', resizeCanvases);
+    resizeCanvases();
 
     function drawMonitors() {
-      t += 0.02;
-      const w1 = previewCanvas.width = previewCanvas.parentElement.clientWidth;
-      const h1 = previewCanvas.height = previewCanvas.parentElement.clientHeight;
-      const w2 = liveCanvas.width = liveCanvas.parentElement.clientWidth;
-      const h2 = liveCanvas.height = liveCanvas.parentElement.clientHeight;
+      // If the window is minimized or hidden, skip drawing to save 100% of CPU and GPU!
+      if (!document.hidden) {
+        t += 0.02;
+        if (prevW === 0 || liveW === 0) resizeCanvases();
 
-      // Draw active procedural background into both canvases
-      renderMonitorBg(ctxPrev, w1, h1, t, state.backgroundId);
-      renderMonitorBg(ctxLive, w2, h2, t, state.backgroundId);
+        // Draw active procedural background into both canvases
+        renderMonitorBg(ctxPrev, prevW, prevH, t, state.backgroundId);
+        renderMonitorBg(ctxLive, liveW, liveH, t, state.backgroundId);
+      }
 
       requestAnimationFrame(drawMonitors);
     }
@@ -881,6 +1117,7 @@
     }
 
     broadcastDisplayState();
+    triggerAutoSave();
   }
 
   function nextSlide() {
@@ -1387,6 +1624,7 @@
     }
 
     broadcastDisplayState();
+    triggerAutoSave();
   }
 
   // =========================================================================
@@ -1600,6 +1838,7 @@
     state.backgroundType = isVideo ? 'video' : 'image';
     state.customBgUrl = item.url;
     broadcastDisplayState();
+    triggerAutoSave();
   }
 
   // =========================================================================
@@ -2040,6 +2279,7 @@
         state.fontSize = val;
         if (badgeFontSize) badgeFontSize.textContent = `${val}px`;
         broadcastDisplayState();
+        triggerAutoSave();
       });
     }
 
@@ -2048,6 +2288,7 @@
       toolbarFontFamily.addEventListener('change', (e) => {
         state.fontFamily = e.target.value;
         broadcastDisplayState();
+        triggerAutoSave();
       });
     }
 
@@ -2056,6 +2297,7 @@
       toolbarFontColor.addEventListener('input', (e) => {
         state.fontColor = e.target.value;
         broadcastDisplayState();
+        triggerAutoSave();
       });
     }
 
@@ -2066,6 +2308,7 @@
         state.strokeWidth = val;
         if (badgeStrokeWidth) badgeStrokeWidth.textContent = `${val}px`;
         broadcastDisplayState();
+        triggerAutoSave();
       });
     }
 
@@ -2076,6 +2319,7 @@
         btnToggleShadow.style.borderColor = state.dropShadow ? 'var(--accent-gold)' : 'var(--border-subtle)';
         btnToggleShadow.style.color = state.dropShadow ? 'var(--accent-gold)' : 'var(--text-main)';
         broadcastDisplayState();
+        triggerAutoSave();
       });
     }
 
@@ -2086,6 +2330,7 @@
         btnAlignLeft.style.borderColor = 'var(--accent-cyan)';
         if (btnAlignCenter) btnAlignCenter.style.borderColor = 'var(--border-subtle)';
         broadcastDisplayState();
+        triggerAutoSave();
       });
     }
     if (btnAlignCenter) {
@@ -2094,6 +2339,7 @@
         btnAlignCenter.style.borderColor = 'var(--accent-cyan)';
         if (btnAlignLeft) btnAlignLeft.style.borderColor = 'var(--border-subtle)';
         broadcastDisplayState();
+        triggerAutoSave();
       });
     }
 
@@ -2144,6 +2390,7 @@
         }
         if (modalBanner) modalBanner.classList.remove('open');
         broadcastDisplayState();
+        triggerAutoSave();
       });
     }
 
@@ -2160,6 +2407,7 @@
         }
         if (modalBanner) modalBanner.classList.remove('open');
         broadcastDisplayState();
+        triggerAutoSave();
       });
     }
 
@@ -2250,6 +2498,7 @@
     if (bibleVersionSelect) {
       bibleVersionSelect.addEventListener('change', async (e) => {
         await loadBibleData(e.target.value);
+        triggerAutoSave();
       });
     }
     if (bibleBookSelect) bibleBookSelect.addEventListener('change', () => updateChapterDropdown(false));
@@ -2267,6 +2516,7 @@
       cameraDeviceSelect.addEventListener('change', (e) => {
         state.cameraDeviceId = e.target.value;
         if (state.cameraEnabled) updateCameraMode(state.cameraMode);
+        triggerAutoSave();
       });
     }
     if (btnRefreshDevices) btnRefreshDevices.addEventListener('click', enumerateVideoDevices);
@@ -2283,6 +2533,7 @@
         state.cameraOpacity = val;
         if (badgeCameraDimmer) badgeCameraDimmer.textContent = `${Math.round(val * 100)}%`;
         broadcastDisplayState();
+        triggerAutoSave();
       });
     }
 
@@ -2300,8 +2551,16 @@
             state.backgroundType = isVideo ? 'video' : 'image';
             state.customBgUrl = filePath;
             broadcastDisplayState();
+            triggerAutoSave();
           }
         }
+      });
+    }
+
+    // Service Title Input
+    if (serviceTitleInput) {
+      serviceTitleInput.addEventListener('input', () => {
+        triggerAutoSave();
       });
     }
 
@@ -2455,6 +2714,7 @@
 
         customSlidesLibrary.unshift(newCustom);
         saveStoredLibrary();
+        renderCustomSlidesList(customSearchInput ? customSearchInput.value : '');
         renderMediaGallery(mediaSearchInput ? mediaSearchInput.value : '');
         if (modalCustom) modalCustom.classList.remove('open');
 

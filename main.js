@@ -2,9 +2,27 @@ const { app, BrowserWindow, screen, ipcMain, dialog, Menu } = require('electron'
 const path = require('path');
 const fs = require('fs');
 
+// Ensure high-performance GPU acceleration & zero background throttling
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+
 let controlWindow = null;
 let displayWindow = null;
 let selectedDisplayId = null; // null means auto-detect secondary
+
+function getDbFilePath() {
+  const dir = app.getPath('userData');
+  if (!fs.existsSync(dir)) {
+    try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
+  }
+  return path.join(dir, 'zioncast_database.json');
+}
 
 let currentDisplayState = {
   activeSlide: null,
@@ -49,7 +67,8 @@ function createControlWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      webSecurity: false
+      webSecurity: false,
+      backgroundThrottling: false
     }
   });
 
@@ -136,7 +155,8 @@ function launchDisplayWindow(targetDisplayId = null) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      webSecurity: false
+      webSecurity: false,
+      backgroundThrottling: false
     }
   });
 
@@ -420,3 +440,33 @@ ipcMain.handle('get-background-presets', async () => {
     return null;
   }
 });
+
+// Native JSON File Persistence for user library & settings
+ipcMain.handle('load-user-data', async () => {
+  try {
+    const dbPath = getDbFilePath();
+    if (fs.existsSync(dbPath)) {
+      const raw = await fs.promises.readFile(dbPath, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch (error) {
+    console.warn('[ZionCast Storage] Could not read user data file:', error.message);
+  }
+  return null;
+});
+
+ipcMain.handle('save-user-data', async (event, bundle) => {
+  try {
+    const dbPath = getDbFilePath();
+    const tempFile = `${dbPath}.tmp`;
+    const serialized = JSON.stringify(bundle, null, 2);
+    await fs.promises.writeFile(tempFile, serialized, 'utf-8');
+    await fs.promises.rename(tempFile, dbPath);
+    console.log('[ZionCast Storage] Persisted state to:', dbPath);
+    return { success: true };
+  } catch (error) {
+    console.error('[ZionCast Storage] Failed to write user data file:', error.message);
+    return { success: false, error: error.message };
+  }
+});
+

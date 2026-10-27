@@ -1415,6 +1415,9 @@ body {
   height: 100%;
   object-fit: cover;
   z-index: 1;
+  transform: translateZ(0);
+  will-change: contents;
+  backface-visibility: hidden;
 }
 
 .display-media-bg {
@@ -1426,6 +1429,9 @@ body {
   object-fit: cover;
   z-index: 2;
   display: none;
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .display-camera-layer {
@@ -1437,6 +1443,9 @@ body {
   object-fit: cover;
   z-index: 3;
   display: none;
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 /* Legibility Dimmer Overlay */

@@ -38,6 +38,10 @@ contextBridge.exposeInMainWorld('zionApi', {
   getBibleData: (version = 'kjv') => ipcRenderer.invoke('get-bible-data', version),
   getBackgroundPresets: () => ipcRenderer.invoke('get-background-presets'),
 
+  // Native Disk Persistence
+  loadUserData: () => ipcRenderer.invoke('load-user-data'),
+  saveUserData: (data) => ipcRenderer.invoke('save-user-data', data),
+
   // Platform
   platform: process.platform
 });
