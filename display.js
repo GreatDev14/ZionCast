@@ -312,12 +312,37 @@
       blackoutCurtain.classList.remove('blackout-active');
     }
 
-    // 1b. Master Hardware-Composited Brightness Dimmer (0% - 100%)
-    if (dimmerCurtain) {
-      const bVal = typeof state.brightness === 'number' ? Math.max(0, Math.min(100, state.brightness)) : 100;
-      // 100% brightness = 0 black opacity (fully lit)
-      // 0% brightness = 1.0 black opacity (fully darkened)
-      dimmerCurtain.style.opacity = (100 - bVal) / 100;
+    // 1b. Master Hardware-Composited Brightness & Image Brightness Booster (0% - 200%)
+    const bVal = typeof state.brightness === 'number' ? Math.max(0, Math.min(200, state.brightness)) : 100;
+
+    if (bVal <= 100) {
+      // 0% - 100%: Smooth zero-lag hardware dimmer curtain
+      if (dimmerCurtain) {
+        dimmerCurtain.style.opacity = (100 - bVal) / 100;
+      }
+      if (mediaImg) mediaImg.style.filter = 'none';
+      if (mediaVideo) mediaVideo.style.filter = 'none';
+      if (cameraVideo) cameraVideo.style.filter = 'none';
+      if (canvas) canvas.style.filter = 'none';
+      if (scrim) scrim.style.opacity = '1';
+    } else {
+      // 101% - 200%: Active brightness amplification! Makes dark images/cameras bright & vivid
+      if (dimmerCurtain) {
+        dimmerCurtain.style.opacity = '0';
+      }
+      const boostFactor = bVal / 100;
+      // Exponential luminous amplification with contrast tuning to keep colors punchy
+      const boostFilter = `brightness(${boostFactor}) contrast(${1 + (boostFactor - 1) * 0.15}) saturate(${1 + (boostFactor - 1) * 0.1})`;
+      if (mediaImg) mediaImg.style.filter = boostFilter;
+      if (mediaVideo) mediaVideo.style.filter = boostFilter;
+      if (cameraVideo) cameraVideo.style.filter = boostFilter;
+      if (canvas) canvas.style.filter = boostFilter;
+
+      // Allow the boosted brightened image to shine through the scrim
+      if (scrim) {
+        const extraRatio = (bVal - 100) / 100;
+        scrim.style.opacity = Math.max(0.15, 1 - extraRatio * 0.75);
+      }
     }
 
     // 2. Hardware Video Camera

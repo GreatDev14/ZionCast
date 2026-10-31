@@ -560,9 +560,9 @@
           if (bannerInput) bannerInput.value = s.bannerText;
         }
         if (s.brightness !== undefined) {
-          state.brightness = s.brightness;
-          if (toolbarBrightness) toolbarBrightness.value = s.brightness;
-          if (badgeBrightness) badgeBrightness.textContent = `${s.brightness}%`;
+          state.brightness = Math.max(0, Math.min(200, s.brightness));
+          if (toolbarBrightness) toolbarBrightness.value = state.brightness;
+          if (badgeBrightness) badgeBrightness.textContent = `${state.brightness}%`;
         }
       }
     }
@@ -891,9 +891,28 @@
       liveBlackoutOverlay.classList.remove('active');
     }
 
-    if (liveDimmerOverlay) {
-      const bVal = typeof payload.brightness === 'number' ? Math.max(0, Math.min(100, payload.brightness)) : 100;
-      liveDimmerOverlay.style.opacity = (100 - bVal) / 100;
+    const bVal = typeof payload.brightness === 'number' ? Math.max(0, Math.min(200, payload.brightness)) : 100;
+    const liveScrim = document.querySelector('#live-screen-box .monitor-dark-scrim');
+
+    if (bVal <= 100) {
+      if (liveDimmerOverlay) {
+        liveDimmerOverlay.style.opacity = (100 - bVal) / 100;
+      }
+      if (liveCanvas) liveCanvas.style.filter = 'none';
+      if (liveVideoStream) liveVideoStream.style.filter = 'none';
+      if (liveScrim) liveScrim.style.opacity = '1';
+    } else {
+      if (liveDimmerOverlay) {
+        liveDimmerOverlay.style.opacity = '0';
+      }
+      const boostFactor = bVal / 100;
+      const boostFilter = `brightness(${boostFactor}) contrast(${1 + (boostFactor - 1) * 0.15}) saturate(${1 + (boostFactor - 1) * 0.1})`;
+      if (liveCanvas) liveCanvas.style.filter = boostFilter;
+      if (liveVideoStream) liveVideoStream.style.filter = boostFilter;
+      if (liveScrim) {
+        const extraRatio = (bVal - 100) / 100;
+        liveScrim.style.opacity = Math.max(0.15, 1 - extraRatio * 0.75);
+      }
     }
 
     if (payload.clearText || payload.themeOnly || payload.blackout || !payload.activeSlide) {
@@ -2360,11 +2379,11 @@
       });
     }
 
-    // Master Audience Screen Brightness / Dimmer Quick Shortcut (Matches Image 1)
+    // Master Audience Screen Brightness & Image Booster Quick Shortcut
     if (toolbarBrightness) {
       toolbarBrightness.addEventListener('input', (e) => {
         const val = parseInt(e.target.value, 10);
-        state.brightness = isNaN(val) ? 100 : Math.max(0, Math.min(100, val));
+        state.brightness = isNaN(val) ? 100 : Math.max(0, Math.min(200, val));
         if (badgeBrightness) badgeBrightness.textContent = `${state.brightness}%`;
         broadcastDisplayState();
         triggerAutoSave();

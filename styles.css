@@ -807,6 +807,7 @@ body {
   height: 100%;
   object-fit: cover;
   pointer-events: none;
+  transition: filter 0.05s linear;
 }
 
 .monitor-video-stream {
@@ -817,6 +818,7 @@ body {
   height: 100%;
   object-fit: cover;
   pointer-events: none;
+  transition: filter 0.05s linear;
 }
 
 .monitor-dark-scrim {
@@ -827,6 +829,7 @@ body {
   height: 100%;
   background: rgba(0, 0, 0, 0.4);
   pointer-events: none;
+  transition: opacity 0.05s linear;
 }
 
 .monitor-slide-text-wrap {
@@ -1265,12 +1268,12 @@ body {
 }
 
 .bottom-brightness-pill .range-slider {
-  width: 95px;
+  width: 100px;
 }
 
 .bottom-brightness-pill .badge-value {
   font-size: 0.73rem;
-  min-width: 42px;
+  min-width: 46px;
   text-align: center;
   cursor: pointer;
   user-select: none;
@@ -1485,6 +1488,7 @@ body {
   transform: translateZ(0);
   will-change: contents;
   backface-visibility: hidden;
+  transition: filter 0.05s linear;
 }
 
 .display-media-bg {
@@ -1499,6 +1503,7 @@ body {
   transform: translateZ(0);
   will-change: transform;
   backface-visibility: hidden;
+  transition: filter 0.05s linear;
 }
 
 .display-camera-layer {
@@ -1513,6 +1518,7 @@ body {
   transform: translateZ(0);
   will-change: transform;
   backface-visibility: hidden;
+  transition: filter 0.05s linear;
 }
 
 /* Legibility Dimmer Overlay */
@@ -1524,6 +1530,7 @@ body {
   height: 100%;
   background: rgba(0, 0, 0, 0.45);
   z-index: 4;
+  transition: opacity 0.05s linear;
 }
 
 /* Presentation Slide Text Container */
