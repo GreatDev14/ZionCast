@@ -1,8 +1,10 @@
+import http.client
 import subprocess
 import urllib.request
 import json
 import os
 import sys
+import time
 
 def get_token():
     p = subprocess.Popen(['git', 'credential', 'fill'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -45,7 +47,7 @@ for asset in assets:
         with urllib.request.urlopen(del_req) as del_resp:
             print(f"Deleted {name}: HTTP {del_resp.status}")
 
-# 3. Upload new binaries with curl.exe
+# 3. Upload new binaries with streaming HTTPSConnection
 files_to_upload = [
     r'dist\ZionCast-Setup-1.0.0.exe',
     r'dist\ZionCast-Portable-1.0.0.zip'
@@ -58,26 +60,48 @@ for filepath in files_to_upload:
     
     filename = os.path.basename(filepath)
     filesize = os.path.getsize(filepath)
-    upload_url = f"https://uploads.github.com/repos/GreatDev14/ZionCast/releases/{release_id}/assets?name={filename}"
+    print(f"\n>>> Uploading {filename} ({filesize / 1024 / 1024:.1f} MB) to GitHub Release...")
     
-    print(f"\nUploading {filename} ({filesize / 1024 / 1024:.1f} MB)...")
-    cmd = [
-        'curl.exe',
-        '-X', 'POST',
-        '-H', f'Authorization: Bearer {token}',
-        '-H', 'Content-Type: application/octet-stream',
-        '-H', 'Accept: application/vnd.github+json',
-        '--data-binary', f'@{filepath}',
-        '--retry', '3',
-        '--connect-timeout', '30',
-        '-f',
-        '-s',
-        '-w', 'HTTP_STATUS: %{http_code}\n',
-        upload_url
-    ]
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    print('Curl Output:', res.stdout.strip())
-    if res.returncode != 0:
-        print('Curl Error:', res.stderr.strip())
+    conn = http.client.HTTPSConnection('uploads.github.com', timeout=600)
+    path = f"/repos/GreatDev14/ZionCast/releases/{release_id}/assets?name={filename}"
+    
+    conn.putrequest('POST', path)
+    conn.putheader('Authorization', f'Bearer {token}')
+    conn.putheader('Content-Type', 'application/octet-stream')
+    conn.putheader('Accept', 'application/vnd.github+json')
+    conn.putheader('Content-Length', str(filesize))
+    conn.putheader('User-Agent', 'ZionCast-Release-Tool')
+    conn.endheaders()
+    
+    CHUNK = 1024 * 1024  # 1MB buffer
+    sent_bytes = 0
+    last_pct = -1
+    start_time = time.time()
+    
+    with open(filepath, 'rb') as f:
+        while True:
+            chunk = f.read(CHUNK)
+            if not chunk:
+                break
+            conn.send(chunk)
+            sent_bytes += len(chunk)
+            pct = int((sent_bytes / filesize) * 100)
+            if pct != last_pct and (pct % 10 == 0 or pct == 100):
+                elapsed = time.time() - start_time
+                mbps = (sent_bytes / 1024 / 1024) / max(0.1, elapsed)
+                print(f"  [{pct}%] {sent_bytes / 1024 / 1024:.1f} MB / {filesize / 1024 / 1024:.1f} MB ({mbps:.2f} MB/s)")
+                sys.stdout.flush()
+                last_pct = pct
+    
+    resp = conn.getresponse()
+    body = resp.read().decode('utf-8')
+    if resp.status in (200, 201):
+        data = json.loads(body)
+        print(f"  [SUCCESS] {filename} uploaded! Asset ID: {data.get('id')}")
+        print(f"  Direct URL: {data.get('browser_download_url')}")
+    else:
+        print(f"  [FAILED] HTTP {resp.status} {resp.reason}")
+        print("  Response:", body[:300])
+        sys.exit(1)
 
-print("\n[OK] Release asset updates completed successfully!")
+print("\n[ALL OK] All release assets uploaded successfully!")
