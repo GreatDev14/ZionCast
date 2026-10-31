@@ -16,6 +16,7 @@
   const badgeTitle = document.getElementById('display-badge');
   const bodyText = document.getElementById('display-body');
   const ticker = document.getElementById('display-ticker');
+  const dimmerCurtain = document.getElementById('display-dimmer');
   const blackoutCurtain = document.getElementById('display-blackout');
 
   // BroadcastChannel Fallback for cross-window sync
@@ -51,7 +52,8 @@
     cameraDeviceId: '',
     cameraOpacity: 0.75,
     bannerText: '',
-    bannerActive: false
+    bannerActive: false,
+    brightness: 100
   };
 
   let activeCameraStream = null;
@@ -308,6 +310,14 @@
       blackoutCurtain.classList.add('blackout-active');
     } else {
       blackoutCurtain.classList.remove('blackout-active');
+    }
+
+    // 1b. Master Hardware-Composited Brightness Dimmer (0% - 100%)
+    if (dimmerCurtain) {
+      const bVal = typeof state.brightness === 'number' ? Math.max(0, Math.min(100, state.brightness)) : 100;
+      // 100% brightness = 0 black opacity (fully lit)
+      // 0% brightness = 1.0 black opacity (fully darkened)
+      dimmerCurtain.style.opacity = (100 - bVal) / 100;
     }
 
     // 2. Hardware Video Camera

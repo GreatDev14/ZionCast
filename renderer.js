@@ -37,6 +37,7 @@
     cameraOpacity: 0.75,
     bannerText: '',
     bannerActive: false,
+    brightness: 100,
 
     // Hardware and displays
     displays: [],
@@ -308,10 +309,14 @@
   const btnSaveService = document.getElementById('btn-save-service');
   const btnLoadService = document.getElementById('btn-load-service');
 
-  // Bottom Status
+  // Bottom Status & Master Brightness Quick Control
   const labelDisplayStatus = document.getElementById('label-display-status');
   const labelCameraStatus = document.getElementById('label-camera-status');
   const labelActiveSlideRef = document.getElementById('label-active-slide-ref');
+  const toolbarBrightness = document.getElementById('toolbar-brightness');
+  const badgeBrightness = document.getElementById('badge-brightness');
+  const labelBrightnessReset = document.getElementById('label-brightness-reset');
+  const liveDimmerOverlay = document.getElementById('live-dimmer-overlay');
 
   // Modals
   const modalSong = document.getElementById('modal-song');
@@ -399,6 +404,7 @@
         cameraOpacity: state.cameraOpacity,
         currentBibleVersion: currentBibleVersion,
         bannerText: state.bannerText,
+        brightness: typeof state.brightness === 'number' ? state.brightness : 100,
         activeItemId: state.activeItem ? state.activeItem.id : null,
         activeItemSource: state.activeItemSource,
         activeSlideIndex: state.activeSlideIndex
@@ -552,6 +558,11 @@
           state.bannerText = s.bannerText;
           const bannerInput = document.getElementById('banner-input-text');
           if (bannerInput) bannerInput.value = s.bannerText;
+        }
+        if (s.brightness !== undefined) {
+          state.brightness = s.brightness;
+          if (toolbarBrightness) toolbarBrightness.value = s.brightness;
+          if (badgeBrightness) badgeBrightness.textContent = `${s.brightness}%`;
         }
       }
     }
@@ -855,7 +866,8 @@
       cameraDeviceId: state.cameraDeviceId,
       cameraOpacity: state.cameraOpacity,
       bannerText: state.bannerText,
-      bannerActive: state.bannerActive
+      bannerActive: state.bannerActive,
+      brightness: typeof state.brightness === 'number' ? state.brightness : 100
     };
 
     // 1. Electron IPC Send
@@ -877,6 +889,11 @@
       liveBlackoutOverlay.classList.add('active');
     } else {
       liveBlackoutOverlay.classList.remove('active');
+    }
+
+    if (liveDimmerOverlay) {
+      const bVal = typeof payload.brightness === 'number' ? Math.max(0, Math.min(100, payload.brightness)) : 100;
+      liveDimmerOverlay.style.opacity = (100 - bVal) / 100;
     }
 
     if (payload.clearText || payload.themeOnly || payload.blackout || !payload.activeSlide) {
@@ -2341,6 +2358,32 @@
         broadcastDisplayState();
         triggerAutoSave();
       });
+    }
+
+    // Master Audience Screen Brightness / Dimmer Quick Shortcut (Matches Image 1)
+    if (toolbarBrightness) {
+      toolbarBrightness.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        state.brightness = isNaN(val) ? 100 : Math.max(0, Math.min(100, val));
+        if (badgeBrightness) badgeBrightness.textContent = `${state.brightness}%`;
+        broadcastDisplayState();
+        triggerAutoSave();
+      });
+    }
+
+    function resetBrightnessToFull() {
+      state.brightness = 100;
+      if (toolbarBrightness) toolbarBrightness.value = 100;
+      if (badgeBrightness) badgeBrightness.textContent = '100%';
+      broadcastDisplayState();
+      triggerAutoSave();
+    }
+
+    if (labelBrightnessReset) {
+      labelBrightnessReset.addEventListener('click', resetBrightnessToFull);
+    }
+    if (badgeBrightness) {
+      badgeBrightness.addEventListener('click', resetBrightnessToFull);
     }
 
     // Fast Action Buttons: Blackout, Theme Only, Clear

@@ -359,6 +359,7 @@
               <div id="live-text-title" class="monitor-slide-title">ZIONCAST BROADCAST</div>
               <div id="live-text-body" class="monitor-slide-body">Ready for Service</div>
             </div>
+            <div id="live-dimmer-overlay" class="monitor-dimmer-curtain"></div>
             <div id="live-blackout-overlay" class="monitor-blackout-curtain">
               BLACKOUT ACTIVE
             </div>
@@ -450,6 +451,27 @@
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
       <span id="label-camera-status">Camera: Standby</span>
     </div>
+
+    <!-- Audience Screen Brightness / Dimmer Quick Shortcut -->
+    <div class="bottom-brightness-pill" title="Audience Display Brightness / Dimmer (0% - 100%)">
+      <span class="toolbar-label" id="label-brightness-reset" title="Click to reset to 100%" style="cursor: pointer; user-select: none;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-gold); flex-shrink: 0;">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        Brightness
+      </span>
+      <input type="range" id="toolbar-brightness" class="range-slider" min="0" max="100" value="100" step="1" title="Audience Display Brightness (0% - 100%)">
+      <span id="badge-brightness" class="badge-value" style="cursor: pointer; user-select: none;" title="Click to reset to 100%">100%</span>
+    </div>
+
     <div class="status-item">
       <span>Active: <strong id="label-active-slide-ref" style="color: var(--accent-gold);">None</strong></span>
     </div>

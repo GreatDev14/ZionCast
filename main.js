@@ -45,7 +45,8 @@ let currentDisplayState = {
   cameraDeviceId: '',
   cameraOpacity: 0.85,
   bannerText: '',
-  bannerActive: false
+  bannerActive: false,
+  brightness: 100
 };
 
 function createControlWindow() {
