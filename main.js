@@ -379,13 +379,19 @@ ipcMain.handle('toggle-fullscreen', (event) => {
 // File Dialogs & System operations
 ipcMain.handle('open-file-dialog', async (event, options = {}) => {
   if (!controlWindow) return null;
+  const ALL_MEDIA_EXTS = [
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico', 'tiff', 'tif', 'avif', 'jfif', 'heic', 'heif',
+    'mp4', 'webm', 'mov', 'mkv', 'avi', 'm4v', 'wmv', 'flv', 'ogv', '3gp', 'ts', 'mts', 'm2ts', 'vob', 'mpg', 'mpeg'
+  ];
   return await dialog.showOpenDialog(controlWindow, {
     title: options.title || 'Select File',
     properties: options.properties || ['openFile'],
     filters: options.filters || [
-      { name: 'All Supported Files', extensions: ['jpg', 'jpeg', 'png', 'webp', 'mp4', 'webm', 'json', 'txt', 'xml'] },
-      { name: 'Media Files', extensions: ['jpg', 'jpeg', 'png', 'webp', 'mp4', 'webm'] },
-      { name: 'Song & Service Files', extensions: ['json', 'txt', 'xml', 'ccli'] }
+      { name: 'All Media Files (Images & Videos)', extensions: ALL_MEDIA_EXTS },
+      { name: 'All Images (*.jpg, *.png, *.webp, *.gif, *.svg, etc.)', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico', 'tiff', 'tif', 'avif', 'jfif', 'heic', 'heif'] },
+      { name: 'All Videos (*.mp4, *.webm, *.mov, *.mkv, *.avi, etc.)', extensions: ['mp4', 'webm', 'mov', 'mkv', 'avi', 'm4v', 'wmv', 'flv', 'ogv', '3gp', 'ts', 'mts', 'm2ts', 'vob', 'mpg', 'mpeg'] },
+      { name: 'Song & Service Files', extensions: ['json', 'txt', 'xml', 'ccli'] },
+      { name: 'All Files (*.*)', extensions: ['*'] }
     ]
   });
 });

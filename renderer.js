@@ -37,6 +37,9 @@
     cameraOpacity: 0.75,
     bannerText: '',
     bannerActive: false,
+    bannerStyle: 'urgent-red',
+    bannerLayout: 'bar',
+    bannerAutoDismiss: 60,
     brightness: 100,
 
     // Hardware and displays
@@ -51,6 +54,28 @@
     syncChannel = new BroadcastChannel('zioncast-sync');
   } catch (err) {
     console.warn('BroadcastChannel fallback not supported:', err);
+  }
+
+  // Comprehensive Media Formats Support (Any Image & Any Video)
+  const ALL_IMAGE_EXTS = new Set([
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico', 'tiff', 'tif', 'avif', 'jfif', 'heic', 'heif', 'raw', 'cr2', 'nef'
+  ]);
+  const ALL_VIDEO_EXTS = new Set([
+    'mp4', 'webm', 'mov', 'mkv', 'avi', 'm4v', 'wmv', 'flv', 'ogv', '3gp', 'ts', 'mts', 'm2ts', 'vob', 'mpg', 'mpeg', 'asf', 'divx'
+  ]);
+
+  function isVideoFile(pathOrUrl) {
+    if (!pathOrUrl) return false;
+    const clean = String(pathOrUrl).split('?')[0].split('#')[0];
+    const ext = clean.split('.').pop().toLowerCase();
+    return ALL_VIDEO_EXTS.has(ext) || clean.toLowerCase().includes('video');
+  }
+
+  function isImageFile(pathOrUrl) {
+    if (!pathOrUrl) return false;
+    const clean = String(pathOrUrl).split('?')[0].split('#')[0];
+    const ext = clean.split('.').pop().toLowerCase();
+    return ALL_IMAGE_EXTS.has(ext);
   }
 
   // Preloaded Church Worship Songs Library (Classic & Modern Anthems)
@@ -404,6 +429,9 @@
         cameraOpacity: state.cameraOpacity,
         currentBibleVersion: currentBibleVersion,
         bannerText: state.bannerText,
+        bannerStyle: state.bannerStyle,
+        bannerLayout: state.bannerLayout,
+        bannerAutoDismiss: state.bannerAutoDismiss,
         brightness: typeof state.brightness === 'number' ? state.brightness : 100,
         activeItemId: state.activeItem ? state.activeItem.id : null,
         activeItemSource: state.activeItemSource,
@@ -559,6 +587,9 @@
           const bannerInput = document.getElementById('banner-input-text');
           if (bannerInput) bannerInput.value = s.bannerText;
         }
+        if (s.bannerStyle) state.bannerStyle = s.bannerStyle;
+        if (s.bannerLayout) state.bannerLayout = s.bannerLayout;
+        if (s.bannerAutoDismiss !== undefined) state.bannerAutoDismiss = s.bannerAutoDismiss;
         if (s.brightness !== undefined) {
           state.brightness = Math.max(0, Math.min(200, s.brightness));
           if (toolbarBrightness) toolbarBrightness.value = state.brightness;
@@ -867,6 +898,9 @@
       cameraOpacity: state.cameraOpacity,
       bannerText: state.bannerText,
       bannerActive: state.bannerActive,
+      bannerStyle: state.bannerStyle || 'urgent-red',
+      bannerLayout: state.bannerLayout || 'bar',
+      bannerAutoDismiss: state.bannerAutoDismiss || 0,
       brightness: typeof state.brightness === 'number' ? state.brightness : 100
     };
 
@@ -933,6 +967,24 @@
       labelActiveSlideRef.textContent = `${state.activeItem.title} (${payload.activeSlide.label})`;
     } else {
       labelActiveSlideRef.textContent = payload.blackout ? 'BLACKOUT' : (payload.clearText ? 'CLEARED' : 'None');
+    }
+
+    // Mirror Nursery / Congregation Alert Banner on Live Monitor
+    const liveBanner = document.getElementById('live-banner-overlay');
+    if (liveBanner) {
+      if (payload.bannerActive && payload.bannerText) {
+        const style = payload.bannerStyle || 'urgent-red';
+        let icon = '📢';
+        if (style === 'urgent-red') icon = '🚨';
+        else if (style === 'amber-warning') icon = '⚠️';
+        else if (style === 'royal-blue') icon = '📢';
+        else if (style === 'celebration-green') icon = '🕊️';
+        else if (style === 'obsidian-glass') icon = '✨';
+        liveBanner.textContent = `${icon} ${payload.bannerText}`;
+        liveBanner.className = `monitor-banner-overlay active ${style}`;
+      } else {
+        liveBanner.className = 'monitor-banner-overlay';
+      }
     }
   }
 
@@ -1020,6 +1072,63 @@
       const g = ctx.createRadialGradient(w * 0.5, h * 0.2, 10, w * 0.5, h * 0.5, w * 0.7);
       g.addColorStop(0, '#78350f');
       g.addColorStop(1, '#120b04');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    } else if (bgId === 'sacred-light-rays') {
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, '#0a0d14');
+      g.addColorStop(1, '#020408');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.15)';
+      ctx.beginPath();
+      ctx.moveTo(w * 0.5, 0);
+      ctx.lineTo(w * 0.2, h);
+      ctx.lineTo(w * 0.8, h);
+      ctx.closePath();
+      ctx.fill();
+    } else if (bgId === 'living-waters') {
+      const g = ctx.createLinearGradient(0, 0, w, h);
+      g.addColorStop(0, '#021526');
+      g.addColorStop(0.5, '#032b44');
+      g.addColorStop(1, '#010c14');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    } else if (bgId === 'heavenly-dawn') {
+      const g = ctx.createRadialGradient(w * 0.5, h * 0.6, 20, w * 0.5, h * 0.5, w * 0.7);
+      g.addColorStop(0, '#be185d');
+      g.addColorStop(0.5, '#831843');
+      g.addColorStop(1, '#05020a');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    } else if (bgId === 'holy-fire') {
+      const g = ctx.createRadialGradient(w * 0.5, h * 0.9, 20, w * 0.5, h * 0.6, w * 0.6);
+      g.addColorStop(0, '#ef4444');
+      g.addColorStop(0.5, '#7f1d1d');
+      g.addColorStop(1, '#0f0202');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    } else if (bgId === 'starlight-firmament') {
+      ctx.fillStyle = '#030014';
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
+      ctx.beginPath();
+      ctx.arc(w * 0.5, h * 0.5, w * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (bgId === 'cross-majesty') {
+      const g = ctx.createRadialGradient(w * 0.5, h * 0.4, 10, w * 0.5, h * 0.45, w * 0.6);
+      g.addColorStop(0, '#311b05');
+      g.addColorStop(1, '#050301');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(w * 0.5 - 6, h * 0.2, 12, h * 0.6);
+      ctx.fillRect(w * 0.5 - 30, h * 0.35, 60, 12);
+    } else if (bgId === 'emerald-sanctuary') {
+      const g = ctx.createLinearGradient(0, 0, w, h);
+      g.addColorStop(0, '#021c14');
+      g.addColorStop(0.5, '#064e3b');
+      g.addColorStop(1, '#02100b');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, w, h);
     } else {
@@ -1709,22 +1818,25 @@
 
       filteredCustom.forEach(custom => {
         const card = document.createElement('div');
-        card.className = 'media-card announcement-card';
+        card.className = 'media-row-card announcement-row';
 
         card.innerHTML = `
-          <div class="media-thumbnail-box" style="background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%); display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 8px; text-align: center;">
-            <span class="media-type-pill" style="color: var(--accent-gold); border-color: rgba(245, 158, 11, 0.4);">ANNOUNCEMENT</span>
-            <div style="font-size: 0.82rem; font-weight: 800; color: #fff; line-height: 1.2; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(custom.title)}</div>
-            <div style="font-size: 0.68rem; color: var(--accent-cyan); margin-top: 3px;">${custom.slides.length} slide tile${custom.slides.length > 1 ? 's' : ''}</div>
+          <div class="media-row-icon-badge" title="Announcement Slide">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
           </div>
-          <div class="media-info-bar">
-            <span class="media-title-text" title="${escapeHtml(custom.title)}">${escapeHtml(custom.title)}</span>
-            <span style="font-size: 0.68rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(custom.subtitle || (custom.slides[0]?.body || ''))}</span>
-            <div class="media-card-buttons">
-              <button class="btn-mini btn-proj-live" style="color: var(--accent-gold); font-weight: 700;" title="Project Live to TV">⚡ Live</button>
-              <button class="btn-mini btn-add-service" title="Add to Sunday Order of Service">+ Service</button>
-              <button class="btn-mini btn-del-custom" style="color: var(--accent-red);" title="Delete Announcement">&times;</button>
+          <div class="media-row-content">
+            <span class="media-row-title" title="${escapeHtml(custom.title)}">${escapeHtml(custom.title)}</span>
+            <div class="media-row-meta">
+              <span class="media-row-tag tag-announcement">${custom.slides.length} slide${custom.slides.length > 1 ? 's' : ''}</span>
+              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(custom.subtitle || (custom.slides[0]?.body ? custom.slides[0].body.split('\n')[0] : ''))}</span>
             </div>
+          </div>
+          <div class="media-row-actions">
+            <button class="btn-mini btn-proj-live" style="color: var(--accent-gold); font-weight: 700;" title="Project Live to TV">⚡ Live</button>
+            <button class="btn-mini btn-add-service" title="Add to Sunday Order of Service">+ Service</button>
+            <button class="btn-mini btn-del-custom" style="color: var(--accent-red);" title="Delete Announcement">&times;</button>
           </div>
         `;
 
@@ -1772,29 +1884,32 @@
 
       filteredMedia.forEach(item => {
         const card = document.createElement('div');
-        card.className = 'media-card';
+        card.className = 'media-row-card';
 
-        const isVideo = item.type === 'video';
+        const isVideo = isVideoFile(item.url || item.title || item.type);
         const fileUrl = item.url.startsWith('http') || item.url.startsWith('file:') || item.url.startsWith('data:') 
           ? item.url 
           : 'file:///' + item.url.replace(/\\/g, '/');
 
         card.innerHTML = `
-          <div class="media-thumbnail-box">
+          <div class="media-row-thumb-box">
             ${isVideo 
-              ? `<video class="media-thumb-video" src="${fileUrl}" muted preload="metadata"></video><div style="position: absolute; color: #fff; font-size: 1.2rem; pointer-events: none; text-shadow: 0 2px 4px rgba(0,0,0,0.8);">▶</div>`
-              : `<img class="media-thumb-img" src="${fileUrl}" alt="${escapeHtml(item.title)}" onerror="this.src='assets/icon.png'">`
+              ? `<video class="media-row-thumb-video" src="${fileUrl}" muted preload="metadata"></video><div style="position: absolute; color: #fff; font-size: 0.9rem; pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,0.9);">▶</div>`
+              : `<img class="media-row-thumb-img" src="${fileUrl}" alt="${escapeHtml(item.title)}" onerror="this.src='assets/icon.png'">`
             }
-            <span class="media-type-pill">${item.type}</span>
           </div>
-          <div class="media-info-bar">
-            <span class="media-title-text" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</span>
-            <div class="media-card-buttons">
-              <button class="btn-mini btn-proj-live" style="color: var(--accent-gold); font-weight: 700;" title="Project Fullscreen Live to TV">⚡ Project</button>
-              <button class="btn-mini btn-set-bg" style="color: var(--accent-cyan);" title="Set as Background Under Lyrics">🎵 Bg</button>
-              <button class="btn-mini btn-add-service" title="Add to Sunday Order of Service">+ Service</button>
-              <button class="btn-mini btn-del-media" style="color: var(--accent-red);" title="Delete Media">&times;</button>
+          <div class="media-row-content">
+            <span class="media-row-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</span>
+            <div class="media-row-meta">
+              <span class="media-row-tag ${isVideo ? 'tag-video' : 'tag-image'}">${isVideo ? 'VIDEO' : 'IMAGE'}</span>
+              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${isVideo ? 'Motion Video Loop' : 'Background Graphic'}</span>
             </div>
+          </div>
+          <div class="media-row-actions">
+            <button class="btn-mini btn-proj-live" style="color: var(--accent-gold); font-weight: 700;" title="Project Fullscreen Live to TV">⚡ Project</button>
+            <button class="btn-mini btn-set-bg" style="color: var(--accent-cyan);" title="Set as Background Under Lyrics">🎵 Bg</button>
+            <button class="btn-mini btn-add-service" title="Add to Sunday Order of Service">+ Service</button>
+            <button class="btn-mini btn-del-media" style="color: var(--accent-red);" title="Delete Media">&times;</button>
           </div>
         `;
 
@@ -1903,10 +2018,18 @@
         if (window.zionApi && window.zionApi.openFileDialog) {
           const res = await window.zionApi.openFileDialog({
             title: 'Choose Background Image or Video for Theme',
-            filters: [{ name: 'Media Files', extensions: ['jpg', 'jpeg', 'png', 'webp', 'mp4', 'webm'] }]
+            filters: [
+              { name: 'All Media Files (Images & Videos)', extensions: [...ALL_IMAGE_EXTS, ...ALL_VIDEO_EXTS] },
+              { name: 'All Images', extensions: [...ALL_IMAGE_EXTS] },
+              { name: 'All Videos', extensions: [...ALL_VIDEO_EXTS] },
+              { name: 'All Files (*.*)', extensions: ['*'] }
+            ]
           });
           if (res && !res.canceled && res.filePaths.length > 0) {
             themeFormFilePath.value = res.filePaths[0];
+            if (themeFormBgType) {
+              themeFormBgType.value = isVideoFile(res.filePaths[0]) ? 'video' : 'image';
+            }
             updateThemePreview();
           }
         }
@@ -2007,9 +2130,12 @@
         if (!window.zionApi || !window.zionApi.openFileDialog) return;
         const currentType = uploadFormType ? uploadFormType.value : 'image';
         const isVideo = currentType === 'video';
-        const filters = isVideo
-          ? [{ name: 'Videos', extensions: ['mp4', 'webm', 'mov', 'mkv'] }]
-          : [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] }];
+        const filters = [
+          { name: 'All Media Files (Images & Videos)', extensions: [...ALL_IMAGE_EXTS, ...ALL_VIDEO_EXTS] },
+          { name: 'All Images (*.jpg, *.png, *.webp, *.gif, *.svg, etc.)', extensions: [...ALL_IMAGE_EXTS] },
+          { name: 'All Videos (*.mp4, *.webm, *.mov, *.mkv, *.avi, etc.)', extensions: [...ALL_VIDEO_EXTS] },
+          { name: 'All Files (*.*)', extensions: ['*'] }
+        ];
 
         const res = await window.zionApi.openFileDialog({
           title: `Select Church ${isVideo ? 'Video' : 'Image'}`,
@@ -2019,6 +2145,9 @@
         if (res && !res.canceled && res.filePaths.length > 0) {
           const selectedPath = res.filePaths[0];
           if (uploadFormFilePath) uploadFormFilePath.value = selectedPath;
+          if (uploadFormType) {
+            uploadFormType.value = isVideoFile(selectedPath) ? 'video' : 'image';
+          }
           if (uploadFormTitle && !uploadFormTitle.value.trim()) {
             const parts = selectedPath.split(/[\\/]/);
             const fileName = parts[parts.length - 1];
@@ -2032,7 +2161,8 @@
       btnConfirmUploadMedia.addEventListener('click', () => {
         const title = (uploadFormTitle ? uploadFormTitle.value : '').trim();
         const filePath = (uploadFormFilePath ? uploadFormFilePath.value : '').trim();
-        const type = uploadFormType ? uploadFormType.value : 'image';
+        const chosenType = uploadFormType ? uploadFormType.value : 'image';
+        const actualType = isVideoFile(filePath) ? 'video' : (isImageFile(filePath) ? 'image' : chosenType);
 
         if (!title) {
           alert('Please enter a title for this media.');
@@ -2046,7 +2176,7 @@
         const newItem = {
           id: `media-${Date.now()}`,
           title: title,
-          type: type,
+          type: actualType,
           url: filePath
         };
 
@@ -2430,24 +2560,127 @@
       });
     }
 
-    // Alert Banner Modal
+    // =========================================================================
+    // ENHANCED NURSERY & CONGREGATION ALERT BANNER CONTROLS
+    // =========================================================================
+    const bannerInputText = document.getElementById('banner-input-text');
+    const bannerCharCount = document.getElementById('banner-char-count');
+    const bannerStatusBadge = document.getElementById('banner-modal-status-badge');
+    const bannerModalPreview = document.getElementById('banner-modal-preview-banner');
+    const bannerPreviewText = document.getElementById('banner-preview-text');
+    const bannerPreviewIcon = document.getElementById('banner-preview-icon');
+    const bannerDismissSelect = document.getElementById('banner-auto-dismiss-select');
+    const bannerChipButtons = document.querySelectorAll('.banner-chip-btn');
+    const bannerStyleButtons = document.querySelectorAll('.banner-style-btn');
+    const bannerLayoutButtons = document.querySelectorAll('.banner-layout-btn');
+
+    function updateBannerModalPreview() {
+      const text = bannerInputText ? bannerInputText.value.trim() : '';
+      if (bannerCharCount && bannerInputText) {
+        bannerCharCount.textContent = `${bannerInputText.value.length} / 180`;
+      }
+
+      const style = state.bannerStyle || 'urgent-red';
+      const layout = state.bannerLayout || 'bar';
+
+      let icon = '📢';
+      if (style === 'urgent-red') icon = '🚨';
+      else if (style === 'amber-warning') icon = '⚠️';
+      else if (style === 'royal-blue') icon = '📢';
+      else if (style === 'celebration-green') icon = '🕊️';
+      else if (style === 'obsidian-glass') icon = '✨';
+
+      if (bannerPreviewIcon) bannerPreviewIcon.textContent = icon;
+      if (bannerPreviewText) bannerPreviewText.textContent = text || 'Sample alert notification text here...';
+
+      if (bannerModalPreview) {
+        bannerModalPreview.className = `banner-preview-banner ${style} layout-${layout}`;
+      }
+
+      if (bannerStatusBadge) {
+        if (state.bannerActive && state.bannerText) {
+          bannerStatusBadge.textContent = 'LIVE ON AIR';
+          bannerStatusBadge.className = 'badge-status-pill badge-live';
+        } else {
+          bannerStatusBadge.textContent = 'OFF AIR';
+          bannerStatusBadge.className = 'badge-status-pill badge-idle';
+        }
+      }
+    }
+
+    if (bannerInputText) {
+      bannerInputText.addEventListener('input', updateBannerModalPreview);
+    }
+
+    if (bannerChipButtons) {
+      bannerChipButtons.forEach(chip => {
+        chip.addEventListener('click', () => {
+          const tmpl = chip.dataset.template || '';
+          const chipStyle = chip.dataset.style || '';
+          if (bannerInputText) bannerInputText.value = tmpl;
+          if (chipStyle) {
+            state.bannerStyle = chipStyle;
+            bannerStyleButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.style === chipStyle));
+          }
+          updateBannerModalPreview();
+          if (bannerInputText) bannerInputText.focus();
+        });
+      });
+    }
+
+    if (bannerStyleButtons) {
+      bannerStyleButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.bannerStyle = btn.dataset.style || 'urgent-red';
+          bannerStyleButtons.forEach(b => b.classList.toggle('active', b === btn));
+          updateBannerModalPreview();
+        });
+      });
+    }
+
+    if (bannerLayoutButtons) {
+      bannerLayoutButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.bannerLayout = btn.dataset.layout || 'bar';
+          bannerLayoutButtons.forEach(b => b.classList.toggle('active', b === btn));
+          updateBannerModalPreview();
+        });
+      });
+    }
+
+    if (bannerDismissSelect) {
+      bannerDismissSelect.addEventListener('change', () => {
+        state.bannerAutoDismiss = parseInt(bannerDismissSelect.value, 10) || 0;
+      });
+    }
+
+    // Alert Banner Modal Open
     if (btnOpenBanner) {
       btnOpenBanner.addEventListener('click', () => {
         if (modalBanner) modalBanner.classList.add('open');
+        if (bannerInputText && state.bannerText) {
+          bannerInputText.value = state.bannerText;
+        }
+        if (bannerDismissSelect && state.bannerAutoDismiss !== undefined) {
+          bannerDismissSelect.value = String(state.bannerAutoDismiss);
+        }
+        bannerStyleButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.style === state.bannerStyle));
+        bannerLayoutButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.layout === state.bannerLayout));
+        updateBannerModalPreview();
       });
     }
 
     const btnPubBanner = document.getElementById('btn-publish-banner');
     if (btnPubBanner) {
       btnPubBanner.addEventListener('click', () => {
-        const input = document.getElementById('banner-input-text');
-        const text = input ? input.value.trim() : '';
+        const text = bannerInputText ? bannerInputText.value.trim() : '';
         if (text) {
           state.bannerText = text;
           state.bannerActive = true;
           if (btnOpenBanner) {
             btnOpenBanner.style.color = 'var(--accent-red)';
             btnOpenBanner.style.borderColor = 'var(--accent-red)';
+            btnOpenBanner.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.4)';
           }
         }
         if (modalBanner) modalBanner.classList.remove('open');
@@ -2461,11 +2694,11 @@
       btnClrBanner.addEventListener('click', () => {
         state.bannerText = '';
         state.bannerActive = false;
-        const input = document.getElementById('banner-input-text');
-        if (input) input.value = '';
+        if (bannerInputText) bannerInputText.value = '';
         if (btnOpenBanner) {
           btnOpenBanner.style.color = 'var(--text-main)';
           btnOpenBanner.style.borderColor = 'var(--border-subtle)';
+          btnOpenBanner.style.boxShadow = 'none';
         }
         if (modalBanner) modalBanner.classList.remove('open');
         broadcastDisplayState();
@@ -2599,17 +2832,22 @@
       });
     }
 
-    // Browse custom background file (jpg, mp4, etc.)
+    // Browse custom background file (any video or any image)
     if (btnPickCustomBg) {
       btnPickCustomBg.addEventListener('click', async () => {
         if (window.zionApi && window.zionApi.openFileDialog) {
           const res = await window.zionApi.openFileDialog({
             title: 'Select Background Video or Image',
-            filters: [{ name: 'Media Files', extensions: ['mp4', 'webm', 'jpg', 'jpeg', 'png', 'webp'] }]
+            filters: [
+              { name: 'All Media Files (Images & Videos)', extensions: [...ALL_IMAGE_EXTS, ...ALL_VIDEO_EXTS] },
+              { name: 'All Videos', extensions: [...ALL_VIDEO_EXTS] },
+              { name: 'All Images', extensions: [...ALL_IMAGE_EXTS] },
+              { name: 'All Files (*.*)', extensions: ['*'] }
+            ]
           });
           if (res && !res.canceled && res.filePaths.length > 0) {
             const filePath = res.filePaths[0];
-            const isVideo = filePath.endsWith('.mp4') || filePath.endsWith('.webm');
+            const isVideo = isVideoFile(filePath);
             state.backgroundType = isVideo ? 'video' : 'image';
             state.customBgUrl = filePath;
             broadcastDisplayState();

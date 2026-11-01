@@ -360,6 +360,7 @@
               <div id="live-text-body" class="monitor-slide-body">Ready for Service</div>
             </div>
             <div id="live-dimmer-overlay" class="monitor-dimmer-curtain"></div>
+            <div id="live-banner-overlay" class="monitor-banner-overlay"></div>
             <div id="live-blackout-overlay" class="monitor-blackout-curtain">
               BLACKOUT ACTIVE
             </div>
@@ -602,23 +603,104 @@ My chains are gone, I've been set free..."></textarea>
 
   <!-- 4. Nursery / Alert Ticker Banner Modal -->
   <div id="modal-banner" class="modal-overlay">
-    <div class="modal-container" style="width: 500px;">
+    <div class="modal-container" style="width: 580px;">
       <div class="modal-header">
-        <span class="modal-title">Broadcast Live Alert Banner</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="modal-title">Broadcast Live Alert Banner</span>
+          <span id="banner-modal-status-badge" class="badge-status-pill badge-idle">OFF AIR</span>
+        </div>
         <button class="modal-close-btn" data-close="modal-banner">&times;</button>
       </div>
-      <div class="modal-body">
-        <p style="font-size: 0.8rem; color: var(--text-dim);">
-          Broadcasts a prominent, non-intrusive alert across the bottom of the TV/Projector display (e.g. nursery alerts, vehicle registration notes).
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+        <p style="font-size: 0.78rem; color: var(--text-dim); margin: 0; line-height: 1.4;">
+          Broadcasts an instant, non-intrusive alert across the TV/Projector screen without interrupting worship lyrics or scripture.
         </p>
-        <div class="form-group">
-          <label class="form-label">Alert Message</label>
-          <input type="text" id="banner-input-text" class="form-input" placeholder="e.g. Parent of Tag #42 needed in the Nursery please.">
+
+        <!-- Quick Template Chips -->
+        <div>
+          <label class="form-label" style="margin-bottom: 6px;">⚡ Quick-Fill Templates</label>
+          <div class="banner-quick-chips">
+            <button type="button" class="banner-chip-btn" data-template="👶 Parent of child with Tag #____ please report to the Nursery" data-style="urgent-red">👶 Nursery Call</button>
+            <button type="button" class="banner-chip-btn" data-template="🚗 Vehicle with plate #____ has lights on / blocking access" data-style="amber-warning">🚗 Vehicle Notice</button>
+            <button type="button" class="banner-chip-btn" data-template="📱 Courtesy Notice: Please ensure all mobile devices are silenced during worship" data-style="royal-blue">📱 Silence Phones</button>
+            <button type="button" class="banner-chip-btn" data-template="🕊️ Prayer ministry teams are available at the altar" data-style="celebration-green">🕊️ Altar Prayer</button>
+            <button type="button" class="banner-chip-btn" data-template="⏰ Welcome to church! Service will begin in 5 minutes" data-style="obsidian-glass">⏰ Starting Soon</button>
+            <button type="button" class="banner-chip-btn" data-template="📢 First-time visitors: Please visit the Welcome Desk in the lobby after service" data-style="royal-blue">📢 Visitors Desk</button>
+          </div>
+        </div>
+
+        <!-- Alert Message Input -->
+        <div class="form-group" style="margin: 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <label class="form-label" style="margin: 0;">Alert Message</label>
+            <span id="banner-char-count" style="font-size: 0.72rem; color: var(--text-muted);">0 / 180</span>
+          </div>
+          <input type="text" id="banner-input-text" class="form-input" placeholder="Type custom alert message here..." maxlength="180">
+        </div>
+
+        <!-- Style & Layout Selectors -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div>
+            <label class="form-label" style="margin-bottom: 6px;">Alert Color Theme</label>
+            <div class="banner-style-picker" id="banner-style-picker">
+              <button type="button" class="banner-style-btn active" data-style="urgent-red" title="Urgent Red">
+                <span class="color-dot red"></span> Urgent Red
+              </button>
+              <button type="button" class="banner-style-btn" data-style="amber-warning" title="Amber Warning">
+                <span class="color-dot amber"></span> Amber Notice
+              </button>
+              <button type="button" class="banner-style-btn" data-style="royal-blue" title="Royal Blue">
+                <span class="color-dot blue"></span> Royal Blue
+              </button>
+              <button type="button" class="banner-style-btn" data-style="celebration-green" title="Praise Green">
+                <span class="color-dot green"></span> Praise Green
+              </button>
+              <button type="button" class="banner-style-btn" data-style="obsidian-glass" title="Obsidian Glass">
+                <span class="color-dot glass"></span> Obsidian Glass
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="form-label" style="margin-bottom: 6px;">Display Layout</label>
+            <div class="banner-layout-picker" id="banner-layout-picker">
+              <button type="button" class="banner-layout-btn active" data-layout="bar">
+                <span class="layout-icon">▔</span> Full Bottom Bar
+              </button>
+              <button type="button" class="banner-layout-btn" data-layout="toast">
+                <span class="layout-icon">🏷️</span> Floating Toast Pill
+              </button>
+              <button type="button" class="banner-layout-btn" data-layout="marquee">
+                <span class="layout-icon">⏩</span> Scrolling Marquee
+              </button>
+            </div>
+
+            <label class="form-label" style="margin-top: 10px; margin-bottom: 6px;">Auto-Dismiss Timer</label>
+            <select id="banner-auto-dismiss-select" class="select-custom" style="width: 100%;">
+              <option value="0">Manual (Keep until cleared)</option>
+              <option value="30">30 Seconds</option>
+              <option value="60" selected>60 Seconds (1 minute)</option>
+              <option value="120">2 Minutes</option>
+              <option value="300">5 Minutes</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Live In-Modal Preview -->
+        <div>
+          <label class="form-label" style="margin-bottom: 4px;">Live Screen Preview</label>
+          <div class="banner-preview-box" id="banner-modal-preview-box">
+            <div class="banner-preview-mock-text">"Amazing grace how sweet the sound..."</div>
+            <div id="banner-modal-preview-banner" class="banner-preview-banner urgent-red layout-bar">
+              <span id="banner-preview-icon">🚨</span>
+              <span id="banner-preview-text">Parent of child with Tag #42 needed in the Nursery</span>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
         <button id="btn-clear-banner" class="btn-secondary" style="color: var(--accent-red);">Clear / Hide Banner</button>
-        <button id="btn-publish-banner" class="btn-primary">Broadcast Banner Live</button>
+        <button id="btn-publish-banner" class="btn-primary" style="padding: 8px 18px; font-weight: 700;">⚡ Broadcast Live to TV</button>
       </div>
     </div>
   </div>
@@ -653,6 +735,15 @@ My chains are gone, I've been set free..."></textarea>
               <option value="worship-particles">Worship Particles</option>
               <option value="golden-sanctuary">Golden Sanctuary</option>
               <option value="midnight-praise">Midnight Praise</option>
+              <option value="sacred-light-rays">Sacred Light Rays</option>
+              <option value="living-waters">Living Waters</option>
+              <option value="heavenly-dawn">Heavenly Dawn</option>
+              <option value="holy-fire">Holy Fire (Pentecost)</option>
+              <option value="starlight-firmament">Starlight Firmament</option>
+              <option value="rose-gold-elegance">Rose Gold Elegance</option>
+              <option value="cathedral-stained-glass">Cathedral Stained Glass</option>
+              <option value="cross-majesty">Cross of Majesty</option>
+              <option value="emerald-sanctuary">Emerald Sanctuary</option>
             </select>
           </div>
         </div>

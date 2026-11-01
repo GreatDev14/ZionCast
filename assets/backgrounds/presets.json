@@ -54,6 +54,105 @@
       "primaryColor": "#030712",
       "secondaryColor": "#0f172a",
       "accentColor": "#06b6d4"
+    },
+    {
+      "id": "sacred-light-rays",
+      "name": "Sacred Light Rays",
+      "category": "Cathedral",
+      "description": "Majestic volumetric sunbeams streaming downward through a sacred sanctuary atmosphere.",
+      "type": "procedural-canvas",
+      "renderer": "light-rays",
+      "primaryColor": "#0a0d14",
+      "secondaryColor": "#1e293b",
+      "accentColor": "#fef08a"
+    },
+    {
+      "id": "living-waters",
+      "name": "Living Waters",
+      "category": "Serenity",
+      "description": "Deep ocean indigo and soothing cyan fluid ripples gently swaying in rhythmic worship peace.",
+      "type": "procedural-canvas",
+      "renderer": "living-waters",
+      "primaryColor": "#021526",
+      "secondaryColor": "#032b44",
+      "accentColor": "#00f0ff"
+    },
+    {
+      "id": "heavenly-dawn",
+      "name": "Heavenly Dawn",
+      "category": "Communion",
+      "description": "Warm sunrise gradients shifting through sacred peach, rose, and amber hues.",
+      "type": "procedural-canvas",
+      "renderer": "dawn",
+      "primaryColor": "#2d0a1e",
+      "secondaryColor": "#4c1d3d",
+      "accentColor": "#f472b6"
+    },
+    {
+      "id": "holy-fire",
+      "name": "Holy Fire",
+      "category": "Revival",
+      "description": "Vibrant spiritual fire with rising golden embers and warm deep crimson passion.",
+      "type": "procedural-canvas",
+      "renderer": "fire",
+      "primaryColor": "#1c0404",
+      "secondaryColor": "#4a0404",
+      "accentColor": "#ef4444"
+    },
+    {
+      "id": "starlight-firmament",
+      "name": "Starlight Firmament",
+      "category": "Creation",
+      "description": "Deep cosmos expanse with gentle nebula drift and twinkling celestial stars.",
+      "type": "procedural-canvas",
+      "renderer": "starlight",
+      "primaryColor": "#030014",
+      "secondaryColor": "#0c0728",
+      "accentColor": "#818cf8"
+    },
+    {
+      "id": "rose-gold-elegance",
+      "name": "Rose Gold Elegance",
+      "category": "Modern",
+      "description": "Luxury rose-gold and deep charcoal atmospheric waves with fine ambient glimmer.",
+      "type": "procedural-canvas",
+      "renderer": "rose-gold",
+      "primaryColor": "#1c1418",
+      "secondaryColor": "#38232b",
+      "accentColor": "#fb7185"
+    },
+    {
+      "id": "cathedral-stained-glass",
+      "name": "Stained Glass Glow",
+      "category": "Sacred Tradition",
+      "description": "Rich jewel-toned light prisms softly refracting across dark cathedral stones.",
+      "type": "procedural-canvas",
+      "renderer": "stained-glass",
+      "primaryColor": "#0b0b1a",
+      "secondaryColor": "#1a1235",
+      "accentColor": "#eab308"
+    },
+    {
+      "id": "cross-majesty",
+      "name": "Cross of Majesty",
+      "category": "Worship Core",
+      "description": "Reverent glowing silhouette of the sacred Cross bathed in heavenly volumetric backlighting.",
+      "type": "procedural-canvas",
+      "renderer": "cross",
+      "primaryColor": "#050811",
+      "secondaryColor": "#0f172a",
+      "accentColor": "#f59e0b"
+    },
+    {
+      "id": "emerald-sanctuary",
+      "name": "Emerald Sanctuary",
+      "category": "Atmospheric",
+      "description": "Deep royal forest green ambient with floating emerald sparkles and golden warmth.",
+      "type": "procedural-canvas",
+      "renderer": "emerald",
+      "primaryColor": "#021c14",
+      "secondaryColor": "#064e3b",
+      "accentColor": "#34d399"
     }
   ]
 }

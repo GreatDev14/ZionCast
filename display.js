@@ -53,11 +53,21 @@
     cameraOpacity: 0.75,
     bannerText: '',
     bannerActive: false,
+    bannerStyle: 'urgent-red',
+    bannerLayout: 'bar',
+    bannerAutoDismiss: 0,
     brightness: 100
   };
 
   let activeCameraStream = null;
   let activeCameraDeviceId = null;
+  let activeBannerTimer = null;
+  let lastSlideSignature = '';
+
+  function escapeHtmlDisplay(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
 
   // Window Resize & Canvas Setup
   function resizeCanvas() {
@@ -224,6 +234,215 @@
       waveGrad.addColorStop(1, 'rgba(16, 185, 129, 0)');
       ctx.fillStyle = waveGrad;
       ctx.fillRect(0, 0, w, h);
+
+    } else if (bgId === 'sacred-light-rays') {
+      // Sacred Light Rays: Volumetric Cathedral sunbeams streaming down
+      const bg = ctx.createLinearGradient(0, 0, 0, h);
+      bg.addColorStop(0, '#0a0d14');
+      bg.addColorStop(1, '#020408');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+
+      for (let i = 0; i < 4; i++) {
+        const offset = Math.sin(animTime * 0.4 + i * 1.2) * (w * 0.15);
+        const originX = w * (0.2 + i * 0.2) + offset;
+        const beamGrad = ctx.createRadialGradient(originX, 0, 10, originX, h * 0.6, w * 0.4);
+        beamGrad.addColorStop(0, 'rgba(254, 240, 138, 0.14)');
+        beamGrad.addColorStop(0.5, 'rgba(251, 191, 36, 0.05)');
+        beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = beamGrad;
+        ctx.beginPath();
+        ctx.moveTo(originX - 20, 0);
+        ctx.lineTo(originX + 20, 0);
+        ctx.lineTo(originX + w * 0.25, h);
+        ctx.lineTo(originX - w * 0.15, h);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+    } else if (bgId === 'living-waters') {
+      // Living Waters: Gentle flowing oceanic sapphire waves
+      const bg = ctx.createLinearGradient(0, 0, w, h);
+      bg.addColorStop(0, '#021526');
+      bg.addColorStop(0.5, '#032b44');
+      bg.addColorStop(1, '#010c14');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+
+      for (let layer = 1; layer <= 3; layer++) {
+        ctx.fillStyle = `rgba(0, 240, 255, ${0.03 * layer})`;
+        ctx.beginPath();
+        ctx.moveTo(0, h * (0.4 + layer * 0.15));
+        for (let x = 0; x <= w; x += 30) {
+          const waveY = h * (0.4 + layer * 0.15) + Math.sin(animTime * 1.2 * layer + x * 0.005) * (20 * layer);
+          ctx.lineTo(x, waveY);
+        }
+        ctx.lineTo(w, h);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+    } else if (bgId === 'heavenly-dawn') {
+      // Heavenly Dawn: Sunrise gold, rose & peach communion ambient
+      const grad = ctx.createRadialGradient(
+        w * 0.5 + Math.sin(animTime * 0.3) * 80,
+        h * 0.65,
+        30,
+        w * 0.5,
+        h * 0.5,
+        w * 0.7
+      );
+      grad.addColorStop(0, '#be185d');
+      grad.addColorStop(0.35, '#831843');
+      grad.addColorStop(0.7, '#2e1065');
+      grad.addColorStop(1, '#05020a');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      const sunAura = ctx.createRadialGradient(w * 0.5, h * 0.85, 20, w * 0.5, h * 0.85, w * 0.45);
+      sunAura.addColorStop(0, 'rgba(251, 191, 36, 0.18)');
+      sunAura.addColorStop(1, 'rgba(251, 191, 36, 0)');
+      ctx.fillStyle = sunAura;
+      ctx.fillRect(0, 0, w, h);
+
+    } else if (bgId === 'holy-fire') {
+      // Holy Fire: Spiritual flame glow and rising ember particles
+      ctx.fillStyle = '#0f0202';
+      ctx.fillRect(0, 0, w, h);
+
+      const fireGlow = ctx.createRadialGradient(w * 0.5, h * 0.95, 30, w * 0.5, h * 0.6, w * 0.6);
+      fireGlow.addColorStop(0, 'rgba(239, 68, 68, 0.28)');
+      fireGlow.addColorStop(0.4, 'rgba(245, 158, 11, 0.16)');
+      fireGlow.addColorStop(1, 'rgba(15, 2, 2, 0)');
+      ctx.fillStyle = fireGlow;
+      ctx.fillRect(0, 0, w, h);
+
+      for (let i = 0; i < 40; i++) {
+        const px = (w * ((i * 37) % 100) / 100) + Math.sin(animTime * 2 + i) * 20;
+        const py = (h - ((animTime * 120 + i * 45) % h));
+        const pRadius = (i % 3) + 1.5;
+        ctx.fillStyle = `rgba(245, 158, 11, ${0.4 + Math.sin(animTime * 3 + i) * 0.3})`;
+        ctx.beginPath();
+        ctx.arc(px, py, pRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+    } else if (bgId === 'starlight-firmament') {
+      // Starlight Firmament: Deep starry cosmos & subtle drifting nebula
+      ctx.fillStyle = '#030014';
+      ctx.fillRect(0, 0, w, h);
+
+      const nebula = ctx.createRadialGradient(
+        w * 0.4 + Math.sin(animTime * 0.2) * 50,
+        h * 0.4 + Math.cos(animTime * 0.2) * 40,
+        40,
+        w * 0.5,
+        h * 0.5,
+        w * 0.6
+      );
+      nebula.addColorStop(0, 'rgba(99, 102, 241, 0.12)');
+      nebula.addColorStop(0.6, 'rgba(168, 85, 247, 0.08)');
+      nebula.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = nebula;
+      ctx.fillRect(0, 0, w, h);
+
+      for (let i = 0; i < 50; i++) {
+        const sx = (w * ((i * 73) % 100) / 100);
+        const sy = (h * ((i * 47) % 100) / 100);
+        const twinkle = Math.sin(animTime * 3 + i * 1.5) * 0.4 + 0.6;
+        ctx.fillStyle = `rgba(255, 255, 255, ${twinkle * 0.8})`;
+        ctx.beginPath();
+        ctx.arc(sx, sy, (i % 4 === 0) ? 2 : 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+    } else if (bgId === 'rose-gold-elegance') {
+      // Rose Gold Elegance: Modern velvet rose-gold and deep charcoal waves
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, '#1c1418');
+      grad.addColorStop(0.5, '#2e1822');
+      grad.addColorStop(1, '#0c080a');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      const sheen = ctx.createRadialGradient(
+        w * 0.6 + Math.cos(animTime * 0.4) * 90,
+        h * 0.4 + Math.sin(animTime * 0.3) * 60,
+        30,
+        w * 0.6,
+        h * 0.4,
+        w * 0.5
+      );
+      sheen.addColorStop(0, 'rgba(251, 113, 133, 0.16)');
+      sheen.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = sheen;
+      ctx.fillRect(0, 0, w, h);
+
+    } else if (bgId === 'cathedral-stained-glass') {
+      // Cathedral Stained Glass Glow: Refracting jewel tones
+      ctx.fillStyle = '#080811';
+      ctx.fillRect(0, 0, w, h);
+
+      const colors = ['rgba(234, 179, 8, 0.08)', 'rgba(59, 130, 246, 0.08)', 'rgba(239, 68, 68, 0.08)', 'rgba(168, 85, 247, 0.08)'];
+      for (let i = 0; i < 4; i++) {
+        const cx = w * (0.25 + (i % 2) * 0.5) + Math.sin(animTime * 0.5 + i) * 30;
+        const cy = h * (0.3 + Math.floor(i / 2) * 0.4) + Math.cos(animTime * 0.4 + i) * 20;
+        const prism = ctx.createRadialGradient(cx, cy, 20, cx, cy, w * 0.35);
+        prism.addColorStop(0, colors[i]);
+        prism.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = prism;
+        ctx.fillRect(0, 0, w, h);
+      }
+
+    } else if (bgId === 'cross-majesty') {
+      // Cross of Majesty: Reverent backlit glowing Cross
+      const grad = ctx.createRadialGradient(w * 0.5, h * 0.4, 20, w * 0.5, h * 0.45, w * 0.65);
+      grad.addColorStop(0, '#311b05');
+      grad.addColorStop(0.4, '#170c02');
+      grad.addColorStop(1, '#050301');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      const halo = ctx.createRadialGradient(w * 0.5, h * 0.38, 10, w * 0.5, h * 0.38, 160 + Math.sin(animTime * 1.5) * 15);
+      halo.addColorStop(0, 'rgba(245, 158, 11, 0.35)');
+      halo.addColorStop(0.5, 'rgba(217, 119, 6, 0.12)');
+      halo.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(w * 0.5, h * 0.38, 200, 0, Math.PI * 2);
+      ctx.fill();
+
+      const crossW = 28;
+      const crossH = 260;
+      const barW = 160;
+      const barH = 28;
+      const crossY = h * 0.22;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+      ctx.fillRect(w * 0.5 - crossW * 0.5, crossY, crossW, crossH);
+      ctx.fillRect(w * 0.5 - barW * 0.5, crossY + 60, barW, barH);
+
+    } else if (bgId === 'emerald-sanctuary') {
+      // Emerald Sanctuary: Deep forest emerald and golden amber
+      const grad = ctx.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, '#021c14');
+      grad.addColorStop(0.5, '#064e3b');
+      grad.addColorStop(1, '#02100b');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      const aura = ctx.createRadialGradient(
+        w * 0.5 + Math.sin(animTime * 0.4) * 80,
+        h * 0.5 + Math.cos(animTime * 0.5) * 50,
+        30,
+        w * 0.5,
+        h * 0.5,
+        w * 0.55
+      );
+      aura.addColorStop(0, 'rgba(52, 211, 153, 0.16)');
+      aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = aura;
+      ctx.fillRect(0, 0, w, h);
     }
 
     animationFrameId = requestAnimationFrame(renderProceduralLoop);
@@ -371,9 +590,10 @@
       return 'file:///' + url.replace(/\\/g, '/');
     }
 
-    // 4. Custom Local Media Backgrounds
+    // 4. Custom Local Media Backgrounds with Smooth Crossfade
     if (state.backgroundType === 'video' && state.customBgUrl) {
-      canvas.style.display = 'none';
+      canvas.style.opacity = '0';
+      mediaImg.classList.remove('media-active');
       mediaImg.style.display = 'none';
       mediaVideo.style.display = 'block';
       const formatted = formatMediaUrl(state.customBgUrl);
@@ -381,68 +601,130 @@
         mediaVideo.src = formatted;
         mediaVideo.play().catch(e => console.warn('Video bg autoplay prevented:', e));
       }
+      mediaVideo.classList.add('media-active');
     } else if (state.backgroundType === 'image' && state.customBgUrl) {
-      canvas.style.display = 'none';
+      canvas.style.opacity = '0';
+      mediaVideo.classList.remove('media-active');
       mediaVideo.style.display = 'none';
       mediaImg.style.display = 'block';
       mediaImg.src = formatMediaUrl(state.customBgUrl);
+      mediaImg.classList.add('media-active');
     } else {
       // Procedural canvas mode
+      mediaVideo.classList.remove('media-active');
+      mediaImg.classList.remove('media-active');
+      setTimeout(() => {
+        if (state.backgroundType === 'procedural') {
+          mediaVideo.style.display = 'none';
+          mediaImg.style.display = 'none';
+        }
+      }, 350);
       canvas.style.display = 'block';
-      mediaVideo.style.display = 'none';
-      mediaImg.style.display = 'none';
+      canvas.style.opacity = '1';
     }
 
-    // 5. Text Styling & Visibility
+    // 5. Text Styling, Visibility & Smooth Slide Crossfade
     const isTextHidden = state.clearText || state.themeOnly || state.blackout || !state.activeSlide;
 
     if (isTextHidden) {
       textContainer.classList.add('fade-out');
+      lastSlideSignature = '';
     } else {
-      textContainer.classList.remove('fade-out');
+      const currentSignature = `${state.activeSlide.label || ''}__${state.activeSlide.body || ''}`;
 
-      // Update slide title / label badge
-      if (state.activeSlide.label || state.activeItem) {
-        const itemTitle = state.activeItem ? state.activeItem.title : '';
-        const slideLabel = state.activeSlide.label || '';
-        badgeTitle.textContent = itemTitle && slideLabel ? `${itemTitle} • ${slideLabel}` : (itemTitle || slideLabel);
-        badgeTitle.style.display = 'block';
+      const applySlideContent = () => {
+        // Update slide title / label badge
+        if (state.activeSlide.label || state.activeItem) {
+          const itemTitle = state.activeItem ? state.activeItem.title : '';
+          const slideLabel = state.activeSlide.label || '';
+          badgeTitle.textContent = itemTitle && slideLabel ? `${itemTitle} • ${slideLabel}` : (itemTitle || slideLabel);
+          badgeTitle.style.display = 'block';
+        } else {
+          badgeTitle.style.display = 'none';
+        }
+
+        // Update slide body
+        bodyText.textContent = state.activeSlide.body || '';
+
+        // Apply dynamic typography & legibility properties
+        bodyText.style.fontSize = `${state.fontSize || 44}px`;
+        bodyText.style.fontFamily = `${state.fontFamily || 'Outfit'}, sans-serif`;
+        bodyText.style.color = state.fontColor || '#ffffff';
+        bodyText.style.textAlign = state.textAlign || 'center';
+        bodyText.style.paintOrder = 'stroke fill';
+
+        // Text stroke outline
+        const strokeW = state.strokeWidth !== undefined ? state.strokeWidth : 0;
+        const strokeC = state.strokeColor || '#000000';
+        if (strokeW > 0) {
+          bodyText.style.webkitTextStroke = `${strokeW}px ${strokeC}`;
+        } else {
+          bodyText.style.webkitTextStroke = 'none';
+        }
+
+        // Drop shadow
+        if (state.dropShadow) {
+          bodyText.style.textShadow = '0 4px 24px rgba(0, 0, 0, 0.95), 0 2px 8px rgba(0, 0, 0, 0.9)';
+        } else {
+          bodyText.style.textShadow = 'none';
+        }
+      };
+
+      if (lastSlideSignature && lastSlideSignature !== currentSignature) {
+        // Smooth slide cross-dissolve
+        textContainer.classList.add('slide-swapping');
+        setTimeout(() => {
+          applySlideContent();
+          textContainer.classList.remove('slide-swapping');
+          textContainer.classList.remove('fade-out');
+        }, 110);
       } else {
-        badgeTitle.style.display = 'none';
+        applySlideContent();
+        textContainer.classList.remove('fade-out');
+        textContainer.classList.remove('slide-swapping');
       }
 
-      // Update slide body
-      bodyText.textContent = state.activeSlide.body || '';
-
-      // Apply dynamic typography & legibility properties
-      bodyText.style.fontSize = `${state.fontSize || 44}px`;
-      bodyText.style.fontFamily = `${state.fontFamily || 'Outfit'}, sans-serif`;
-      bodyText.style.color = state.fontColor || '#ffffff';
-      bodyText.style.textAlign = state.textAlign || 'center';
-      bodyText.style.paintOrder = 'stroke fill';
-
-      // Text stroke outline (paint-order: stroke fill ensures the stroke stays outside and never turns text black)
-      const strokeW = state.strokeWidth !== undefined ? state.strokeWidth : 0;
-      const strokeC = state.strokeColor || '#000000';
-      if (strokeW > 0) {
-        bodyText.style.webkitTextStroke = `${strokeW}px ${strokeC}`;
-      } else {
-        bodyText.style.webkitTextStroke = 'none';
-      }
-
-      // Drop shadow
-      if (state.dropShadow) {
-        bodyText.style.textShadow = '0 4px 24px rgba(0, 0, 0, 0.95), 0 2px 8px rgba(0, 0, 0, 0.9)';
-      } else {
-        bodyText.style.textShadow = 'none';
-      }
+      lastSlideSignature = currentSignature;
     }
 
-    // 6. Nursery / Congregation Alert Ticker Banner
+    // 6. Nursery / Congregation Alert Ticker Banner (Enhanced with Themes, Layouts & Timers)
     if (state.bannerActive && state.bannerText) {
-      ticker.textContent = state.bannerText;
-      ticker.classList.add('active');
+      if (activeBannerTimer) {
+        clearTimeout(activeBannerTimer);
+        activeBannerTimer = null;
+      }
+
+      const style = state.bannerStyle || 'urgent-red';
+      const layout = state.bannerLayout || 'bar';
+
+      let icon = '📢';
+      if (style === 'urgent-red') icon = '🚨';
+      else if (style === 'amber-warning') icon = '⚠️';
+      else if (style === 'royal-blue') icon = '📢';
+      else if (style === 'celebration-green') icon = '🕊️';
+      else if (style === 'obsidian-glass') icon = '✨';
+
+      ticker.className = `display-ticker-banner active ${style} layout-${layout}`;
+
+      if (layout === 'marquee') {
+        const itemHtml = `<span>${icon} ${escapeHtmlDisplay(state.bannerText)}</span>`;
+        ticker.innerHTML = `<div class="marquee-inner">${itemHtml}&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${itemHtml}</div>`;
+      } else {
+        ticker.innerHTML = `<span style="font-size: 1.1em; flex-shrink: 0;">${icon}</span> <span>${escapeHtmlDisplay(state.bannerText)}</span>`;
+      }
+
+      const autoDismissSec = parseInt(state.bannerAutoDismiss, 10) || 0;
+      if (autoDismissSec > 0) {
+        activeBannerTimer = setTimeout(() => {
+          ticker.classList.remove('active');
+          state.bannerActive = false;
+        }, autoDismissSec * 1000);
+      }
     } else {
+      if (activeBannerTimer) {
+        clearTimeout(activeBannerTimer);
+        activeBannerTimer = null;
+      }
       ticker.classList.remove('active');
     }
   }
