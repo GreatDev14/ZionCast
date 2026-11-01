@@ -42,6 +42,11 @@ contextBridge.exposeInMainWorld('zionApi', {
   loadUserData: () => ipcRenderer.invoke('load-user-data'),
   saveUserData: (data) => ipcRenderer.invoke('save-user-data', data),
 
+  // In-app Updates & External Links
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
+  getVersion: () => '1.0.0',
+
   // Platform
   platform: process.platform
 });

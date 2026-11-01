@@ -1,6 +1,7 @@
-const { app, BrowserWindow, screen, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
 
 // Ensure high-performance GPU acceleration & zero background throttling
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
@@ -475,5 +476,85 @@ ipcMain.handle('save-user-data', async (event, bundle) => {
     console.error('[ZionCast Storage] Failed to write user data file:', error.message);
     return { success: false, error: error.message };
   }
+});
+
+// External browser launcher
+ipcMain.handle('open-external-url', async (event, url) => {
+  if (url && (url.startsWith('https://') || url.startsWith('http://'))) {
+    await shell.openExternal(url);
+    return true;
+  }
+  return false;
+});
+
+// In-app Update Checker (queries official GitHub Releases API)
+ipcMain.handle('check-for-updates', async () => {
+  return new Promise((resolve) => {
+    const currentVersion = app.getVersion();
+    const options = {
+      hostname: 'api.github.com',
+      path: '/repos/GreatDev14/ZionCast/releases/latest',
+      headers: {
+        'User-Agent': `ZionCast-Desktop/${currentVersion}`,
+        'Accept': 'application/vnd.github+json'
+      },
+      timeout: 8000
+    };
+
+    const req = https.get(options, (res) => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        try {
+          if (res.statusCode === 200) {
+            const data = JSON.parse(body);
+            const latestTag = data.tag_name || '';
+            const latestVer = latestTag.replace(/^v/, '');
+            let downloadUrl = 'https://github.com/GreatDev14/ZionCast/releases/latest';
+            if (Array.isArray(data.assets)) {
+              const exeAsset = data.assets.find(a => a.name.endsWith('.exe') && !a.name.includes('Portable'));
+              if (exeAsset && exeAsset.browser_download_url) {
+                downloadUrl = exeAsset.browser_download_url;
+              }
+            }
+
+            const parseVer = v => v.split('.').map(n => parseInt(n, 10) || 0);
+            const curParts = parseVer(currentVersion);
+            const latParts = parseVer(latestVer);
+            let hasUpdate = false;
+            for (let i = 0; i < Math.max(curParts.length, latParts.length); i++) {
+              const c = curParts[i] || 0;
+              const l = latParts[i] || 0;
+              if (l > c) { hasUpdate = true; break; }
+              if (l < c) { hasUpdate = false; break; }
+            }
+
+            resolve({
+              success: true,
+              hasUpdate,
+              currentVersion,
+              latestVersion: latestVer,
+              releaseName: data.name || latestTag,
+              releaseNotes: data.body || '',
+              releaseUrl: data.html_url || 'https://github.com/GreatDev14/ZionCast/releases',
+              downloadUrl
+            });
+          } else {
+            resolve({ success: false, error: `GitHub HTTP ${res.statusCode}`, currentVersion });
+          }
+        } catch (e) {
+          resolve({ success: false, error: e.message, currentVersion });
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      resolve({ success: false, error: err.message, currentVersion });
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ success: false, error: 'Check request timed out', currentVersion });
+    });
+  });
 });
 

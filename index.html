@@ -126,6 +126,11 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
         <span id="btn-tv-label">Projector Output</span>
       </button>
+
+      <button id="btn-check-updates" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: var(--accent-gold); border-color: rgba(245, 158, 11, 0.35);" title="Check GitHub for latest ZionCast updates">
+        <span id="update-badge-icon">🔄</span>
+        <span id="update-badge-text">v1.0.0</span>
+      </button>
     </div>
   </header>
 
@@ -836,6 +841,34 @@ My chains are gone, I've been set free..."></textarea>
       <div class="modal-footer">
         <button class="btn-secondary" data-close="modal-upload-media">Cancel</button>
         <button id="btn-confirm-upload-media" class="btn-primary">Add to Media Library</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Software Update Modal -->
+  <div id="modal-update" class="modal-overlay">
+    <div class="modal-container" style="width: 520px;">
+      <div class="modal-header">
+        <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          🚀 ZionCast Software Update
+        </span>
+        <button class="modal-close-btn" data-close="modal-update">&times;</button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px;">
+        <div id="update-modal-banner" style="padding: 12px 14px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-sm);">
+          <div style="font-weight: 800; font-size: 0.95rem; color: var(--accent-gold);" id="update-modal-title">Checking for updates...</div>
+          <div style="font-size: 0.78rem; color: var(--text-dim); margin-top: 4px;" id="update-modal-subtitle">Current installed version: v1.0.0</div>
+        </div>
+        <div id="update-modal-notes-wrap" style="display: none;">
+          <label class="form-label" style="margin-bottom: 4px;">What's New in this Release:</label>
+          <div id="update-modal-notes" style="max-height: 160px; overflow-y: auto; background: var(--bg-deep); border: 1px solid var(--border-subtle); padding: 10px; border-radius: var(--radius-sm); font-size: 0.78rem; color: var(--text-main); white-space: pre-wrap; line-height: 1.5;"></div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button class="btn-secondary" data-close="modal-update">Close</button>
+        <button id="btn-download-update" class="btn-primary" style="display: none; padding: 8px 18px; font-weight: 700;">
+          ⬇️ Download & Install Update
+        </button>
       </div>
     </div>
   </div>

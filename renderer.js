@@ -3105,6 +3105,100 @@
           break;
       }
     });
+
+    // =========================================================================
+    // AUTOMATIC IN-APP UPDATE CHECKER
+    // =========================================================================
+    const btnCheckUpdates = document.getElementById('btn-check-updates');
+    const updateBadgeIcon = document.getElementById('update-badge-icon');
+    const updateBadgeText = document.getElementById('update-badge-text');
+    const modalUpdate = document.getElementById('modal-update');
+    const updateModalTitle = document.getElementById('update-modal-title');
+    const updateModalSubtitle = document.getElementById('update-modal-subtitle');
+    const updateModalNotesWrap = document.getElementById('update-modal-notes-wrap');
+    const updateModalNotes = document.getElementById('update-modal-notes');
+    const btnDownloadUpdate = document.getElementById('btn-download-update');
+
+    async function performUpdateCheck(manual = false) {
+      if (!window.zionApi || !window.zionApi.checkForUpdates) return;
+
+      if (manual) {
+        if (updateBadgeIcon) updateBadgeIcon.textContent = '⏳';
+        if (updateBadgeText) updateBadgeText.textContent = 'Checking...';
+        if (modalUpdate) modalUpdate.classList.add('open');
+        if (updateModalTitle) updateModalTitle.textContent = 'Checking for updates...';
+        if (updateModalSubtitle) updateModalSubtitle.textContent = 'Connecting to GitHub...';
+        if (updateModalNotesWrap) updateModalNotesWrap.style.display = 'none';
+        if (btnDownloadUpdate) btnDownloadUpdate.style.display = 'none';
+      }
+
+      try {
+        const res = await window.zionApi.checkForUpdates();
+        if (res && res.success) {
+          if (res.hasUpdate) {
+            if (updateBadgeIcon) updateBadgeIcon.textContent = '🚀';
+            if (updateBadgeText) updateBadgeText.textContent = `Update v${res.latestVersion}`;
+            if (btnCheckUpdates) {
+              btnCheckUpdates.style.color = '#ffffff';
+              btnCheckUpdates.style.background = 'linear-gradient(135deg, #d97706, #f59e0b)';
+              btnCheckUpdates.style.borderColor = '#fbbf24';
+              btnCheckUpdates.style.boxShadow = '0 0 12px rgba(245, 158, 11, 0.5)';
+            }
+
+            if (updateModalTitle) updateModalTitle.textContent = `🚀 Update Available: v${res.latestVersion}!`;
+            if (updateModalSubtitle) updateModalSubtitle.textContent = `Current installed: v${res.currentVersion} • Latest release: v${res.latestVersion}`;
+            if (res.releaseNotes && updateModalNotes) {
+              updateModalNotes.textContent = res.releaseNotes;
+              if (updateModalNotesWrap) updateModalNotesWrap.style.display = 'block';
+            }
+            if (btnDownloadUpdate) {
+              btnDownloadUpdate.style.display = 'inline-flex';
+              btnDownloadUpdate.onclick = () => {
+                if (window.zionApi && window.zionApi.openExternalUrl) {
+                  window.zionApi.openExternalUrl(res.downloadUrl || res.releaseUrl);
+                } else {
+                  window.open(res.downloadUrl || res.releaseUrl, '_blank');
+                }
+              };
+            }
+          } else {
+            if (updateBadgeIcon) updateBadgeIcon.textContent = '✓';
+            if (updateBadgeText) updateBadgeText.textContent = `v${res.currentVersion} (Latest)`;
+            if (btnCheckUpdates) {
+              btnCheckUpdates.style.color = 'var(--accent-gold)';
+              btnCheckUpdates.style.background = '';
+              btnCheckUpdates.style.boxShadow = 'none';
+            }
+            if (updateModalTitle) updateModalTitle.textContent = `✓ ZionCast is Up to Date!`;
+            if (updateModalSubtitle) updateModalSubtitle.textContent = `You are running the latest version (v${res.currentVersion}).`;
+            if (updateModalNotesWrap) updateModalNotesWrap.style.display = 'none';
+            if (btnDownloadUpdate) btnDownloadUpdate.style.display = 'none';
+          }
+        } else {
+          if (manual) {
+            if (updateModalTitle) updateModalTitle.textContent = 'Could not check for updates';
+            if (updateModalSubtitle) updateModalSubtitle.textContent = res?.error || 'Check internet connection and try again.';
+          }
+          if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.0.0';
+        }
+      } catch (err) {
+        console.warn('Update check warning:', err);
+        if (manual && updateModalTitle) {
+          updateModalTitle.textContent = 'Update check failed';
+          if (updateModalSubtitle) updateModalSubtitle.textContent = err.message;
+        }
+      }
+    }
+
+    if (btnCheckUpdates) {
+      btnCheckUpdates.addEventListener('click', () => performUpdateCheck(true));
+    }
+
+    // Background check 3 seconds after startup
+    setTimeout(() => {
+      performUpdateCheck(false);
+    }, 3000);
   }
 
   // Utility escape HTML
