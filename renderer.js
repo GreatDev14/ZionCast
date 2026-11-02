@@ -42,6 +42,13 @@
     bannerAutoDismiss: 60,
     brightness: 100,
 
+    // YouTube Live & Online Stream Player
+    youtubeVideoId: '',
+    youtubeUrl: '',
+    youtubeTitle: '',
+    youtubeMuted: false,
+    youtubeActive: false,
+
     // Hardware and displays
     displays: [],
     primaryDisplayId: null,
@@ -356,12 +363,29 @@
   const mediaSearchInput = document.getElementById('media-search-input');
   const btnUploadImage = document.getElementById('btn-upload-image');
   const btnUploadVideo = document.getElementById('btn-upload-video');
+  const btnOpenYoutubeModal = document.getElementById('btn-open-youtube-modal');
 
-  // DroidCam Studio Controls
-  const droidcamStatusBadge = document.getElementById('droidcam-status-badge');
+  // Camera Studio Controls (Camo, DroidCam, OBS, USB)
+  const cameraStatusBadge = document.getElementById('camera-status-badge') || document.getElementById('droidcam-status-badge');
   const btnProjectPreacher = document.getElementById('btn-project-preacher');
   const btnProjectWorshipBg = document.getElementById('btn-project-worship-bg');
   const btnCameraOff = document.getElementById('btn-camera-off');
+
+  // YouTube Live & Online Video Controls
+  const modalYoutube = document.getElementById('modal-youtube');
+  const youtubeUrlInput = document.getElementById('youtube-url-input');
+  const youtubeTitleInput = document.getElementById('youtube-title-input');
+  const youtubeMuteToggle = document.getElementById('youtube-mute-toggle');
+  const youtubePreviewImg = document.getElementById('youtube-preview-img');
+  const youtubePreviewPlaceholder = document.getElementById('youtube-preview-placeholder');
+  const youtubePreviewBadge = document.getElementById('youtube-preview-badge');
+  const btnSaveYoutubeLibrary = document.getElementById('btn-save-youtube-library');
+  const btnProjectYoutubeWorship = document.getElementById('btn-project-youtube-worship');
+  const btnProjectYoutubeLive = document.getElementById('btn-project-youtube-live');
+  const activeYoutubeBar = document.getElementById('active-youtube-bar');
+  const labelActiveYoutubeTitle = document.getElementById('label-active-youtube-title');
+  const btnToggleYoutubeMute = document.getElementById('btn-toggle-youtube-mute');
+  const btnStopYoutube = document.getElementById('btn-stop-youtube');
 
   // Theme Builder Controls
   const btnOpenThemeBuilder = document.getElementById('btn-open-theme-builder');
@@ -742,7 +766,7 @@
   }
 
   // =========================================================================
-  // 5. DIRECT HARDWARE VIDEO CAPTURE (DroidCam / OBS / USB Webcams)
+  // 5. DIRECT HARDWARE VIDEO CAPTURE (Camo / DroidCam / OBS / HDMI Capture)
   // =========================================================================
   async function enumerateVideoDevices() {
     try {
@@ -754,18 +778,39 @@
       if (videoInputs.length === 0) {
         cameraDeviceSelect.innerHTML = '<option value="">No camera devices found</option>';
         labelCameraStatus.textContent = 'Camera: No Hardware';
+        const badge = cameraStatusBadge || droidcamStatusBadge;
+        if (badge) {
+          badge.textContent = '⚠️ No Camera Detected';
+          badge.className = 'camera-status-pill offline';
+        }
         return;
       }
+
+      // Check specifically for Camo, DroidCam, and OBS
+      const camoCam = videoInputs.find(d => (d.label || '').toLowerCase().includes('camo'));
+      const droidCam = videoInputs.find(d => {
+        const lbl = (d.label || '').toLowerCase();
+        return lbl.includes('droidcam') || lbl.includes('droid');
+      });
+      const obsCam = videoInputs.find(d => (d.label || '').toLowerCase().includes('obs'));
+      const hdmiCapture = videoInputs.find(d => {
+        const lbl = (d.label || '').toLowerCase();
+        return lbl.includes('capture') || lbl.includes('elgato') || lbl.includes('cam link') || lbl.includes('atem') || lbl.includes('hdmi');
+      });
 
       videoInputs.forEach((device, index) => {
         const option = document.createElement('option');
         option.value = device.deviceId;
         let label = device.label || `Camera ${index + 1}`;
-        // Highlight DroidCam or OBS
-        if (label.toLowerCase().includes('droidcam')) {
+        const low = label.toLowerCase();
+        if (low.includes('camo')) {
+          label = `✨ ${label} (Camo Studio)`;
+        } else if (low.includes('droidcam') || low.includes('droid')) {
           label = `📱 ${label} (DroidCam)`;
-        } else if (label.toLowerCase().includes('obs')) {
-          label = `🎥 ${label} (OBS Virtual)`;
+        } else if (low.includes('obs')) {
+          label = `🎬 ${label} (OBS Virtual Cam)`;
+        } else if (low.includes('capture') || low.includes('elgato') || low.includes('cam link') || low.includes('atem') || low.includes('hdmi')) {
+          label = `📡 ${label} (HDMI Capture Card)`;
         } else {
           label = `📹 ${label}`;
         }
@@ -773,33 +818,42 @@
         cameraDeviceSelect.appendChild(option);
       });
 
-      // Check for DroidCam specifically
-      const droidCam = videoInputs.find(d => {
-        const lbl = (d.label || '').toLowerCase();
-        return lbl.includes('droidcam') || lbl.includes('droid');
-      });
-
-      if (droidcamStatusBadge) {
-        if (droidCam) {
-          droidcamStatusBadge.textContent = '📱 DroidCam Connected';
-          droidcamStatusBadge.classList.remove('offline');
+      // Update badge with active camera platform info
+      const badge = cameraStatusBadge || droidcamStatusBadge;
+      if (badge) {
+        badge.className = 'camera-status-pill';
+        if (camoCam) {
+          badge.textContent = '✨ Camo Connected';
+          badge.classList.add('camo-active');
+        } else if (droidCam) {
+          badge.textContent = '📱 DroidCam Connected';
+        } else if (obsCam) {
+          badge.textContent = '🎬 OBS Cam Connected';
+          badge.classList.add('obs-active');
+        } else if (hdmiCapture) {
+          badge.textContent = '📡 HDMI Capture Ready';
         } else if (videoInputs.length > 0) {
-          droidcamStatusBadge.textContent = `📹 ${videoInputs.length} Camera(s) Ready`;
-          droidcamStatusBadge.classList.remove('offline');
+          badge.textContent = `📹 ${videoInputs.length} Camera(s) Ready`;
         } else {
-          droidcamStatusBadge.textContent = '⚠️ DroidCam Not Detected';
-          droidcamStatusBadge.classList.add('offline');
+          badge.textContent = '⚠️ No Camera Detected';
+          badge.classList.add('offline');
         }
       }
 
-      // Default select DroidCam if present, or first device
-      if (droidCam && !state.cameraDeviceId) {
-        state.cameraDeviceId = droidCam.deviceId;
-        cameraDeviceSelect.value = droidCam.deviceId;
-      } else if (!state.cameraDeviceId && videoInputs.length > 0) {
-        state.cameraDeviceId = videoInputs[0].deviceId;
-        cameraDeviceSelect.value = videoInputs[0].deviceId;
-      } else if (state.cameraDeviceId) {
+      // Priority selection: saved device -> Camo -> DroidCam -> OBS -> first device
+      if (!state.cameraDeviceId) {
+        if (camoCam) {
+          state.cameraDeviceId = camoCam.deviceId;
+        } else if (droidCam) {
+          state.cameraDeviceId = droidCam.deviceId;
+        } else if (obsCam) {
+          state.cameraDeviceId = obsCam.deviceId;
+        } else if (videoInputs.length > 0) {
+          state.cameraDeviceId = videoInputs[0].deviceId;
+        }
+      }
+
+      if (state.cameraDeviceId && cameraDeviceSelect) {
         cameraDeviceSelect.value = state.cameraDeviceId;
       }
 
@@ -901,7 +955,12 @@
       bannerStyle: state.bannerStyle || 'urgent-red',
       bannerLayout: state.bannerLayout || 'bar',
       bannerAutoDismiss: state.bannerAutoDismiss || 0,
-      brightness: typeof state.brightness === 'number' ? state.brightness : 100
+      brightness: typeof state.brightness === 'number' ? state.brightness : 100,
+      youtubeVideoId: state.youtubeVideoId || '',
+      youtubeUrl: state.youtubeUrl || '',
+      youtubeTitle: state.youtubeTitle || '',
+      youtubeMuted: !!state.youtubeMuted,
+      youtubeActive: !!state.youtubeActive
     };
 
     // 1. Electron IPC Send
@@ -984,6 +1043,34 @@
         liveBanner.className = `monitor-banner-overlay active ${style}`;
       } else {
         liveBanner.className = 'monitor-banner-overlay';
+      }
+    }
+
+    // Mirror YouTube Live overlay & stream control bar
+    const liveYtOverlay = document.getElementById('live-youtube-overlay');
+    const liveYtThumb = document.getElementById('live-youtube-thumb');
+    const activeYtBar = document.getElementById('active-youtube-bar');
+    const labelActiveYtTitle = document.getElementById('label-active-youtube-title');
+
+    if (payload.youtubeActive && payload.youtubeVideoId && !payload.blackout) {
+      if (liveYtOverlay) {
+        liveYtOverlay.classList.add('active');
+        if (liveYtThumb) {
+          liveYtThumb.src = `https://img.youtube.com/vi/${payload.youtubeVideoId}/hqdefault.jpg`;
+        }
+      }
+      if (activeYtBar) {
+        activeYtBar.style.display = 'flex';
+        if (labelActiveYtTitle) {
+          labelActiveYtTitle.textContent = payload.youtubeTitle || 'YouTube Live Stream';
+        }
+      }
+    } else {
+      if (liveYtOverlay) {
+        liveYtOverlay.classList.remove('active');
+      }
+      if (activeYtBar && (!payload.youtubeActive || !payload.youtubeVideoId)) {
+        activeYtBar.style.display = 'none';
       }
     }
   }
@@ -1141,7 +1228,23 @@
   // 8. PRESENTATION TILES & SELECTION LOGIC
   // =========================================================================
   function loadPresentationItem(item, type, pushDirectlyToLive = false) {
-    if (type === 'media') {
+    if (type === 'youtube' || (item && item.type === 'youtube')) {
+      const vid = item.videoId || extractYouTubeId(item.url);
+      state.backgroundType = 'youtube';
+      state.youtubeVideoId = vid;
+      state.youtubeUrl = item.url || (vid ? `https://www.youtube.com/watch?v=${vid}` : '');
+      state.youtubeTitle = item.title || 'YouTube Live Stream';
+      state.youtubeActive = true;
+      state.youtubeMuted = false;
+      state.customBgUrl = '';
+      state.clearText = true;
+      if (!item.slides) {
+        item = {
+          ...item,
+          slides: [{ label: item.title, body: '' }]
+        };
+      }
+    } else if (type === 'media') {
       const isVideo = item.type === 'video';
       state.backgroundType = isVideo ? 'video' : 'image';
       state.customBgUrl = item.url;
@@ -1230,6 +1333,20 @@
     cards.forEach((c, i) => {
       c.classList.toggle('preview-active', i === index);
     });
+
+    // YouTube preview overlay
+    const prevYtOverlay = document.getElementById('preview-youtube-overlay');
+    const prevYtThumb = document.getElementById('preview-youtube-thumb');
+    if (prevYtOverlay) {
+      if ((state.backgroundType === 'youtube' || (state.activeItem && state.activeItem.type === 'youtube')) && state.youtubeVideoId) {
+        prevYtOverlay.classList.add('active');
+        if (prevYtThumb) {
+          prevYtThumb.src = `https://img.youtube.com/vi/${state.youtubeVideoId}/hqdefault.jpg`;
+        }
+      } else {
+        prevYtOverlay.classList.remove('active');
+      }
+    }
   }
 
   function goLiveSlide(index) {
@@ -1886,23 +2003,37 @@
         const card = document.createElement('div');
         card.className = 'media-row-card';
 
-        const isVideo = isVideoFile(item.url || item.title || item.type);
-        const fileUrl = item.url.startsWith('http') || item.url.startsWith('file:') || item.url.startsWith('data:') 
-          ? item.url 
-          : 'file:///' + item.url.replace(/\\/g, '/');
+        const isYouTube = item.type === 'youtube' || !!item.videoId;
+        const isVideo = !isYouTube && isVideoFile(item.url || item.title || item.type);
+        const ytId = isYouTube ? (item.videoId || extractYouTubeId(item.url)) : '';
+        const thumbUrl = isYouTube 
+          ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`
+          : (item.url.startsWith('http') || item.url.startsWith('file:') || item.url.startsWith('data:') 
+              ? item.url 
+              : 'file:///' + item.url.replace(/\\/g, '/'));
+
+        let thumbMarkup = '';
+        if (isYouTube) {
+          thumbMarkup = `<img class="media-row-thumb-img" src="${thumbUrl}" alt="${escapeHtml(item.title)}" onerror="this.src='assets/icon.png'"><div style="position: absolute; color: #ef4444; font-size: 0.95rem; pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,0.9);">▶</div>`;
+        } else if (isVideo) {
+          thumbMarkup = `<video class="media-row-thumb-video" src="${thumbUrl}" muted preload="metadata"></video><div style="position: absolute; color: #fff; font-size: 0.9rem; pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,0.9);">▶</div>`;
+        } else {
+          thumbMarkup = `<img class="media-row-thumb-img" src="${thumbUrl}" alt="${escapeHtml(item.title)}" onerror="this.src='assets/icon.png'">`;
+        }
+
+        const typeLabel = isYouTube ? 'YOUTUBE' : (isVideo ? 'VIDEO' : 'IMAGE');
+        const tagClass = isYouTube ? 'tag-youtube' : (isVideo ? 'tag-video' : 'tag-image');
+        const descLabel = isYouTube ? 'Online Live Stream' : (isVideo ? 'Motion Video Loop' : 'Background Graphic');
 
         card.innerHTML = `
           <div class="media-row-thumb-box">
-            ${isVideo 
-              ? `<video class="media-row-thumb-video" src="${fileUrl}" muted preload="metadata"></video><div style="position: absolute; color: #fff; font-size: 0.9rem; pointer-events: none; text-shadow: 0 1px 3px rgba(0,0,0,0.9);">▶</div>`
-              : `<img class="media-row-thumb-img" src="${fileUrl}" alt="${escapeHtml(item.title)}" onerror="this.src='assets/icon.png'">`
-            }
+            ${thumbMarkup}
           </div>
           <div class="media-row-content">
             <span class="media-row-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</span>
             <div class="media-row-meta">
-              <span class="media-row-tag ${isVideo ? 'tag-video' : 'tag-image'}">${isVideo ? 'VIDEO' : 'IMAGE'}</span>
-              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${isVideo ? 'Motion Video Loop' : 'Background Graphic'}</span>
+              <span class="media-row-tag ${tagClass}">${typeLabel}</span>
+              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${descLabel}</span>
             </div>
           </div>
           <div class="media-row-actions">
@@ -1914,20 +2045,32 @@
         `;
 
         card.addEventListener('dblclick', () => {
-          projectMediaLive(item);
+          if (isYouTube) {
+            projectYouTubeLive(item);
+          } else {
+            projectMediaLive(item);
+          }
         });
 
         card.addEventListener('click', (e) => {
           if (e.target.closest('.btn-proj-live')) {
-            projectMediaLive(item);
+            if (isYouTube) {
+              projectYouTubeLive(item);
+            } else {
+              projectMediaLive(item);
+            }
             return;
           }
           if (e.target.closest('.btn-set-bg')) {
-            setMediaAsBackground(item);
+            if (isYouTube) {
+              setYouTubeAsBackground(item, true);
+            } else {
+              setMediaAsBackground(item);
+            }
             return;
           }
           if (e.target.closest('.btn-add-service')) {
-            addToServiceOrder('media', item.title, item);
+            addToServiceOrder(isYouTube ? 'youtube' : 'media', item.title, item);
             return;
           }
           if (e.target.closest('.btn-del-media')) {
@@ -1940,15 +2083,129 @@
           }
 
           // Single click: update preview
-          state.backgroundType = isVideo ? 'video' : 'image';
-          state.customBgUrl = item.url;
-          previewTextTitle.textContent = item.title;
-          previewTextBody.textContent = isVideo ? '[Video Media Loop Ready]' : '[Image Graphic Ready]';
+          if (isYouTube) {
+            state.backgroundType = 'youtube';
+            state.youtubeVideoId = ytId;
+            state.youtubeUrl = item.url;
+            state.youtubeTitle = item.title;
+            state.activeItem = {
+              id: item.id,
+              title: item.title,
+              type: 'youtube',
+              videoId: ytId,
+              url: item.url,
+              slides: [{ label: item.title, body: '' }]
+            };
+            previewTextTitle.textContent = item.title;
+            previewTextBody.textContent = '[YouTube Live Stream Ready]';
+            updateOperatorPreview(0);
+          } else {
+            state.backgroundType = isVideo ? 'video' : 'image';
+            state.customBgUrl = item.url;
+            previewTextTitle.textContent = item.title;
+            previewTextBody.textContent = isVideo ? '[Video Media Loop Ready]' : '[Image Graphic Ready]';
+            const prevYtOverlay = document.getElementById('preview-youtube-overlay');
+            if (prevYtOverlay) prevYtOverlay.classList.remove('active');
+          }
         });
 
         mediaGalleryGrid.appendChild(card);
       });
     }
+  }
+
+  function extractYouTubeId(urlOrId) {
+    if (!urlOrId) return '';
+    const clean = String(urlOrId).trim();
+    if (/^[a-zA-Z0-9_-]{11}$/.test(clean)) return clean;
+    const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?|live|shorts)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
+    const match = clean.match(regex);
+    return match ? match[1] : '';
+  }
+
+  function projectYouTubeLive(item, muted = false) {
+    const videoId = item.videoId || extractYouTubeId(item.url);
+    if (!videoId) {
+      alert('Could not determine a valid YouTube video ID from the provided link.');
+      return;
+    }
+
+    state.backgroundType = 'youtube';
+    state.youtubeVideoId = videoId;
+    state.youtubeUrl = item.url || `https://www.youtube.com/watch?v=${videoId}`;
+    state.youtubeTitle = item.title || 'YouTube Live Stream';
+    state.youtubeMuted = muted;
+    state.youtubeActive = true;
+    state.customBgUrl = '';
+    state.clearText = true;
+    state.themeOnly = true;
+    state.blackout = false;
+
+    btnFastClear.classList.add('active-clear');
+    btnFastTheme.classList.add('active-theme');
+    btnFastBlackout.classList.remove('active-blackout');
+
+    state.activeItem = {
+      id: item.id || `yt-${Date.now()}`,
+      title: state.youtubeTitle,
+      type: 'youtube',
+      videoId: videoId,
+      url: state.youtubeUrl,
+      slides: [{ label: state.youtubeTitle, body: '' }]
+    };
+    state.activeSlideIndex = 0;
+    activeItemTitle.textContent = state.youtubeTitle;
+    activeItemMeta.textContent = `YouTube Stream (Live TV)`;
+    renderSlideTiles();
+
+    // Auto-launch TV output if closed
+    if (window.zionApi && !state.displayOpen) {
+      const targetScreenId = selectTargetScreen ? selectTargetScreen.value : null;
+      window.zionApi.launchDisplay(targetScreenId).then(() => {
+        updateTvStatusUI(true);
+        setTimeout(() => broadcastDisplayState(), 200);
+      });
+    }
+
+    broadcastDisplayState();
+    triggerAutoSave();
+  }
+
+  function setYouTubeAsBackground(item, muted = true) {
+    const videoId = item.videoId || extractYouTubeId(item.url);
+    if (!videoId) {
+      alert('Could not determine a valid YouTube video ID.');
+      return;
+    }
+
+    state.backgroundType = 'youtube';
+    state.youtubeVideoId = videoId;
+    state.youtubeUrl = item.url || `https://www.youtube.com/watch?v=${videoId}`;
+    state.youtubeTitle = item.title || 'YouTube Background';
+    state.youtubeMuted = muted;
+    state.youtubeActive = true;
+    state.customBgUrl = '';
+
+    broadcastDisplayState();
+    triggerAutoSave();
+  }
+
+  function stopYouTubeStream() {
+    state.youtubeActive = false;
+    state.youtubeVideoId = '';
+    state.youtubeUrl = '';
+    state.youtubeTitle = '';
+    if (state.backgroundType === 'youtube') {
+      state.backgroundType = 'procedural';
+    }
+    const prevYtOverlay = document.getElementById('preview-youtube-overlay');
+    if (prevYtOverlay) prevYtOverlay.classList.remove('active');
+    const liveYtOverlay = document.getElementById('live-youtube-overlay');
+    if (liveYtOverlay) liveYtOverlay.classList.remove('active');
+    if (activeYoutubeBar) activeYoutubeBar.style.display = 'none';
+
+    broadcastDisplayState();
+    triggerAutoSave();
   }
 
   function projectMediaLive(item) {
@@ -2205,17 +2462,30 @@
     if (modalUploadMedia) modalUploadMedia.classList.add('open');
   }
 
+  function getActiveCameraDevice() {
+    if (cameraDeviceSelect && cameraDeviceSelect.value) {
+      const match = state.videoDevices.find(d => d.deviceId === cameraDeviceSelect.value);
+      if (match) return match;
+    }
+    const camo = state.videoDevices.find(d => (d.label || '').toLowerCase().includes('camo'));
+    if (camo) return camo;
+    const droid = state.videoDevices.find(d => {
+      const lbl = (d.label || '').toLowerCase();
+      return lbl.includes('droidcam') || lbl.includes('droid');
+    });
+    if (droid) return droid;
+    const obs = state.videoDevices.find(d => (d.label || '').toLowerCase().includes('obs'));
+    if (obs) return obs;
+    return state.videoDevices[0] || null;
+  }
+
   function initDroidCamStudio() {
     if (btnProjectPreacher) {
       btnProjectPreacher.addEventListener('click', async () => {
-        const droidCam = state.videoDevices.find(d => {
-          const lbl = (d.label || '').toLowerCase();
-          return lbl.includes('droidcam') || lbl.includes('droid');
-        });
-        const targetDevice = droidCam || state.videoDevices[0];
+        const targetDevice = getActiveCameraDevice();
 
         if (!targetDevice) {
-          alert('No camera detected. Please open DroidCam on your phone and PC, then click Refresh Cameras.');
+          alert('No camera detected. Please connect Reincubate Camo, DroidCam, OBS Virtual Cam, or a USB/HDMI capture card, then click Refresh Cameras ↺.');
           return;
         }
 
@@ -2237,14 +2507,10 @@
 
     if (btnProjectWorshipBg) {
       btnProjectWorshipBg.addEventListener('click', async () => {
-        const droidCam = state.videoDevices.find(d => {
-          const lbl = (d.label || '').toLowerCase();
-          return lbl.includes('droidcam') || lbl.includes('droid');
-        });
-        const targetDevice = droidCam || state.videoDevices[0];
+        const targetDevice = getActiveCameraDevice();
 
         if (!targetDevice) {
-          alert('No camera detected. Please connect DroidCam via WiFi/USB, then click Refresh.');
+          alert('No camera detected. Please connect Reincubate Camo, DroidCam, OBS Virtual Cam, or a USB/HDMI capture card, then click Refresh Cameras ↺.');
           return;
         }
 
@@ -2267,6 +2533,146 @@
     if (btnCameraOff) {
       btnCameraOff.addEventListener('click', async () => {
         await updateCameraMode('none');
+      });
+    }
+  }
+
+  function initYouTubeModal() {
+    if (btnOpenYoutubeModal) {
+      btnOpenYoutubeModal.addEventListener('click', () => {
+        if (modalYoutube) modalYoutube.classList.add('open');
+        if (youtubeUrlInput) {
+          youtubeUrlInput.value = '';
+          youtubeUrlInput.focus();
+        }
+        if (youtubeTitleInput) youtubeTitleInput.value = '';
+        if (youtubePreviewImg) {
+          youtubePreviewImg.style.display = 'none';
+          youtubePreviewImg.src = '';
+        }
+        if (youtubePreviewPlaceholder) youtubePreviewPlaceholder.style.display = 'block';
+        if (youtubePreviewBadge) youtubePreviewBadge.style.display = 'none';
+        if (youtubeMuteToggle) youtubeMuteToggle.checked = false;
+      });
+    }
+
+    // Live URL input listener for thumbnail preview
+    if (youtubeUrlInput) {
+      youtubeUrlInput.addEventListener('input', () => {
+        const raw = youtubeUrlInput.value.trim();
+        const vid = extractYouTubeId(raw);
+        if (vid) {
+          if (youtubePreviewImg) {
+            youtubePreviewImg.src = `https://img.youtube.com/vi/${vid}/hqdefault.jpg`;
+            youtubePreviewImg.style.display = 'block';
+          }
+          if (youtubePreviewPlaceholder) youtubePreviewPlaceholder.style.display = 'none';
+          if (youtubePreviewBadge) youtubePreviewBadge.style.display = 'flex';
+          if (youtubeTitleInput && !youtubeTitleInput.value.trim()) {
+            youtubeTitleInput.value = `YouTube Live (${vid})`;
+          }
+        } else {
+          if (youtubePreviewImg) {
+            youtubePreviewImg.style.display = 'none';
+            youtubePreviewImg.src = '';
+          }
+          if (youtubePreviewPlaceholder) youtubePreviewPlaceholder.style.display = 'block';
+          if (youtubePreviewBadge) youtubePreviewBadge.style.display = 'none';
+        }
+      });
+    }
+
+    // Save to Media Library
+    if (btnSaveYoutubeLibrary) {
+      btnSaveYoutubeLibrary.addEventListener('click', () => {
+        const raw = (youtubeUrlInput ? youtubeUrlInput.value : '').trim();
+        const vid = extractYouTubeId(raw);
+        if (!vid) {
+          alert('Please enter a valid YouTube video or live stream link.');
+          return;
+        }
+        const title = (youtubeTitleInput && youtubeTitleInput.value.trim()) || `YouTube Stream (${vid})`;
+        const item = {
+          id: `yt-${Date.now()}`,
+          title: title,
+          type: 'youtube',
+          videoId: vid,
+          url: raw.startsWith('http') ? raw : `https://www.youtube.com/watch?v=${vid}`
+        };
+        mediaLibrary.unshift(item);
+        saveStoredLibrary();
+        renderMediaGallery(mediaSearchInput ? mediaSearchInput.value : '');
+        if (modalYoutube) modalYoutube.classList.remove('open');
+      });
+    }
+
+    // Project Live TV
+    if (btnProjectYoutubeLive) {
+      btnProjectYoutubeLive.addEventListener('click', () => {
+        const raw = (youtubeUrlInput ? youtubeUrlInput.value : '').trim();
+        const vid = extractYouTubeId(raw);
+        if (!vid) {
+          alert('Please enter a valid YouTube video or live stream link.');
+          return;
+        }
+        const title = (youtubeTitleInput && youtubeTitleInput.value.trim()) || `YouTube Live (${vid})`;
+        const muted = youtubeMuteToggle ? youtubeMuteToggle.checked : false;
+        const item = {
+          id: `yt-${Date.now()}`,
+          title: title,
+          type: 'youtube',
+          videoId: vid,
+          url: raw.startsWith('http') ? raw : `https://www.youtube.com/watch?v=${vid}`
+        };
+        if (!mediaLibrary.some(m => m.videoId === vid)) {
+          mediaLibrary.unshift(item);
+          saveStoredLibrary();
+          renderMediaGallery(mediaSearchInput ? mediaSearchInput.value : '');
+        }
+        projectYouTubeLive(item, muted);
+        if (modalYoutube) modalYoutube.classList.remove('open');
+      });
+    }
+
+    // Worship Background Mode
+    if (btnProjectYoutubeWorship) {
+      btnProjectYoutubeWorship.addEventListener('click', () => {
+        const raw = (youtubeUrlInput ? youtubeUrlInput.value : '').trim();
+        const vid = extractYouTubeId(raw);
+        if (!vid) {
+          alert('Please enter a valid YouTube video link.');
+          return;
+        }
+        const title = (youtubeTitleInput && youtubeTitleInput.value.trim()) || `YouTube Background (${vid})`;
+        const item = {
+          id: `yt-${Date.now()}`,
+          title: title,
+          type: 'youtube',
+          videoId: vid,
+          url: raw.startsWith('http') ? raw : `https://www.youtube.com/watch?v=${vid}`
+        };
+        if (!mediaLibrary.some(m => m.videoId === vid)) {
+          mediaLibrary.unshift(item);
+          saveStoredLibrary();
+          renderMediaGallery(mediaSearchInput ? mediaSearchInput.value : '');
+        }
+        setYouTubeAsBackground(item, true);
+        if (modalYoutube) modalYoutube.classList.remove('open');
+      });
+    }
+
+    // Active Stream Bar Controls
+    if (btnToggleYoutubeMute) {
+      btnToggleYoutubeMute.addEventListener('click', () => {
+        state.youtubeMuted = !state.youtubeMuted;
+        btnToggleYoutubeMute.textContent = state.youtubeMuted ? '🔇 Audio Muted' : '🔊 Audio On';
+        broadcastDisplayState();
+      });
+    }
+
+    if (btnStopYoutube) {
+      btnStopYoutube.addEventListener('click', () => {
+        stopYouTubeStream();
       });
     }
   }
@@ -3044,10 +3450,11 @@
       });
     }
 
-    // Initialize Theme Builder, Upload Media, and DroidCam Studio
+    // Initialize Theme Builder, Upload Media, Camera Studio, and YouTube Player
     initThemeBuilderModal();
     initUploadMediaModal();
     initDroidCamStudio();
+    initYouTubeModal();
   }
 
   // =========================================================================

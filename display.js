@@ -56,6 +56,11 @@
     bannerStyle: 'urgent-red',
     bannerLayout: 'bar',
     bannerAutoDismiss: 0,
+    youtubeVideoId: '',
+    youtubeUrl: '',
+    youtubeTitle: '',
+    youtubeMuted: false,
+    youtubeActive: false,
     brightness: 100
   };
 
@@ -590,37 +595,68 @@
       return 'file:///' + url.replace(/\\/g, '/');
     }
 
-    // 4. Custom Local Media Backgrounds with Smooth Crossfade
-    if (state.backgroundType === 'video' && state.customBgUrl) {
+    // 4. Custom Local Media & YouTube Live Backgrounds with Smooth Crossfade
+    const youtubeLayer = document.getElementById('display-youtube-layer');
+    const youtubeIframe = document.getElementById('display-youtube-iframe');
+
+    if (state.backgroundType === 'youtube' && state.youtubeVideoId) {
       canvas.style.opacity = '0';
       mediaImg.classList.remove('media-active');
+      mediaVideo.classList.remove('media-active');
       mediaImg.style.display = 'none';
-      mediaVideo.style.display = 'block';
-      const formatted = formatMediaUrl(state.customBgUrl);
-      if (mediaVideo.src !== formatted) {
-        mediaVideo.src = formatted;
-        mediaVideo.play().catch(e => console.warn('Video bg autoplay prevented:', e));
-      }
-      mediaVideo.classList.add('media-active');
-    } else if (state.backgroundType === 'image' && state.customBgUrl) {
-      canvas.style.opacity = '0';
-      mediaVideo.classList.remove('media-active');
       mediaVideo.style.display = 'none';
-      mediaImg.style.display = 'block';
-      mediaImg.src = formatMediaUrl(state.customBgUrl);
-      mediaImg.classList.add('media-active');
-    } else {
-      // Procedural canvas mode
-      mediaVideo.classList.remove('media-active');
-      mediaImg.classList.remove('media-active');
-      setTimeout(() => {
-        if (state.backgroundType === 'procedural') {
-          mediaVideo.style.display = 'none';
-          mediaImg.style.display = 'none';
+
+      if (youtubeLayer && youtubeIframe) {
+        youtubeLayer.style.display = 'block';
+        youtubeLayer.classList.add('youtube-active');
+        const muteParam = state.youtubeMuted ? 1 : 0;
+        const targetUrl = `https://www.youtube-nocookie.com/embed/${state.youtubeVideoId}?autoplay=1&mute=${muteParam}&controls=1&rel=0&modestbranding=1&enablejsapi=1`;
+        if (youtubeIframe.src !== targetUrl) {
+          youtubeIframe.src = targetUrl;
         }
-      }, 350);
-      canvas.style.display = 'block';
-      canvas.style.opacity = '1';
+      }
+    } else {
+      if (youtubeLayer && youtubeIframe) {
+        youtubeLayer.classList.remove('youtube-active');
+        setTimeout(() => {
+          if (state.backgroundType !== 'youtube') {
+            youtubeLayer.style.display = 'none';
+            youtubeIframe.src = '';
+          }
+        }, 350);
+      }
+
+      if (state.backgroundType === 'video' && state.customBgUrl) {
+        canvas.style.opacity = '0';
+        mediaImg.classList.remove('media-active');
+        mediaImg.style.display = 'none';
+        mediaVideo.style.display = 'block';
+        const formatted = formatMediaUrl(state.customBgUrl);
+        if (mediaVideo.src !== formatted) {
+          mediaVideo.src = formatted;
+          mediaVideo.play().catch(e => console.warn('Video bg autoplay prevented:', e));
+        }
+        mediaVideo.classList.add('media-active');
+      } else if (state.backgroundType === 'image' && state.customBgUrl) {
+        canvas.style.opacity = '0';
+        mediaVideo.classList.remove('media-active');
+        mediaVideo.style.display = 'none';
+        mediaImg.style.display = 'block';
+        mediaImg.src = formatMediaUrl(state.customBgUrl);
+        mediaImg.classList.add('media-active');
+      } else {
+        // Procedural canvas mode
+        mediaVideo.classList.remove('media-active');
+        mediaImg.classList.remove('media-active');
+        setTimeout(() => {
+          if (state.backgroundType === 'procedural') {
+            mediaVideo.style.display = 'none';
+            mediaImg.style.display = 'none';
+          }
+        }, 350);
+        canvas.style.display = 'block';
+        canvas.style.opacity = '1';
+      }
     }
 
     // 5. Text Styling, Visibility & Smooth Slide Crossfade
