@@ -2,6 +2,7 @@ const { app, BrowserWindow, screen, ipcMain, dialog, Menu, shell } = require('el
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const remoteServer = require('./remote-server.js');
 
 // Ensure high-performance GPU acceleration & zero background throttling
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
@@ -269,6 +270,13 @@ function identifyScreens() {
 app.whenReady().then(() => {
   createControlWindow();
 
+  // Initialize Mobile Remote Server
+  remoteServer.init((action, data) => {
+    if (controlWindow && !controlWindow.isDestroyed()) {
+      controlWindow.webContents.send('remote-action', { action, data });
+    }
+  });
+
   // Monitor physical display plug/unplug events
   screen.on('display-added', (event, newDisplay) => {
     if (controlWindow && !controlWindow.isDestroyed()) {
@@ -298,7 +306,21 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  remoteServer.stop();
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('will-quit', () => {
+  remoteServer.stop();
+});
+
+// Mobile Remote IPC Handlers
+ipcMain.handle('get-remote-info', () => {
+  return remoteServer.getInfo();
+});
+
+ipcMain.on('update-remote-status', (event, status) => {
+  remoteServer.updateStatus(status);
 });
 
 // IPC Handlers

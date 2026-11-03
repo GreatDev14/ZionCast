@@ -36,6 +36,7 @@
       "styles.css",
       "renderer.js",
       "display.js",
+      "remote-server.js",
       "assets/**/*"
     ],
     "win": {
@@ -76,5 +77,8 @@
       "synopsis": "Production Church Presentation System",
       "description": "Modern church presentation software with dual-screen projector output, camera background support, and offline scriptures."
     }
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
   }
 }

@@ -20,6 +20,7 @@ async function pack() {
     'styles.css',
     'renderer.js',
     'display.js',
+    'remote-server.js',
     'package.json'
   ];
 
@@ -46,6 +47,15 @@ async function pack() {
   const assetsDir = path.join(root, 'assets');
   if (fs.existsSync(assetsDir)) {
     copyDirRecursive(assetsDir, path.join(stage, 'assets'));
+  }
+
+  // Copy production dependencies needed by main.js
+  const prodModules = ['qrcode', 'dijkstrajs', 'pngjs'];
+  for (const mod of prodModules) {
+    const srcMod = path.join(root, 'node_modules', mod);
+    if (fs.existsSync(srcMod)) {
+      copyDirRecursive(srcMod, path.join(stage, 'node_modules', mod));
+    }
   }
 
   fs.mkdirSync(path.dirname(destAsar), { recursive: true });

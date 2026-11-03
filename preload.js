@@ -47,6 +47,13 @@ contextBridge.exposeInMainWorld('zionApi', {
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
   getVersion: () => '1.0.0',
 
+  // Mobile Wi-Fi Remote Control APIs
+  getRemoteInfo: () => ipcRenderer.invoke('get-remote-info'),
+  updateRemoteStatus: (status) => ipcRenderer.send('update-remote-status', status),
+  onRemoteAction: (callback) => {
+    ipcRenderer.on('remote-action', (event, data) => callback(data));
+  },
+
   // Platform
   platform: process.platform
 });

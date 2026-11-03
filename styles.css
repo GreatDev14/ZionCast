@@ -2482,3 +2482,27 @@ body {
   box-shadow: 0 0 8px #ef4444;
   animation: pulse-badge 1.2s infinite;
 }
+
+/* ==========================================================================
+   MOBILE WI-FI REMOTE CONTROL STYLES
+   ========================================================================== */
+.btn-remote-top {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.btn-remote-top:hover {
+  background: rgba(16, 185, 129, 0.2) !important;
+  border-color: #34d399 !important;
+  color: #ffffff !important;
+}
+
+.remote-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  background: #10b981;
+  display: inline-block;
+  box-shadow: 0 0 6px #10b981;
+  animation: pulse-badge 1.5s infinite;
+}

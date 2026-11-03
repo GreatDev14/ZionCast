@@ -387,6 +387,15 @@
   const btnToggleYoutubeMute = document.getElementById('btn-toggle-youtube-mute');
   const btnStopYoutube = document.getElementById('btn-stop-youtube');
 
+  // Mobile Remote Controls
+  const btnOpenRemoteModal = document.getElementById('btn-open-remote-modal');
+  const modalRemote = document.getElementById('modal-remote');
+  const remoteQrImg = document.getElementById('remote-qr-img');
+  const remoteUrlDisplay = document.getElementById('remote-url-display');
+  const btnCopyRemoteUrl = document.getElementById('btn-copy-remote-url');
+  const btnOpenRemoteBrowser = document.getElementById('btn-open-remote-browser');
+  const remoteModalStatusText = document.getElementById('remote-modal-status-text');
+
   // Theme Builder Controls
   const btnOpenThemeBuilder = document.getElementById('btn-open-theme-builder');
   const themeFormName = document.getElementById('theme-form-name');
@@ -975,6 +984,9 @@
 
     // Update Local Live Monitor Mirror
     updateLiveMonitorMirror(payload);
+
+    // Synchronize Connected Mobile Wi-Fi Remotes
+    syncRemoteStatus();
   }
 
   function updateLiveMonitorMirror(payload) {
@@ -2678,6 +2690,153 @@
   }
 
   // =========================================================================
+  // 11d. MOBILE WI-FI REMOTE CONTROL SYNCHRONIZATION
+  // =========================================================================
+  function syncRemoteStatus() {
+    if (!window.zionApi || !window.zionApi.updateRemoteStatus) return;
+
+    let slidesList = [];
+    let currentSlideLabel = 'Ready';
+    let currentSlideBody = 'Ready for service';
+    let nextSlideLabel = 'End of Item';
+    let nextSlideBody = 'No upcoming slide';
+
+    if (state.activeItem && Array.isArray(state.activeItem.slides) && state.activeItem.slides.length > 0) {
+      slidesList = state.activeItem.slides.map((s, idx) => ({
+        index: idx,
+        label: s.label || `Slide ${idx + 1}`,
+        body: (s.body || '').substring(0, 150)
+      }));
+
+      const curSlide = state.activeItem.slides[state.activeSlideIndex];
+      if (curSlide) {
+        currentSlideLabel = curSlide.label || `Slide ${state.activeSlideIndex + 1}`;
+        currentSlideBody = curSlide.body || '';
+      }
+
+      const nextSlide = state.activeItem.slides[state.activeSlideIndex + 1];
+      if (nextSlide) {
+        nextSlideLabel = nextSlide.label || `Slide ${state.activeSlideIndex + 2}`;
+        nextSlideBody = nextSlide.body || '';
+      } else {
+        nextSlideLabel = 'End of Item';
+        nextSlideBody = 'Next item in Order of Service';
+      }
+    }
+
+    const statusPayload = {
+      activeItemTitle: state.activeItem ? state.activeItem.title : 'ZionCast Broadcast',
+      currentSlideIndex: state.activeSlideIndex || 0,
+      totalSlides: state.activeItem && state.activeItem.slides ? state.activeItem.slides.length : 1,
+      currentSlideLabel,
+      currentSlideBody,
+      nextSlideLabel,
+      nextSlideBody,
+      slidesList,
+      blackout: !!state.blackout,
+      clearText: !!state.clearText,
+      themeOnly: !!state.themeOnly,
+      bannerActive: !!state.bannerActive,
+      bannerText: state.bannerText || ''
+    };
+
+    window.zionApi.updateRemoteStatus(statusPayload);
+  }
+
+  function toggleBlackout() {
+    state.blackout = !state.blackout;
+    if (btnFastBlackout) btnFastBlackout.classList.toggle('active-blackout', state.blackout);
+    broadcastDisplayState();
+  }
+
+  function toggleClearText() {
+    state.clearText = !state.clearText;
+    if (btnFastClear) btnFastClear.classList.toggle('active-clear', state.clearText);
+    broadcastDisplayState();
+  }
+
+  function toggleThemeOnly() {
+    state.themeOnly = !state.themeOnly;
+    if (btnFastTheme) btnFastTheme.classList.toggle('active-theme', state.themeOnly);
+    broadcastDisplayState();
+  }
+
+  function initRemoteModal() {
+    if (btnOpenRemoteModal) {
+      btnOpenRemoteModal.addEventListener('click', async () => {
+        if (modalRemote) modalRemote.classList.add('open');
+        if (window.zionApi && window.zionApi.getRemoteInfo) {
+          const info = await window.zionApi.getRemoteInfo();
+          if (info) {
+            if (remoteQrImg && info.qrCodeDataUrl) {
+              remoteQrImg.src = info.qrCodeDataUrl;
+            }
+            if (remoteUrlDisplay && info.primaryUrl) {
+              remoteUrlDisplay.value = info.primaryUrl;
+            }
+            if (remoteModalStatusText) {
+              const count = info.connectedCount || 0;
+              remoteModalStatusText.textContent = count > 0 
+                ? `Active • ${count} Mobile Device${count > 1 ? 's' : ''} Connected`
+                : `Server Active on Local Wi-Fi (${info.localIps ? info.localIps[0] : 'Local'})`;
+            }
+          }
+        }
+      });
+    }
+
+    if (btnCopyRemoteUrl && remoteUrlDisplay) {
+      btnCopyRemoteUrl.addEventListener('click', () => {
+        navigator.clipboard.writeText(remoteUrlDisplay.value).then(() => {
+          const prev = btnCopyRemoteUrl.textContent;
+          btnCopyRemoteUrl.textContent = 'Copied!';
+          setTimeout(() => { btnCopyRemoteUrl.textContent = prev; }, 2000);
+        });
+      });
+    }
+
+    if (btnOpenRemoteBrowser && remoteUrlDisplay) {
+      btnOpenRemoteBrowser.addEventListener('click', () => {
+        if (window.zionApi && window.zionApi.openExternalUrl) {
+          window.zionApi.openExternalUrl(remoteUrlDisplay.value);
+        } else {
+          window.open(remoteUrlDisplay.value, '_blank');
+        }
+      });
+    }
+  }
+
+  function initRemoteActionListener() {
+    if (!window.zionApi || !window.zionApi.onRemoteAction) return;
+
+    window.zionApi.onRemoteAction(({ action, data }) => {
+      console.log('[Remote Action Received from Mobile]', action, data);
+      if (action === 'next') {
+        nextSlide();
+      } else if (action === 'prev') {
+        prevSlide();
+      } else if (action === 'goto') {
+        if (typeof data.index === 'number') {
+          goLiveSlide(data.index);
+        }
+      } else if (action === 'blackout') {
+        toggleBlackout();
+      } else if (action === 'clear') {
+        toggleClearText();
+      } else if (action === 'theme') {
+        toggleThemeOnly();
+      } else if (action === 'alert') {
+        if (data.text) {
+          state.bannerText = data.text;
+          state.bannerActive = true;
+          broadcastDisplayState();
+          triggerAutoSave();
+        }
+      }
+    });
+  }
+
+  // =========================================================================
   // 12. SERVICE ORDER TIMELINE (Right Panel)
   // =========================================================================
   let selectedServiceIndex = -1;
@@ -2943,27 +3102,15 @@
 
     // Fast Action Buttons: Blackout, Theme Only, Clear
     if (btnFastBlackout) {
-      btnFastBlackout.addEventListener('click', () => {
-        state.blackout = !state.blackout;
-        btnFastBlackout.classList.toggle('active-blackout', state.blackout);
-        broadcastDisplayState();
-      });
+      btnFastBlackout.addEventListener('click', toggleBlackout);
     }
 
     if (btnFastTheme) {
-      btnFastTheme.addEventListener('click', () => {
-        state.themeOnly = !state.themeOnly;
-        btnFastTheme.classList.toggle('active-theme', state.themeOnly);
-        broadcastDisplayState();
-      });
+      btnFastTheme.addEventListener('click', toggleThemeOnly);
     }
 
     if (btnFastClear) {
-      btnFastClear.addEventListener('click', () => {
-        state.clearText = !state.clearText;
-        btnFastClear.classList.toggle('active-clear', state.clearText);
-        broadcastDisplayState();
-      });
+      btnFastClear.addEventListener('click', toggleClearText);
     }
 
     // =========================================================================
@@ -3450,11 +3597,14 @@
       });
     }
 
-    // Initialize Theme Builder, Upload Media, Camera Studio, and YouTube Player
+    // Initialize Theme Builder, Upload Media, Camera Studio, YouTube Player, and Mobile Remote
     initThemeBuilderModal();
     initUploadMediaModal();
     initDroidCamStudio();
     initYouTubeModal();
+    initRemoteModal();
+    initRemoteActionListener();
+    setTimeout(() => syncRemoteStatus(), 500);
   }
 
   // =========================================================================
