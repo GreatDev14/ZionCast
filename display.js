@@ -610,7 +610,7 @@
         youtubeLayer.style.display = 'block';
         youtubeLayer.classList.add('youtube-active');
         const muteParam = state.youtubeMuted ? 1 : 0;
-        const targetUrl = `https://www.youtube.com/embed/${state.youtubeVideoId}?autoplay=1&mute=${muteParam}&controls=1&rel=0&modestbranding=1&enablejsapi=1&origin=https%3A%2F%2Fwww.youtube.com`;
+        const targetUrl = `https://www.youtube-nocookie.com/embed/${state.youtubeVideoId}?autoplay=1&mute=${muteParam}&controls=1&rel=0&modestbranding=1&playsinline=1`;
         if (youtubeIframe.src !== targetUrl) {
           youtubeIframe.src = targetUrl;
         }
@@ -679,8 +679,24 @@
           badgeTitle.style.display = 'none';
         }
 
-        // Update slide body
-        bodyText.textContent = state.activeSlide.body || '';
+        // Update slide body: support standard text & parallel dual-Bible comparison
+        if (state.activeSlide.isDualComparison && state.activeSlide.dualPrimary && state.activeSlide.dualSecondary) {
+          bodyText.innerHTML = `
+            <div class="display-dual-comparison">
+              <div class="dual-col dual-col-primary">
+                <div class="dual-col-header">${escapeHtmlDisplay(state.activeSlide.dualPrimary.label || 'PRIMARY')}</div>
+                <div class="dual-col-text">"${escapeHtmlDisplay(state.activeSlide.dualPrimary.text || '')}"</div>
+              </div>
+              <div class="dual-col-divider"></div>
+              <div class="dual-col dual-col-secondary">
+                <div class="dual-col-header">${escapeHtmlDisplay(state.activeSlide.dualSecondary.label || 'SECONDARY')}</div>
+                <div class="dual-col-text">"${escapeHtmlDisplay(state.activeSlide.dualSecondary.text || '')}"</div>
+              </div>
+            </div>
+          `;
+        } else {
+          bodyText.textContent = state.activeSlide.body || '';
+        }
 
         // Apply dynamic typography & legibility properties
         bodyText.style.fontSize = `${state.fontSize || 44}px`;
@@ -762,6 +778,33 @@
         activeBannerTimer = null;
       }
       ticker.classList.remove('active');
+    }
+
+    // 7. Pre-Service Countdown Timer Overlay Layer
+    const countdownLayer = document.getElementById('display-countdown-layer');
+    const countdownTitle = document.getElementById('display-countdown-title');
+    const countdownDigits = document.getElementById('display-countdown-digits');
+    const countdownSub = document.getElementById('display-countdown-sub');
+
+    if (countdownLayer && countdownDigits) {
+      if (state.countdownActive && state.countdownRemaining !== undefined) {
+        countdownLayer.classList.add('active');
+        if (countdownTitle) countdownTitle.textContent = state.countdownTitle || 'SERVICE BEGINS IN';
+        const rem = Math.max(0, Math.floor(state.countdownRemaining));
+        const m = Math.floor(rem / 60);
+        const s = rem % 60;
+        countdownDigits.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+        if (countdownSub) {
+          if (rem <= 0) {
+            countdownDigits.textContent = '00:00';
+            countdownSub.textContent = '✨ Welcome to Zion Sanctuary • Service Has Begun ✨';
+          } else {
+            countdownSub.textContent = state.countdownSub || 'Welcome to Worship • Please take your seats';
+          }
+        }
+      } else {
+        countdownLayer.classList.remove('active');
+      }
     }
   }
 

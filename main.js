@@ -16,6 +16,7 @@ app.commandLine.appendSwitch('ignore-gpu-blocklist');
 
 let controlWindow = null;
 let displayWindow = null;
+let stageWindow = null;
 let selectedDisplayId = null; // null means auto-detect secondary
 
 function getDbFilePath() {
@@ -185,6 +186,44 @@ function launchDisplayWindow(targetDisplayId = null) {
   return { success: true, isSecondary, bounds: targetDisplay.bounds };
 }
 
+function launchStageDisplayWindow() {
+  const allDisplays = screen.getAllDisplays();
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const targetDisplay = allDisplays.length > 2 ? allDisplays[2] : (allDisplays.length > 1 ? allDisplays[1] : primaryDisplay);
+
+  if (stageWindow && !stageWindow.isDestroyed()) {
+    stageWindow.show();
+    stageWindow.focus();
+    return { success: true };
+  }
+
+  const port = remoteServer.port || 3000;
+  const stageUrl = `http://127.0.0.1:${port}/stage`;
+
+  stageWindow = new BrowserWindow({
+    x: targetDisplay.bounds.x + 30,
+    y: targetDisplay.bounds.y + 30,
+    width: Math.min(1280, targetDisplay.bounds.width - 60),
+    height: Math.min(760, targetDisplay.bounds.height - 60),
+    title: 'ZionCast - Preacher & Choir Stage Display',
+    backgroundColor: '#07090e',
+    icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    }
+  });
+
+  stageWindow.loadURL(stageUrl);
+
+  stageWindow.on('closed', () => {
+    stageWindow = null;
+    notifyControlDisplayStatus();
+  });
+
+  return { success: true };
+}
+
 function notifyControlDisplayStatus() {
   if (controlWindow && !controlWindow.isDestroyed()) {
     const isOpen = displayWindow !== null && !displayWindow.isDestroyed();
@@ -268,18 +307,31 @@ function identifyScreens() {
 
 // App lifecycle
 app.whenReady().then(() => {
-  // Fix YouTube Embed Error 153: bypass missing file:// referrer by injecting valid origin & referer
+  // Fix YouTube Embed Errors 152 & 153:
+  // 1. Neutralize Electron detection by supplying desktop Chrome User-Agent
+  // 2. Supply valid Referer header so YouTube allows iframe embed
+  // 3. DO NOT inject fake Origin header (prevents Error 152-4 origin spoofing rejection)
   const ytFilter = {
     urls: [
       '*://*.youtube.com/*',
       '*://*.youtube-nocookie.com/*',
-      '*://*.googlevideo.com/*'
+      '*://*.googlevideo.com/*',
+      '*://*.ytimg.com/*'
     ]
   };
 
   session.defaultSession.webRequest.onBeforeSendHeaders(ytFilter, (details, callback) => {
-    details.requestHeaders['Referer'] = 'https://www.youtube.com/';
-    details.requestHeaders['Origin'] = 'https://www.youtube.com';
+    // Desktop Chrome User-Agent (prevents bot detection)
+    details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+    // Supply valid Referer so YouTube doesn't reject file:// or empty referer (prevents Error 153)
+    if (!details.requestHeaders['Referer'] || details.requestHeaders['Referer'].startsWith('file://')) {
+      details.requestHeaders['Referer'] = 'https://www.youtube.com/';
+    }
+
+    // Never spoof cross-origin 'Origin' header on GET embeds (causes Error 152-4)
+    delete details.requestHeaders['Origin'];
+
     callback({ cancel: false, requestHeaders: details.requestHeaders });
   });
 
@@ -336,6 +388,25 @@ ipcMain.handle('get-remote-info', () => {
 
 ipcMain.on('update-remote-status', (event, status) => {
   remoteServer.updateStatus(status);
+});
+
+// Stage Display / Confidence Monitor IPC Handlers
+ipcMain.handle('launch-stage-display', () => {
+  return launchStageDisplayWindow();
+});
+
+ipcMain.handle('close-stage-display', () => {
+  if (stageWindow && !stageWindow.isDestroyed()) {
+    stageWindow.close();
+    stageWindow = null;
+  }
+  return { success: true };
+});
+
+ipcMain.handle('get-stage-display-status', () => {
+  return {
+    isOpen: stageWindow !== null && !stageWindow.isDestroyed()
+  };
 });
 
 // IPC Handlers

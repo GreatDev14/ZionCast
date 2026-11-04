@@ -127,14 +127,21 @@
         <span id="btn-tv-label">Projector Output</span>
       </button>
 
-      <button id="btn-open-remote-modal" class="btn-fast btn-remote-top" style="padding: 5px 10px; font-size: 0.74rem; display: flex; align-items: center; gap: 6px; color: #34d399; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.1);" title="Open Wi-Fi Mobile Remote Control & Scan QR Code">
+      <button id="btn-open-remote-modal" class="btn-fast btn-remote-top" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: #34d399; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.1);" title="Open Wi-Fi Mobile Remote Control & Scan QR Code">
         <span class="remote-pulse-dot"></span>
         <span>📱 Remote</span>
       </button>
 
-            <button id="btn-open-remote-modal" class="btn-fast btn-remote-top" style="padding: 5px 10px; font-size: 0.74rem; display: flex; align-items: center; gap: 6px; color: #34d399; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.1);" title="Open Wi-Fi Mobile Remote Control & Scan QR Code">
-        <span class="remote-pulse-dot"></span>
-        <span>📱 Remote</span>
+      <button id="btn-open-stage-modal" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); background: rgba(56, 189, 248, 0.08);" title="Preacher & Choir Stage Display / Confidence Monitor & OBS Lower-Thirds">
+        <span>🖥️ Stage</span>
+      </button>
+
+      <button id="btn-open-countdown-modal" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.08);" title="Pre-Service Countdown Timers (5m, 10m, Custom)">
+        <span>⏱️ Timer</span>
+      </button>
+
+      <button id="btn-open-pads-modal" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: #a855f7; border-color: rgba(168, 85, 247, 0.35); background: rgba(168, 85, 247, 0.08);" title="Ambient Worship Pad Player (Continuous Synth Drone in 12 Keys)">
+        <span>🎵 Pads</span>
       </button>
 
 <button id="btn-check-updates" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: var(--accent-gold); border-color: rgba(245, 158, 11, 0.35);" title="Check GitHub for latest ZionCast updates">
@@ -199,11 +206,11 @@
       <!-- TAB 2: SCRIPTURES (BIBLES - KJV, RSV, GNT) -->
       <div id="tab-bibles" class="tab-pane-content">
         <div class="bible-controls-wrap">
-          <div class="bible-version-row" style="margin-bottom: 8px;">
+          <div class="bible-version-row" style="margin-bottom: 6px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
               <span style="font-size: 0.76rem; font-weight: 700; color: var(--accent-gold); display: flex; align-items: center; gap: 5px;">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
-                Bible Version (3 Translations)
+                Primary Version
               </span>
               <span id="bible-version-badge" class="lib-item-badge" style="background: rgba(245, 158, 11, 0.2); color: var(--accent-gold); font-size: 0.72rem; padding: 2px 7px;">KJV</span>
             </div>
@@ -212,6 +219,22 @@
               <option value="rsv">Revised Standard Version (RSV)</option>
               <option value="gnt">Good News Bible (GNT / Good News)</option>
             </select>
+          </div>
+
+          <!-- Parallel Dual-Bible Scripture Comparison Toggle -->
+          <div class="bible-compare-bar">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #38bdf8; font-weight: 700;">
+              <input type="checkbox" id="bible-compare-toggle" style="accent-color: #38bdf8; width: 14px; height: 14px; cursor: pointer;">
+              <span>⚡ Dual-Bible Compare</span>
+            </label>
+            <div id="bible-compare-secondary-wrap" style="display: none; align-items: center; gap: 6px;">
+              <span style="font-size: 0.72rem; color: #94a3b8;">vs</span>
+              <select id="bible-version-secondary" class="select-custom" style="padding: 2px 6px; font-size: 0.74rem; background: var(--bg-deep); border-color: #38bdf8; color: #38bdf8; font-weight: 600;">
+                <option value="rsv" selected>RSV</option>
+                <option value="kjv">KJV</option>
+                <option value="gnt">GNT</option>
+              </select>
+            </div>
           </div>
           <div class="bible-select-grid">
             <select id="bible-book-select" class="select-custom"></select>
@@ -571,52 +594,7 @@ Light in the darkness, my God, that is who You are"></textarea>
     </div>
   </div>
 
-  <!-- 9. Mobile Wi-Fi Remote Control Modal -->
-  <div id="modal-remote" class="modal-overlay">
-    <div class="modal-container" style="width: 480px; text-align: center;">
-      <div class="modal-header">
-        <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
-          📱 Mobile Wi-Fi Remote Control
-        </span>
-        <button class="modal-close-btn" data-close="modal-remote">&times;</button>
-      </div>
-      <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 16px;">
-        
-        <!-- Live Connection Status Pill -->
-        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-size: 0.76rem; font-weight: 700;">
-          <span class="remote-pulse-dot"></span>
-          <span id="remote-modal-status-text">Server Active on Local Wi-Fi</span>
-        </div>
-
-        <!-- Scannable High-Contrast QR Code Card -->
-        <div style="background: #ffffff; padding: 12px; border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center;">
-          <img id="remote-qr-img" style="width: 200px; height: 200px; display: block;" alt="Scan QR Code with Phone Camera">
-        </div>
-
-        <!-- Direct URL and Copy Button -->
-        <div style="width: 100%;">
-          <label class="form-label" style="text-align: center; margin-bottom: 6px;">Or open this address in your phone's browser:</label>
-          <div style="display: flex; gap: 6px; align-items: center; justify-content: center;">
-            <input type="text" id="remote-url-display" class="form-input" style="font-family: monospace; font-weight: 700; color: var(--accent-gold); text-align: center; flex: 1;" readonly value="http://...">
-            <button id="btn-copy-remote-url" class="btn-primary" style="padding: 7px 12px; font-size: 0.78rem; font-weight: 700;" title="Copy Remote Link">Copy</button>
-            <button id="btn-open-remote-browser" class="btn-secondary" style="padding: 7px 10px; font-size: 0.78rem;" title="Test in Local Browser">Open</button>
-          </div>
-        </div>
-
-        <!-- Easy 3-Step Guide -->
-        <div style="background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.74rem; color: var(--text-dim); text-align: left; line-height: 1.5; width: 100%;">
-          <strong style="color: var(--accent-gold); display: block; margin-bottom: 4px;">Quick Phone Connection:</strong>
-          1. Connect your iPhone, iPad, or Android phone to the <strong>same Wi-Fi network</strong>.<br>
-          2. Open your smartphone camera and point it at the QR code above.<br>
-          3. Tap the link to control lyrics, scriptures, blackout, and alerts from stage or sanctuary!
-        </div>
-
-      </div>
-      <div class="modal-footer" style="justify-content: flex-end;">
-        <button class="btn-secondary" data-close="modal-remote">Close</button>
-      </div>
-    </div>
-  </div>
+  
 
   <!-- 2. OpenLP Importer Modal -->
   <div id="modal-import" class="modal-overlay">
@@ -651,52 +629,7 @@ My chains are gone, I've been set free..."></textarea>
     </div>
   </div>
 
-  <!-- 9. Mobile Wi-Fi Remote Control Modal -->
-  <div id="modal-remote" class="modal-overlay">
-    <div class="modal-container" style="width: 480px; text-align: center;">
-      <div class="modal-header">
-        <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
-          📱 Mobile Wi-Fi Remote Control
-        </span>
-        <button class="modal-close-btn" data-close="modal-remote">&times;</button>
-      </div>
-      <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 16px;">
-        
-        <!-- Live Connection Status Pill -->
-        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-size: 0.76rem; font-weight: 700;">
-          <span class="remote-pulse-dot"></span>
-          <span id="remote-modal-status-text">Server Active on Local Wi-Fi</span>
-        </div>
-
-        <!-- Scannable High-Contrast QR Code Card -->
-        <div style="background: #ffffff; padding: 12px; border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center;">
-          <img id="remote-qr-img" style="width: 200px; height: 200px; display: block;" alt="Scan QR Code with Phone Camera">
-        </div>
-
-        <!-- Direct URL and Copy Button -->
-        <div style="width: 100%;">
-          <label class="form-label" style="text-align: center; margin-bottom: 6px;">Or open this address in your phone's browser:</label>
-          <div style="display: flex; gap: 6px; align-items: center; justify-content: center;">
-            <input type="text" id="remote-url-display" class="form-input" style="font-family: monospace; font-weight: 700; color: var(--accent-gold); text-align: center; flex: 1;" readonly value="http://...">
-            <button id="btn-copy-remote-url" class="btn-primary" style="padding: 7px 12px; font-size: 0.78rem; font-weight: 700;" title="Copy Remote Link">Copy</button>
-            <button id="btn-open-remote-browser" class="btn-secondary" style="padding: 7px 10px; font-size: 0.78rem;" title="Test in Local Browser">Open</button>
-          </div>
-        </div>
-
-        <!-- Easy 3-Step Guide -->
-        <div style="background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.74rem; color: var(--text-dim); text-align: left; line-height: 1.5; width: 100%;">
-          <strong style="color: var(--accent-gold); display: block; margin-bottom: 4px;">Quick Phone Connection:</strong>
-          1. Connect your iPhone, iPad, or Android phone to the <strong>same Wi-Fi network</strong>.<br>
-          2. Open your smartphone camera and point it at the QR code above.<br>
-          3. Tap the link to control lyrics, scriptures, blackout, and alerts from stage or sanctuary!
-        </div>
-
-      </div>
-      <div class="modal-footer" style="justify-content: flex-end;">
-        <button class="btn-secondary" data-close="modal-remote">Close</button>
-      </div>
-    </div>
-  </div>
+  
 
   <!-- 3. Dedicated Custom Slide Builder Modal (Eliminating OpenLP Friction) -->
   <div id="modal-custom" class="modal-overlay">
@@ -738,52 +671,7 @@ My chains are gone, I've been set free..."></textarea>
     </div>
   </div>
 
-  <!-- 9. Mobile Wi-Fi Remote Control Modal -->
-  <div id="modal-remote" class="modal-overlay">
-    <div class="modal-container" style="width: 480px; text-align: center;">
-      <div class="modal-header">
-        <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
-          📱 Mobile Wi-Fi Remote Control
-        </span>
-        <button class="modal-close-btn" data-close="modal-remote">&times;</button>
-      </div>
-      <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 16px;">
-        
-        <!-- Live Connection Status Pill -->
-        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-size: 0.76rem; font-weight: 700;">
-          <span class="remote-pulse-dot"></span>
-          <span id="remote-modal-status-text">Server Active on Local Wi-Fi</span>
-        </div>
-
-        <!-- Scannable High-Contrast QR Code Card -->
-        <div style="background: #ffffff; padding: 12px; border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center;">
-          <img id="remote-qr-img" style="width: 200px; height: 200px; display: block;" alt="Scan QR Code with Phone Camera">
-        </div>
-
-        <!-- Direct URL and Copy Button -->
-        <div style="width: 100%;">
-          <label class="form-label" style="text-align: center; margin-bottom: 6px;">Or open this address in your phone's browser:</label>
-          <div style="display: flex; gap: 6px; align-items: center; justify-content: center;">
-            <input type="text" id="remote-url-display" class="form-input" style="font-family: monospace; font-weight: 700; color: var(--accent-gold); text-align: center; flex: 1;" readonly value="http://...">
-            <button id="btn-copy-remote-url" class="btn-primary" style="padding: 7px 12px; font-size: 0.78rem; font-weight: 700;" title="Copy Remote Link">Copy</button>
-            <button id="btn-open-remote-browser" class="btn-secondary" style="padding: 7px 10px; font-size: 0.78rem;" title="Test in Local Browser">Open</button>
-          </div>
-        </div>
-
-        <!-- Easy 3-Step Guide -->
-        <div style="background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.74rem; color: var(--text-dim); text-align: left; line-height: 1.5; width: 100%;">
-          <strong style="color: var(--accent-gold); display: block; margin-bottom: 4px;">Quick Phone Connection:</strong>
-          1. Connect your iPhone, iPad, or Android phone to the <strong>same Wi-Fi network</strong>.<br>
-          2. Open your smartphone camera and point it at the QR code above.<br>
-          3. Tap the link to control lyrics, scriptures, blackout, and alerts from stage or sanctuary!
-        </div>
-
-      </div>
-      <div class="modal-footer" style="justify-content: flex-end;">
-        <button class="btn-secondary" data-close="modal-remote">Close</button>
-      </div>
-    </div>
-  </div>
+  
 
   <!-- 4. Nursery / Alert Ticker Banner Modal -->
   <div id="modal-banner" class="modal-overlay">
@@ -889,52 +777,7 @@ My chains are gone, I've been set free..."></textarea>
     </div>
   </div>
 
-  <!-- 9. Mobile Wi-Fi Remote Control Modal -->
-  <div id="modal-remote" class="modal-overlay">
-    <div class="modal-container" style="width: 480px; text-align: center;">
-      <div class="modal-header">
-        <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
-          📱 Mobile Wi-Fi Remote Control
-        </span>
-        <button class="modal-close-btn" data-close="modal-remote">&times;</button>
-      </div>
-      <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 16px;">
-        
-        <!-- Live Connection Status Pill -->
-        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-size: 0.76rem; font-weight: 700;">
-          <span class="remote-pulse-dot"></span>
-          <span id="remote-modal-status-text">Server Active on Local Wi-Fi</span>
-        </div>
-
-        <!-- Scannable High-Contrast QR Code Card -->
-        <div style="background: #ffffff; padding: 12px; border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center;">
-          <img id="remote-qr-img" style="width: 200px; height: 200px; display: block;" alt="Scan QR Code with Phone Camera">
-        </div>
-
-        <!-- Direct URL and Copy Button -->
-        <div style="width: 100%;">
-          <label class="form-label" style="text-align: center; margin-bottom: 6px;">Or open this address in your phone's browser:</label>
-          <div style="display: flex; gap: 6px; align-items: center; justify-content: center;">
-            <input type="text" id="remote-url-display" class="form-input" style="font-family: monospace; font-weight: 700; color: var(--accent-gold); text-align: center; flex: 1;" readonly value="http://...">
-            <button id="btn-copy-remote-url" class="btn-primary" style="padding: 7px 12px; font-size: 0.78rem; font-weight: 700;" title="Copy Remote Link">Copy</button>
-            <button id="btn-open-remote-browser" class="btn-secondary" style="padding: 7px 10px; font-size: 0.78rem;" title="Test in Local Browser">Open</button>
-          </div>
-        </div>
-
-        <!-- Easy 3-Step Guide -->
-        <div style="background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.74rem; color: var(--text-dim); text-align: left; line-height: 1.5; width: 100%;">
-          <strong style="color: var(--accent-gold); display: block; margin-bottom: 4px;">Quick Phone Connection:</strong>
-          1. Connect your iPhone, iPad, or Android phone to the <strong>same Wi-Fi network</strong>.<br>
-          2. Open your smartphone camera and point it at the QR code above.<br>
-          3. Tap the link to control lyrics, scriptures, blackout, and alerts from stage or sanctuary!
-        </div>
-
-      </div>
-      <div class="modal-footer" style="justify-content: flex-end;">
-        <button class="btn-secondary" data-close="modal-remote">Close</button>
-      </div>
-    </div>
-  </div>
+  
 
   <!-- 5. Custom Theme Builder Modal -->
   <div id="modal-theme-builder" class="modal-overlay">
@@ -1036,52 +879,7 @@ My chains are gone, I've been set free..."></textarea>
     </div>
   </div>
 
-  <!-- 9. Mobile Wi-Fi Remote Control Modal -->
-  <div id="modal-remote" class="modal-overlay">
-    <div class="modal-container" style="width: 480px; text-align: center;">
-      <div class="modal-header">
-        <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
-          📱 Mobile Wi-Fi Remote Control
-        </span>
-        <button class="modal-close-btn" data-close="modal-remote">&times;</button>
-      </div>
-      <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 16px;">
-        
-        <!-- Live Connection Status Pill -->
-        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-size: 0.76rem; font-weight: 700;">
-          <span class="remote-pulse-dot"></span>
-          <span id="remote-modal-status-text">Server Active on Local Wi-Fi</span>
-        </div>
-
-        <!-- Scannable High-Contrast QR Code Card -->
-        <div style="background: #ffffff; padding: 12px; border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center;">
-          <img id="remote-qr-img" style="width: 200px; height: 200px; display: block;" alt="Scan QR Code with Phone Camera">
-        </div>
-
-        <!-- Direct URL and Copy Button -->
-        <div style="width: 100%;">
-          <label class="form-label" style="text-align: center; margin-bottom: 6px;">Or open this address in your phone's browser:</label>
-          <div style="display: flex; gap: 6px; align-items: center; justify-content: center;">
-            <input type="text" id="remote-url-display" class="form-input" style="font-family: monospace; font-weight: 700; color: var(--accent-gold); text-align: center; flex: 1;" readonly value="http://...">
-            <button id="btn-copy-remote-url" class="btn-primary" style="padding: 7px 12px; font-size: 0.78rem; font-weight: 700;" title="Copy Remote Link">Copy</button>
-            <button id="btn-open-remote-browser" class="btn-secondary" style="padding: 7px 10px; font-size: 0.78rem;" title="Test in Local Browser">Open</button>
-          </div>
-        </div>
-
-        <!-- Easy 3-Step Guide -->
-        <div style="background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.74rem; color: var(--text-dim); text-align: left; line-height: 1.5; width: 100%;">
-          <strong style="color: var(--accent-gold); display: block; margin-bottom: 4px;">Quick Phone Connection:</strong>
-          1. Connect your iPhone, iPad, or Android phone to the <strong>same Wi-Fi network</strong>.<br>
-          2. Open your smartphone camera and point it at the QR code above.<br>
-          3. Tap the link to control lyrics, scriptures, blackout, and alerts from stage or sanctuary!
-        </div>
-
-      </div>
-      <div class="modal-footer" style="justify-content: flex-end;">
-        <button class="btn-secondary" data-close="modal-remote">Close</button>
-      </div>
-    </div>
-  </div>
+  
 
   <!-- 6. Upload Media Modal (Images, Videos, Presentations) -->
   <div id="modal-upload-media" class="modal-overlay">
@@ -1118,52 +916,7 @@ My chains are gone, I've been set free..."></textarea>
     </div>
   </div>
 
-  <!-- 9. Mobile Wi-Fi Remote Control Modal -->
-  <div id="modal-remote" class="modal-overlay">
-    <div class="modal-container" style="width: 480px; text-align: center;">
-      <div class="modal-header">
-        <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
-          📱 Mobile Wi-Fi Remote Control
-        </span>
-        <button class="modal-close-btn" data-close="modal-remote">&times;</button>
-      </div>
-      <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 16px;">
-        
-        <!-- Live Connection Status Pill -->
-        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-size: 0.76rem; font-weight: 700;">
-          <span class="remote-pulse-dot"></span>
-          <span id="remote-modal-status-text">Server Active on Local Wi-Fi</span>
-        </div>
-
-        <!-- Scannable High-Contrast QR Code Card -->
-        <div style="background: #ffffff; padding: 12px; border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center;">
-          <img id="remote-qr-img" style="width: 200px; height: 200px; display: block;" alt="Scan QR Code with Phone Camera">
-        </div>
-
-        <!-- Direct URL and Copy Button -->
-        <div style="width: 100%;">
-          <label class="form-label" style="text-align: center; margin-bottom: 6px;">Or open this address in your phone's browser:</label>
-          <div style="display: flex; gap: 6px; align-items: center; justify-content: center;">
-            <input type="text" id="remote-url-display" class="form-input" style="font-family: monospace; font-weight: 700; color: var(--accent-gold); text-align: center; flex: 1;" readonly value="http://...">
-            <button id="btn-copy-remote-url" class="btn-primary" style="padding: 7px 12px; font-size: 0.78rem; font-weight: 700;" title="Copy Remote Link">Copy</button>
-            <button id="btn-open-remote-browser" class="btn-secondary" style="padding: 7px 10px; font-size: 0.78rem;" title="Test in Local Browser">Open</button>
-          </div>
-        </div>
-
-        <!-- Easy 3-Step Guide -->
-        <div style="background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.74rem; color: var(--text-dim); text-align: left; line-height: 1.5; width: 100%;">
-          <strong style="color: var(--accent-gold); display: block; margin-bottom: 4px;">Quick Phone Connection:</strong>
-          1. Connect your iPhone, iPad, or Android phone to the <strong>same Wi-Fi network</strong>.<br>
-          2. Open your smartphone camera and point it at the QR code above.<br>
-          3. Tap the link to control lyrics, scriptures, blackout, and alerts from stage or sanctuary!
-        </div>
-
-      </div>
-      <div class="modal-footer" style="justify-content: flex-end;">
-        <button class="btn-secondary" data-close="modal-remote">Close</button>
-      </div>
-    </div>
-  </div>
+  
 
   <!-- 7. Software Update Modal -->
   <div id="modal-update" class="modal-overlay">
@@ -1193,52 +946,7 @@ My chains are gone, I've been set free..."></textarea>
     </div>
   </div>
 
-  <!-- 9. Mobile Wi-Fi Remote Control Modal -->
-  <div id="modal-remote" class="modal-overlay">
-    <div class="modal-container" style="width: 480px; text-align: center;">
-      <div class="modal-header">
-        <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
-          📱 Mobile Wi-Fi Remote Control
-        </span>
-        <button class="modal-close-btn" data-close="modal-remote">&times;</button>
-      </div>
-      <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 16px;">
-        
-        <!-- Live Connection Status Pill -->
-        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-size: 0.76rem; font-weight: 700;">
-          <span class="remote-pulse-dot"></span>
-          <span id="remote-modal-status-text">Server Active on Local Wi-Fi</span>
-        </div>
-
-        <!-- Scannable High-Contrast QR Code Card -->
-        <div style="background: #ffffff; padding: 12px; border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center;">
-          <img id="remote-qr-img" style="width: 200px; height: 200px; display: block;" alt="Scan QR Code with Phone Camera">
-        </div>
-
-        <!-- Direct URL and Copy Button -->
-        <div style="width: 100%;">
-          <label class="form-label" style="text-align: center; margin-bottom: 6px;">Or open this address in your phone's browser:</label>
-          <div style="display: flex; gap: 6px; align-items: center; justify-content: center;">
-            <input type="text" id="remote-url-display" class="form-input" style="font-family: monospace; font-weight: 700; color: var(--accent-gold); text-align: center; flex: 1;" readonly value="http://...">
-            <button id="btn-copy-remote-url" class="btn-primary" style="padding: 7px 12px; font-size: 0.78rem; font-weight: 700;" title="Copy Remote Link">Copy</button>
-            <button id="btn-open-remote-browser" class="btn-secondary" style="padding: 7px 10px; font-size: 0.78rem;" title="Test in Local Browser">Open</button>
-          </div>
-        </div>
-
-        <!-- Easy 3-Step Guide -->
-        <div style="background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.74rem; color: var(--text-dim); text-align: left; line-height: 1.5; width: 100%;">
-          <strong style="color: var(--accent-gold); display: block; margin-bottom: 4px;">Quick Phone Connection:</strong>
-          1. Connect your iPhone, iPad, or Android phone to the <strong>same Wi-Fi network</strong>.<br>
-          2. Open your smartphone camera and point it at the QR code above.<br>
-          3. Tap the link to control lyrics, scriptures, blackout, and alerts from stage or sanctuary!
-        </div>
-
-      </div>
-      <div class="modal-footer" style="justify-content: flex-end;">
-        <button class="btn-secondary" data-close="modal-remote">Close</button>
-      </div>
-    </div>
-  </div>
+  
 
   <!-- 8. YouTube Live & Stream Player Modal -->
   <div id="modal-youtube" class="modal-overlay">
@@ -1286,6 +994,10 @@ My chains are gone, I've been set free..."></textarea>
     </div>
   </div>
 
+  
+
+    
+
   <!-- 9. Mobile Wi-Fi Remote Control Modal -->
   <div id="modal-remote" class="modal-overlay">
     <div class="modal-container" style="width: 480px; text-align: center;">
@@ -1297,18 +1009,15 @@ My chains are gone, I've been set free..."></textarea>
       </div>
       <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 16px;">
         
-        <!-- Live Connection Status Pill -->
         <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-size: 0.76rem; font-weight: 700;">
           <span class="remote-pulse-dot"></span>
           <span id="remote-modal-status-text">Server Active on Local Wi-Fi</span>
         </div>
 
-        <!-- Scannable High-Contrast QR Code Card -->
         <div style="background: #ffffff; padding: 12px; border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center;">
           <img id="remote-qr-img" style="width: 200px; height: 200px; display: block;" alt="Scan QR Code with Phone Camera">
         </div>
 
-        <!-- Direct URL and Copy Button -->
         <div style="width: 100%;">
           <label class="form-label" style="text-align: center; margin-bottom: 6px;">Or open this address in your phone's browser:</label>
           <div style="display: flex; gap: 6px; align-items: center; justify-content: center;">
@@ -1318,12 +1027,11 @@ My chains are gone, I've been set free..."></textarea>
           </div>
         </div>
 
-        <!-- Easy 3-Step Guide -->
         <div style="background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.74rem; color: var(--text-dim); text-align: left; line-height: 1.5; width: 100%;">
           <strong style="color: var(--accent-gold); display: block; margin-bottom: 4px;">Quick Phone Connection:</strong>
-          1. Connect your iPhone, iPad, or Android phone to the <strong>same Wi-Fi network</strong>.<br>
-          2. Open your smartphone camera and point it at the QR code above.<br>
-          3. Tap the link to control lyrics, scriptures, blackout, and alerts from stage or sanctuary!
+          1. Connect your smartphone/tablet to the <strong>same Wi-Fi network</strong>.<br>
+          2. Open camera & scan the QR code above.<br>
+          3. Tap link to control slides, blackout, theme, and send alerts instantly!
         </div>
 
       </div>
@@ -1333,40 +1041,192 @@ My chains are gone, I've been set free..."></textarea>
     </div>
   </div>
 
-    <!-- 9. Mobile Wi-Fi Remote Control Modal -->
-  <div id="modal-remote" class="modal-overlay">
+  <!-- 10. Preacher & Choir Stage Display / Confidence Monitor Modal -->
+  <div id="modal-stage" class="modal-overlay">
+    <div class="modal-container" style="width: 540px;">
+      <div class="modal-header">
+        <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          🖥️ Stage Display & Confidence Monitor
+        </span>
+        <button class="modal-close-btn" data-close="modal-stage">&times;</button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
+        
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: var(--radius-sm);">
+          <div>
+            <div style="font-weight: 800; font-size: 0.9rem; color: #38bdf8;">Stage Monitor Window</div>
+            <div style="font-size: 0.75rem; color: var(--text-dim); margin-top: 2px;">Launch on 3rd display or stage TV screen</div>
+          </div>
+          <button id="btn-launch-stage-win" class="btn-primary" style="padding: 7px 14px; font-size: 0.78rem;">Launch Window</button>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Stage Display Browser Link (Pulpit iPad / Choir Tablet):</label>
+          <div style="display: flex; gap: 6px;">
+            <input type="text" id="stage-url-display" class="form-input" style="font-family: monospace; color: #38bdf8; font-weight: 700;" readonly value="http://...:3000/stage">
+            <button id="btn-copy-stage-url" class="btn-secondary" style="padding: 6px 12px; font-size: 0.76rem;">Copy</button>
+            <button id="btn-open-stage-browser" class="btn-secondary" style="padding: 6px 10px; font-size: 0.76rem;">Open</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" style="color: #f59e0b;">OBS Studio / ATEM Transparent Lower-Thirds Link:</label>
+          <div style="display: flex; gap: 6px;">
+            <input type="text" id="obs-url-display" class="form-input" style="font-family: monospace; color: #f59e0b; font-weight: 700;" readonly value="http://...:3000/lower-thirds">
+            <button id="btn-copy-obs-url" class="btn-secondary" style="padding: 6px 12px; font-size: 0.76rem;">Copy</button>
+          </div>
+          <div style="font-size: 0.72rem; color: var(--text-dim); margin-top: 4px;">Paste as Browser Source in OBS/vMix (1920x1080) for 100% transparent live stream lyrics overlay!</div>
+        </div>
+
+        <!-- Private Tech Booth to Pulpit Message Box -->
+        <div style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-medium); border-radius: var(--radius-sm); padding: 12px;">
+          <label class="form-label" style="color: #ef4444; font-weight: 800;">🔒 Private Tech Booth Alert (Visible ONLY to Preacher on Stage Screen):</label>
+          <div style="display: flex; gap: 6px; margin-top: 6px;">
+            <input type="text" id="tech-stage-msg-input" class="form-input" placeholder="e.g. Pastor: 5 mins remaining, Wrap up please">
+            <button id="btn-send-stage-msg" class="btn-primary" style="background: #dc2626; border-color: #ef4444; font-size: 0.76rem; white-space: nowrap;">Send Alert</button>
+            <button id="btn-clear-stage-msg" class="btn-secondary" style="font-size: 0.76rem;">Clear</button>
+          </div>
+          <div style="display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;">
+            <button class="btn-mini btn-stage-preset" data-msg="Pastor: 5 minutes remaining">5 Mins</button>
+            <button class="btn-mini btn-stage-preset" data-msg="Pastor: Please wrap up">Wrap Up</button>
+            <button class="btn-mini btn-stage-preset" data-msg="Praise Team: Prepare for Altar Call">Altar Call</button>
+            <button class="btn-mini btn-stage-preset" data-msg="Mic battery low - switching to Mic 2">Mic Low</button>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end;">
+        <button class="btn-secondary" data-close="modal-stage">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 11. Pre-Service Countdown Timer Modal -->
+  <div id="modal-countdown" class="modal-overlay">
     <div class="modal-container" style="width: 480px; text-align: center;">
       <div class="modal-header">
         <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
-          📱 Mobile Wi-Fi Remote Control
+          ⏱️ Pre-Service Countdown Timer
         </span>
-        <button class="modal-close-btn" data-close="modal-remote">&times;</button>
+        <button class="modal-close-btn" data-close="modal-countdown">&times;</button>
       </div>
-      <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 16px;">
-        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-size: 0.76rem; font-weight: 700;">
-          <span class="remote-pulse-dot"></span>
-          <span id="remote-modal-status-text">Server Active on Local Wi-Fi</span>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 20px 18px;">
+        
+        <!-- Big Running Digits Display -->
+        <div style="background: #080b11; border: 2px solid rgba(245, 158, 11, 0.4); border-radius: 16px; padding: 24px; box-shadow: inset 0 0 20px rgba(0,0,0,0.8);">
+          <div id="countdown-ctrl-title-preview" style="font-size: 0.85rem; font-weight: 800; color: #f59e0b; letter-spacing: 0.1em; text-transform: uppercase;">SERVICE BEGINS IN</div>
+          <div id="countdown-ctrl-digits" style="font-size: 64px; font-weight: 900; color: #ffffff; font-variant-numeric: tabular-nums; line-height: 1.1; margin: 8px 0; text-shadow: 0 0 15px rgba(245, 158, 11, 0.4);">05:00</div>
+          <div id="countdown-ctrl-status" style="font-size: 0.76rem; font-weight: 700; color: #10b981;">STATUS: READY</div>
         </div>
-        <div style="background: #ffffff; padding: 12px; border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center;">
-          <img id="remote-qr-img" style="width: 200px; height: 200px; display: block;" alt="Scan QR Code with Phone Camera">
+
+        <!-- Presets -->
+        <div style="display: flex; justify-content: center; gap: 8px;">
+          <button class="btn-secondary btn-countdown-preset" data-min="5" style="font-weight: 700; padding: 6px 14px;">5 Min</button>
+          <button class="btn-secondary btn-countdown-preset" data-min="10" style="font-weight: 700; padding: 6px 14px;">10 Min</button>
+          <button class="btn-secondary btn-countdown-preset" data-min="15" style="font-weight: 700; padding: 6px 14px;">15 Min</button>
+          <button class="btn-secondary btn-countdown-preset" data-min="20" style="font-weight: 700; padding: 6px 14px;">20 Min</button>
         </div>
-        <div style="width: 100%;">
-          <label class="form-label" style="text-align: center; margin-bottom: 6px;">Or open this address in your phone's browser:</label>
-          <div style="display: flex; gap: 6px; align-items: center; justify-content: center;">
-            <input type="text" id="remote-url-display" class="form-input" style="font-family: monospace; font-weight: 700; color: var(--accent-gold); text-align: center; flex: 1;" readonly value="http://...">
-            <button id="btn-copy-remote-url" class="btn-primary" style="padding: 7px 12px; font-size: 0.78rem; font-weight: 700;" title="Copy Remote Link">Copy</button>
-            <button id="btn-open-remote-browser" class="btn-secondary" style="padding: 7px 10px; font-size: 0.78rem;" title="Test in Local Browser">Open</button>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left;">
+          <div class="form-group">
+            <label class="form-label">Countdown Title:</label>
+            <input type="text" id="countdown-input-title" class="form-input" value="Service Begins In">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Custom Duration (Minutes):</label>
+            <input type="number" id="countdown-input-minutes" class="form-input" min="1" max="180" value="5">
           </div>
         </div>
-        <div style="background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.74rem; color: var(--text-dim); text-align: left; line-height: 1.5; width: 100%;">
-          <strong style="color: var(--accent-gold); display: block; margin-bottom: 4px;">Quick Phone Connection:</strong>
-          1. Connect your iPhone, iPad, or Android phone to the <strong>same Wi-Fi network</strong>.<br>
-          2. Open your smartphone camera and point it at the QR code above.<br>
-          3. Tap the link to control lyrics, scriptures, blackout, and alerts from stage or sanctuary!
+
+        <!-- Main Action Buttons -->
+        <div style="display: flex; justify-content: center; gap: 10px; margin-top: 4px;">
+          <button id="btn-countdown-start" class="btn-primary" style="padding: 10px 24px; font-size: 0.9rem; font-weight: 800; background: #10b981; border-color: #34d399;">▶ Start Timer</button>
+          <button id="btn-countdown-pause" class="btn-secondary" style="padding: 10px 18px; font-size: 0.9rem; font-weight: 700;">⏸ Pause</button>
+          <button id="btn-countdown-reset" class="btn-secondary" style="padding: 10px 18px; font-size: 0.9rem; font-weight: 700;">⏹ Reset</button>
         </div>
+
+        <!-- Projector Toggle -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-sm); margin-top: 4px;">
+          <span style="font-size: 0.78rem; font-weight: 700; color: #f59e0b;">Live Projector Output:</span>
+          <button id="btn-countdown-project-toggle" class="btn-fast" style="font-size: 0.78rem; font-weight: 800; background: #dc2626; border-color: #ef4444; color: #fff;">🔴 Send to Projector</button>
+        </div>
+
       </div>
       <div class="modal-footer" style="justify-content: flex-end;">
-        <button class="btn-secondary" data-close="modal-remote">Close</button>
+        <button class="btn-secondary" data-close="modal-countdown">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 12. Ambient Worship Pad Player Modal -->
+  <div id="modal-pads" class="modal-overlay">
+    <div class="modal-container" style="width: 520px;">
+      <div class="modal-header">
+        <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+          🎵 Ambient Worship Pad Player (Continuous Sanctuary Drone)
+        </span>
+        <button class="modal-close-btn" data-close="modal-pads">&times;</button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; padding: 18px 20px;">
+        
+        <div style="background: #0b0e14; border: 1px solid #1e293b; border-radius: 14px; padding: 16px; text-align: center;">
+          <div style="font-size: 0.72rem; font-weight: 800; color: #94a3b8; letter-spacing: 0.1em; text-transform: uppercase;">NOW PLAYING</div>
+          <div id="pad-now-playing" style="font-size: 22px; font-weight: 800; color: #f59e0b; margin: 4px 0;">Pad Silent (Tap a Key Below)</div>
+          <div id="pad-tone-desc" style="font-size: 0.76rem; color: #38bdf8;">Warm Sanctuary Synth Drone • Zero Clicks Crossfade</div>
+        </div>
+
+        <!-- 12 Musical Keys Grid -->
+        <div>
+          <label class="form-label" style="margin-bottom: 8px; font-weight: 700; color: #f8fafc;">Select Musical Key:</label>
+          <div class="pad-key-grid">
+            <button class="pad-key-btn" data-key="C">C</button>
+            <button class="pad-key-btn" data-key="C#">C# / Db</button>
+            <button class="pad-key-btn" data-key="D">D</button>
+            <button class="pad-key-btn" data-key="D#">D# / Eb</button>
+            <button class="pad-key-btn" data-key="E">E</button>
+            <button class="pad-key-btn" data-key="F">F</button>
+            <button class="pad-key-btn" data-key="F#">F# / Gb</button>
+            <button class="pad-key-btn" data-key="G">G</button>
+            <button class="pad-key-btn" data-key="G#">G# / Ab</button>
+            <button class="pad-key-btn" data-key="A">A</button>
+            <button class="pad-key-btn" data-key="A#">A# / Bb</button>
+            <button class="pad-key-btn" data-key="B">B</button>
+          </div>
+        </div>
+
+        <!-- Controls: Tone, Octave, Volume -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 4px;">
+          <div class="form-group">
+            <label class="form-label">Sound Texture / Tone:</label>
+            <select id="pad-select-tone" class="select-custom" style="width: 100%;">
+              <option value="warm-sanctuary" selected>Warm Sanctuary (Quiet Prayer)</option>
+              <option value="celestial-shimmer">Celestial Shimmer (Worship Strings)</option>
+              <option value="cathedral-organ">Cathedral Organ (Majestic Warmth)</option>
+              <option value="deep-atmosphere">Deep Atmosphere (Resonant Drone)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Octave Pitch:</label>
+            <select id="pad-select-octave" class="select-custom" style="width: 100%;">
+              <option value="sub">Sub-Bass (Low)</option>
+              <option value="normal" selected>Normal Octave</option>
+              <option value="high">High Strings</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pad-bottom-bar">
+          <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+            <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-dim);">Volume:</span>
+            <input type="range" id="pad-volume-slider" class="range-slider" min="0" max="100" value="75" style="flex: 1;">
+            <span id="pad-volume-label" style="font-size: 0.78rem; font-weight: 800; min-width: 36px; color: var(--accent-gold);">75%</span>
+          </div>
+          <button id="btn-pad-stop" class="btn-secondary" style="padding: 7px 16px; font-size: 0.8rem; font-weight: 700; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);">⏹ Smooth Fade Out</button>
+        </div>
+
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end;">
+        <button class="btn-secondary" data-close="modal-pads">Close</button>
       </div>
     </div>
   </div>

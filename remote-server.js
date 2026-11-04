@@ -29,7 +29,13 @@ class RemoteServer {
       clearText: false,
       themeOnly: false,
       bannerActive: false,
-      bannerText: ''
+      bannerText: '',
+      stageMessage: '',
+      stageMessageActive: false,
+      countdownActive: false,
+      countdownRemaining: 0,
+      countdownTotal: 0,
+      countdownTitle: 'Service Starts In'
     };
     this.onActionCallback = null;
   }
@@ -125,6 +131,8 @@ class RemoteServer {
       port: this.port,
       localIps: this.localIps,
       primaryUrl: `http://${primaryIp}:${this.port}`,
+      stageUrl: `http://${primaryIp}:${this.port}/stage`,
+      lowerThirdsUrl: `http://${primaryIp}:${this.port}/lower-thirds`,
       connectedCount: this.clients.size,
       qrCodeDataUrl: this.qrCodeDataUrl,
       currentStatus: this.currentStatus
@@ -188,7 +196,31 @@ class RemoteServer {
       return;
     }
 
-    // 4. Default: Serve Mobile Remote Web App
+    // 4. Stage Display / Confidence Monitor (Preacher & Choir Screen)
+    if (url.pathname === '/stage' || url.pathname === '/confidence') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(this.getStageHtml());
+      return;
+    }
+
+    // 5. OBS Studio / ATEM Transparent Lower-Thirds Broadcast Overlay
+    if (url.pathname === '/lower-thirds' || url.pathname === '/obs' || url.pathname === '/overlay') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(this.getLowerThirdsHtml());
+      return;
+    }
+
+    // 6. Direct Clean YouTube Embed Proxy
+    if (url.pathname === '/embed') {
+      const vid = url.searchParams.get('v') || '';
+      const autoplay = url.searchParams.get('autoplay') || '1';
+      const mute = url.searchParams.get('mute') || '0';
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(this.getEmbedHtml(vid, autoplay, mute));
+      return;
+    }
+
+    // 7. Default: Serve Mobile Remote Web App
     if (url.pathname === '/' || url.pathname === '/index.html' || url.pathname === '/remote') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(this.getRemoteHtml());
@@ -908,6 +940,550 @@ class RemoteServer {
     });
 
     // Start Real-Time Connection
+    connectSSE();
+  </script>
+</body>
+</html>`;
+  }
+
+  getEmbedHtml(vid, autoplay = '1', mute = '0') {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>ZionCast YouTube Stream</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; overflow:hidden; }
+    html, body { width:100vw; height:100vh; background:#000; }
+    iframe { width:100%; height:100%; border:none; }
+  </style>
+</head>
+<body>
+  <iframe 
+    src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(vid)}?autoplay=${autoplay}&mute=${mute}&controls=1&rel=0&playsinline=1&modestbranding=1" 
+    referrerpolicy="strict-origin-when-cross-origin" 
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+    allowfullscreen>
+  </iframe>
+</body>
+</html>`;
+  }
+
+  getLowerThirdsHtml() {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZionCast OBS Transparent Lower-Thirds</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: transparent !important;
+      font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+    }
+    #lt-container {
+      position: fixed;
+      bottom: 44px;
+      left: 50%;
+      transform: translateX(-50%) translateY(40px);
+      width: 86%;
+      max-width: 1440px;
+      opacity: 0;
+      transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
+    }
+    #lt-container.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .lt-card {
+      background: linear-gradient(135deg, rgba(13, 17, 23, 0.94) 0%, rgba(22, 27, 34, 0.9) 100%);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-left: 8px solid #f59e0b;
+      border-radius: 16px;
+      padding: 22px 34px;
+      box-shadow: 0 16px 45px rgba(0, 0, 0, 0.65), 0 0 1px rgba(255, 255, 255, 0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .lt-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .lt-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 14px;
+      background: rgba(245, 158, 11, 0.18);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #f59e0b;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-radius: 9999px;
+    }
+    .lt-item-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #94a3b8;
+      letter-spacing: 0.05em;
+    }
+    .lt-body {
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.35;
+      color: #ffffff;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    #lt-ticker {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100vw;
+      background: rgba(220, 38, 38, 0.95);
+      color: #fff;
+      font-weight: 800;
+      font-size: 18px;
+      padding: 10px 0;
+      overflow: hidden;
+      white-space: nowrap;
+      display: none;
+      box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.4);
+    }
+    #lt-ticker.visible {
+      display: block;
+    }
+    .ticker-content {
+      display: inline-block;
+      animation: tickerScroll 20s linear infinite;
+      padding-left: 100vw;
+    }
+    @keyframes tickerScroll {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-100%); }
+    }
+  </style>
+</head>
+<body>
+  <div id="lt-container">
+    <div class="lt-card">
+      <div class="lt-header">
+        <span id="lt-badge" class="lt-badge">LIVE</span>
+        <span id="lt-item-title" class="lt-item-title"></span>
+      </div>
+      <div id="lt-body" class="lt-body"></div>
+    </div>
+  </div>
+  <div id="lt-ticker">
+    <div id="lt-ticker-text" class="ticker-content"></div>
+  </div>
+
+  <script>
+    const container = document.getElementById('lt-container');
+    const badge = document.getElementById('lt-badge');
+    const itemTitle = document.getElementById('lt-item-title');
+    const body = document.getElementById('lt-body');
+    const ticker = document.getElementById('lt-ticker');
+    const tickerText = document.getElementById('lt-ticker-text');
+
+    function updateView(state) {
+      if (state.bannerActive && state.bannerText) {
+        tickerText.textContent = state.bannerText;
+        ticker.classList.add('visible');
+      } else {
+        ticker.classList.remove('visible');
+      }
+
+      if (state.blackout || state.clearText || state.themeOnly || !state.currentSlideBody) {
+        container.classList.remove('visible');
+        return;
+      }
+
+      badge.textContent = state.currentSlideLabel || 'LIVE';
+      itemTitle.textContent = state.activeItemTitle || '';
+      body.textContent = state.currentSlideBody || '';
+      container.classList.add('visible');
+    }
+
+    function connectSSE() {
+      const evtSource = new EventSource('/api/events');
+      evtSource.onmessage = (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload.type === 'status') updateView(payload.data);
+        } catch (err) {}
+      };
+      evtSource.onerror = () => {
+        evtSource.close();
+        setTimeout(connectSSE, 2000);
+      };
+    }
+    connectSSE();
+  </script>
+</body>
+</html>`;
+  }
+
+  getStageHtml() {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ZionCast - Preacher & Choir Stage Display</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #07090e;
+      color: #ffffff;
+      font-family: 'Outfit', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      user-select: none;
+    }
+    .stage-shell {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      padding: 18px 24px;
+      gap: 16px;
+    }
+    /* Top Status Bar: Clock, Live indicator, Sermon Timer */
+    .stage-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      background: #0f141f;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      flex-shrink: 0;
+    }
+    .clock-display {
+      font-size: 28px;
+      font-weight: 800;
+      color: #f8fafc;
+      letter-spacing: 0.05em;
+      font-variant-numeric: tabular-nums;
+    }
+    .center-status {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 14px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #10b981;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      border-radius: 9999px;
+      text-transform: uppercase;
+    }
+    .live-badge.blackout-state {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #ef4444;
+    }
+    .stage-item-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #94a3b8;
+    }
+    .timer-display {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .timer-badge {
+      font-size: 12px;
+      font-weight: 800;
+      color: #38bdf8;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .timer-clock {
+      font-size: 28px;
+      font-weight: 800;
+      color: #f59e0b;
+      font-variant-numeric: tabular-nums;
+    }
+    .btn-fs {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      margin-left: 14px;
+    }
+
+    /* Private Tech Booth to Preacher Alert Banner */
+    #stage-alert-banner {
+      display: none;
+      padding: 16px 24px;
+      background: linear-gradient(135deg, rgba(220, 38, 38, 0.95), rgba(185, 28, 28, 0.9));
+      border: 2px solid #fca5a5;
+      border-radius: 14px;
+      color: #ffffff;
+      font-size: 24px;
+      font-weight: 800;
+      text-align: center;
+      letter-spacing: 0.05em;
+      box-shadow: 0 0 25px rgba(220, 38, 38, 0.7);
+      animation: alertPulse 1.5s infinite;
+      flex-shrink: 0;
+    }
+    @keyframes alertPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.85; transform: scale(0.995); }
+    }
+
+    /* Main Stage Layout: Current Slide & Next Preview */
+    .stage-main {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      gap: 16px;
+      min-height: 0;
+    }
+    .current-slide-panel {
+      flex: 1.4;
+      background: #0f141f;
+      border: 2px solid rgba(245, 158, 11, 0.4);
+      border-radius: 16px;
+      padding: 24px 32px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    }
+    .panel-tag {
+      position: absolute;
+      top: 14px;
+      left: 20px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 6px;
+    }
+    .current-slide-panel .panel-tag {
+      background: rgba(245, 158, 11, 0.2);
+      color: #f59e0b;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+    .current-slide-text {
+      font-size: clamp(24px, 4.2vw, 56px);
+      font-weight: 800;
+      line-height: 1.3;
+      color: #ffffff;
+      text-align: center;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin-top: 10px;
+    }
+    .current-slide-text.blackout-msg {
+      color: #ef4444;
+      font-size: clamp(20px, 3vw, 36px);
+    }
+    .current-slide-text.clear-msg {
+      color: #38bdf8;
+      font-size: clamp(20px, 3vw, 36px);
+    }
+
+    /* Next Slide Preview */
+    .next-slide-panel {
+      flex: 0.85;
+      background: #090d14;
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 18px 28px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .next-slide-panel .panel-tag {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    .next-slide-text {
+      font-size: clamp(18px, 2.6vw, 36px);
+      font-weight: 700;
+      line-height: 1.35;
+      color: #94a3b8;
+      text-align: center;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage-shell">
+    <div class="stage-header">
+      <div id="stage-clock" class="clock-display">--:--:--</div>
+      <div class="center-status">
+        <span id="stage-live-badge" class="live-badge">● LIVE</span>
+        <span id="stage-item-title" class="stage-item-title">ZionCast</span>
+      </div>
+      <div class="timer-display">
+        <span id="timer-title" class="timer-badge">COUNTDOWN</span>
+        <span id="timer-clock" class="timer-clock">00:00</span>
+        <button id="btn-fullscreen" class="btn-fs">⛶ Fullscreen</button>
+      </div>
+    </div>
+
+    <!-- Private Tech Booth to Pastor Message -->
+    <div id="stage-alert-banner">
+      ⚠️ TECH BOOTH ALERT: <span id="stage-alert-text">Wrap up in 2 minutes</span>
+    </div>
+
+    <div class="stage-main">
+      <div class="current-slide-panel">
+        <div id="current-panel-tag" class="panel-tag">CURRENT SLIDE</div>
+        <div id="current-slide-text" class="current-slide-text">Waiting for service to begin...</div>
+      </div>
+
+      <div class="next-slide-panel">
+        <div id="next-panel-tag" class="panel-tag">▶ NEXT SLIDE</div>
+        <div id="next-slide-text" class="next-slide-text">--</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const stageClock = document.getElementById('stage-clock');
+    const stageLiveBadge = document.getElementById('stage-live-badge');
+    const stageItemTitle = document.getElementById('stage-item-title');
+    const timerTitle = document.getElementById('timer-title');
+    const timerClock = document.getElementById('timer-clock');
+    const alertBanner = document.getElementById('stage-alert-banner');
+    const alertText = document.getElementById('stage-alert-text');
+    const currentTag = document.getElementById('current-panel-tag');
+    const currentText = document.getElementById('current-slide-text');
+    const nextTag = document.getElementById('next-panel-tag');
+    const nextText = document.getElementById('next-slide-text');
+    const btnFullscreen = document.getElementById('btn-fullscreen');
+
+    // Wall Clock
+    function updateClock() {
+      const now = new Date();
+      stageClock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Fullscreen toggle
+    btnFullscreen.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+        btnFullscreen.textContent = '✕ Exit';
+      } else {
+        document.exitFullscreen().catch(() => {});
+        btnFullscreen.textContent = '⛶ Fullscreen';
+      }
+    });
+
+    function formatTime(sec) {
+      const s = Math.max(0, Math.floor(sec));
+      const m = Math.floor(s / 60);
+      const rem = s % 60;
+      return String(m).padStart(2, '0') + ':' + String(rem).padStart(2, '0');
+    }
+
+    function updateStageDisplay(state) {
+      // 1. Tech Booth Private Alert Message
+      if (state.stageMessageActive && state.stageMessage) {
+        alertText.textContent = state.stageMessage;
+        alertBanner.style.display = 'block';
+      } else {
+        alertBanner.style.display = 'none';
+      }
+
+      // 2. Countdown / Service Timer
+      if (state.countdownActive && state.countdownRemaining !== undefined) {
+        timerTitle.textContent = state.countdownTitle || 'COUNTDOWN';
+        timerClock.textContent = formatTime(state.countdownRemaining);
+        timerClock.style.color = state.countdownRemaining <= 60 ? '#ef4444' : '#f59e0b';
+      } else {
+        timerTitle.textContent = 'STATUS';
+        timerClock.textContent = 'READY';
+        timerClock.style.color = '#10b981';
+      }
+
+      // 3. Status Bar
+      stageItemTitle.textContent = state.activeItemTitle || 'ZionCast Broadcast';
+      if (state.blackout) {
+        stageLiveBadge.textContent = '⬛ BLACKOUT';
+        stageLiveBadge.className = 'live-badge blackout-state';
+      } else if (state.clearText) {
+        stageLiveBadge.textContent = '👁️ TEXT CLEARED';
+        stageLiveBadge.className = 'live-badge blackout-state';
+      } else {
+        stageLiveBadge.textContent = '● LIVE';
+        stageLiveBadge.className = 'live-badge';
+      }
+
+      // 4. Current Slide
+      if (state.blackout) {
+        currentTag.textContent = 'BLACKOUT ACTIVE';
+        currentText.textContent = '[ AUDIENCE PROJECTOR IS BLACKED OUT ]';
+        currentText.className = 'current-slide-text blackout-msg';
+      } else if (state.clearText) {
+        currentTag.textContent = 'TEXT CLEARED';
+        currentText.textContent = '[ TEXT CLEARED ON MAIN PROJECTOR ]';
+        currentText.className = 'current-slide-text clear-msg';
+      } else {
+        currentTag.textContent = state.currentSlideLabel ? ('CURRENT • ' + state.currentSlideLabel) : 'CURRENT SLIDE';
+        currentText.textContent = state.currentSlideBody || 'Ready for service';
+        currentText.className = 'current-slide-text';
+      }
+
+      // 5. Next Slide Preview
+      nextTag.textContent = state.nextSlideLabel ? ('▶ NEXT • ' + state.nextSlideLabel) : '▶ NEXT SLIDE PREVIEW';
+      nextText.textContent = state.nextSlideBody || (state.currentSlideIndex + 1 >= state.totalSlides ? '— End of Item —' : '--');
+    }
+
+    function connectSSE() {
+      const evtSource = new EventSource('/api/events');
+      evtSource.onmessage = (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload.type === 'status') updateStageDisplay(payload.data);
+        } catch (err) {}
+      };
+      evtSource.onerror = () => {
+        evtSource.close();
+        setTimeout(connectSSE, 2000);
+      };
+    }
     connectSSE();
   </script>
 </body>

@@ -54,6 +54,11 @@ contextBridge.exposeInMainWorld('zionApi', {
     ipcRenderer.on('remote-action', (event, data) => callback(data));
   },
 
+  // Stage Display / Confidence Monitor APIs
+  launchStageDisplay: () => ipcRenderer.invoke('launch-stage-display'),
+  closeStageDisplay: () => ipcRenderer.invoke('close-stage-display'),
+  getStageDisplayStatus: () => ipcRenderer.invoke('get-stage-display-status'),
+
   // Platform
   platform: process.platform
 });

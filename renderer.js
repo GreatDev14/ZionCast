@@ -424,6 +424,23 @@
 
   let saveDebounceTimer = null;
 
+  // Stage Display & Tech Booth Private Alert State
+  let stageAlertMessageText = '';
+  let stageAlertMessageActive = false;
+
+  // Pre-Service Countdown Timer State
+  let countdownTimerId = null;
+  let countdownRemainingSec = 300;
+  let countdownTotalSec = 300;
+  let countdownRunning = false;
+  let countdownProjected = false;
+  let countdownTitleText = 'Service Begins In';
+
+  // Dual-Bible Scripture Comparison State
+  let isDualBibleCompare = false;
+  let secondaryBibleVersion = 'rsv';
+  let secondaryBibleDatabase = null;
+
   function triggerAutoSave() {
     if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
     saveDebounceTimer = setTimeout(() => {
@@ -1697,9 +1714,34 @@
     versesToDisplay.forEach(vNum => {
       const text = chObj[vNum];
       if (text) {
+        let itemTitle = `${targetBook} ${targetChapter}:${vNum} (${versionAbbr})`;
+        let slideBody = `"${text}"\n\n— ${targetBook} ${targetChapter}:${vNum} (${versionAbbr})`;
+        let isDual = false;
+        let dualPrimaryObj = null;
+        let dualSecondaryObj = null;
+        let secText = '';
+        let secAbbr = '';
+
+        if (isDualBibleCompare && secondaryBibleDatabase && secondaryBibleDatabase.books) {
+          const secCh = secondaryBibleDatabase.books[targetBook] ? secondaryBibleDatabase.books[targetBook][targetChapter] : null;
+          secText = secCh ? (secCh[vNum] || '') : '';
+          secAbbr = secondaryBibleDatabase.abbreviation || secondaryBibleVersion.toUpperCase();
+
+          if (secText) {
+            isDual = true;
+            itemTitle = `${targetBook} ${targetChapter}:${vNum} (${versionAbbr} vs ${secAbbr})`;
+            slideBody = `✦ ${versionAbbr}:\n"${text}"\n\n✦ ${secAbbr}:\n"${secText}"\n\n— ${targetBook} ${targetChapter}:${vNum}`;
+            dualPrimaryObj = { label: versionAbbr, text: text };
+            dualSecondaryObj = { label: secAbbr, text: secText };
+          }
+        }
+
         scriptureSlides.push({
-          label: `${targetBook} ${targetChapter}:${vNum} (${versionAbbr})`,
-          body: `"${text}"\n\n— ${targetBook} ${targetChapter}:${vNum} (${versionAbbr})`
+          label: itemTitle,
+          body: slideBody,
+          isDualComparison: isDual,
+          dualPrimary: dualPrimaryObj,
+          dualSecondary: dualSecondaryObj
         });
 
         // Add card to library pane
@@ -1709,20 +1751,31 @@
           <div class="lib-item-header">
             <span class="lib-item-title">${escapeHtml(targetBook)} ${targetChapter}:${vNum}</span>
             <span class="lib-item-badge" style="background: rgba(245, 158, 11, 0.2); color: var(--accent-gold);">${versionAbbr}</span>
+            ${isDual ? `<span class="lib-item-badge" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8;">${secAbbr}</span>` : ''}
           </div>
-          <div class="lib-item-preview">${escapeHtml(text)}</div>
+          <div class="lib-item-preview">
+            ${isDual ? `
+              <div style="margin-bottom: 4px;"><strong style="color: var(--accent-gold);">${versionAbbr}:</strong> ${escapeHtml(text)}</div>
+              <div><strong style="color: #38bdf8;">${secAbbr}:</strong> ${escapeHtml(secText)}</div>
+            ` : escapeHtml(text)}
+          </div>
           <div class="lib-item-actions">
             <button class="btn-mini add-service">+ Service</button>
             <button class="btn-mini send-live" style="color: var(--accent-gold);">Send Live</button>
           </div>
         `;
 
+
+
         const singleItem = {
-          id: `scripture-${versionAbbr}-${targetBook}-${targetChapter}-${vNum}`,
-          title: `${targetBook} ${targetChapter}:${vNum} (${versionAbbr})`,
+          id: `scripture-${isDual ? 'dual-' : ''}${versionAbbr}-${targetBook}-${targetChapter}-${vNum}`,
+          title: itemTitle,
           slides: [{
-            label: `${targetBook} ${targetChapter}:${vNum} (${versionAbbr})`,
-            body: `"${text}"\n\n— ${targetBook} ${targetChapter}:${vNum} (${versionAbbr})`
+            label: itemTitle,
+            body: slideBody,
+            isDualComparison: isDual,
+            dualPrimary: dualPrimaryObj,
+            dualSecondary: dualSecondaryObj
           }]
         };
 
@@ -2737,7 +2790,13 @@
       clearText: !!state.clearText,
       themeOnly: !!state.themeOnly,
       bannerActive: !!state.bannerActive,
-      bannerText: state.bannerText || ''
+      bannerText: state.bannerText || '',
+      stageMessage: stageAlertMessageText || '',
+      stageMessageActive: !!stageAlertMessageActive,
+      countdownActive: !!countdownRunning,
+      countdownRemaining: Math.floor(countdownRemainingSec),
+      countdownTotal: Math.floor(countdownTotalSec),
+      countdownTitle: countdownTitleText || 'Service Begins In'
     };
 
     window.zionApi.updateRemoteStatus(statusPayload);
@@ -2834,6 +2893,551 @@
         }
       }
     });
+  }
+
+  // =========================================================================
+  // 11e. PREACHER & CHOIR STAGE DISPLAY / CONFIDENCE MONITOR
+  // =========================================================================
+  function initStageModal() {
+    const btnOpenStageModal = document.getElementById('btn-open-stage-modal');
+    const modalStage = document.getElementById('modal-stage');
+    const btnLaunchStageWin = document.getElementById('btn-launch-stage-win');
+    const stageUrlDisplay = document.getElementById('stage-url-display');
+    const btnCopyStageUrl = document.getElementById('btn-copy-stage-url');
+    const btnOpenStageBrowser = document.getElementById('btn-open-stage-browser');
+    const obsUrlDisplay = document.getElementById('obs-url-display');
+    const btnCopyObsUrl = document.getElementById('btn-copy-obs-url');
+    const techStageMsgInput = document.getElementById('tech-stage-msg-input');
+    const btnSendStageMsg = document.getElementById('btn-send-stage-msg');
+    const btnClearStageMsg = document.getElementById('btn-clear-stage-msg');
+
+    if (btnOpenStageModal) {
+      btnOpenStageModal.addEventListener('click', async () => {
+        if (modalStage) modalStage.classList.add('open');
+        if (window.zionApi && window.zionApi.getRemoteInfo) {
+          const info = await window.zionApi.getRemoteInfo();
+          if (info) {
+            if (stageUrlDisplay && info.stageUrl) stageUrlDisplay.value = info.stageUrl;
+            if (obsUrlDisplay && info.lowerThirdsUrl) obsUrlDisplay.value = info.lowerThirdsUrl;
+          }
+        }
+      });
+    }
+
+    if (btnLaunchStageWin) {
+      btnLaunchStageWin.addEventListener('click', async () => {
+        if (window.zionApi && window.zionApi.launchStageDisplay) {
+          await window.zionApi.launchStageDisplay();
+        }
+      });
+    }
+
+    if (btnCopyStageUrl && stageUrlDisplay) {
+      btnCopyStageUrl.addEventListener('click', () => {
+        navigator.clipboard.writeText(stageUrlDisplay.value).then(() => {
+          const prev = btnCopyStageUrl.textContent;
+          btnCopyStageUrl.textContent = 'Copied!';
+          setTimeout(() => { btnCopyStageUrl.textContent = prev; }, 2000);
+        });
+      });
+    }
+
+    if (btnOpenStageBrowser && stageUrlDisplay) {
+      btnOpenStageBrowser.addEventListener('click', () => {
+        if (window.zionApi && window.zionApi.openExternalUrl) {
+          window.zionApi.openExternalUrl(stageUrlDisplay.value);
+        } else {
+          window.open(stageUrlDisplay.value, '_blank');
+        }
+      });
+    }
+
+    if (btnCopyObsUrl && obsUrlDisplay) {
+      btnCopyObsUrl.addEventListener('click', () => {
+        navigator.clipboard.writeText(obsUrlDisplay.value).then(() => {
+          const prev = btnCopyObsUrl.textContent;
+          btnCopyObsUrl.textContent = 'Copied!';
+          setTimeout(() => { btnCopyObsUrl.textContent = prev; }, 2000);
+        });
+      });
+    }
+
+    // Private Tech Booth to Preacher Message
+    if (btnSendStageMsg && techStageMsgInput) {
+      btnSendStageMsg.addEventListener('click', () => {
+        const text = techStageMsgInput.value.trim();
+        if (text) {
+          stageAlertMessageText = text;
+          stageAlertMessageActive = true;
+          syncRemoteStatus();
+          btnSendStageMsg.textContent = 'Sent!';
+          setTimeout(() => { btnSendStageMsg.textContent = 'Send Alert'; }, 1500);
+        }
+      });
+    }
+
+    if (btnClearStageMsg) {
+      btnClearStageMsg.addEventListener('click', () => {
+        stageAlertMessageText = '';
+        stageAlertMessageActive = false;
+        if (techStageMsgInput) techStageMsgInput.value = '';
+        syncRemoteStatus();
+      });
+    }
+
+    // Preset buttons
+    document.querySelectorAll('.btn-stage-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const msg = btn.dataset.msg;
+        if (msg) {
+          if (techStageMsgInput) techStageMsgInput.value = msg;
+          stageAlertMessageText = msg;
+          stageAlertMessageActive = true;
+          syncRemoteStatus();
+        }
+      });
+    });
+  }
+
+  // =========================================================================
+  // 11f. PRE-SERVICE COUNTDOWN TIMER CONTROLLER
+  // =========================================================================
+  function initCountdownTimer() {
+    const btnOpenCountdownModal = document.getElementById('btn-open-countdown-modal');
+    const modalCountdown = document.getElementById('modal-countdown');
+    const digitsDisplay = document.getElementById('countdown-ctrl-digits');
+    const titlePreview = document.getElementById('countdown-ctrl-title-preview');
+    const statusText = document.getElementById('countdown-ctrl-status');
+    const inputTitle = document.getElementById('countdown-input-title');
+    const inputMinutes = document.getElementById('countdown-input-minutes');
+    const btnStart = document.getElementById('btn-countdown-start');
+    const btnPause = document.getElementById('btn-countdown-pause');
+    const btnReset = document.getElementById('btn-countdown-reset');
+    const btnProjectToggle = document.getElementById('btn-countdown-project-toggle');
+
+    function formatTime(sec) {
+      const s = Math.max(0, Math.floor(sec));
+      const m = Math.floor(s / 60);
+      const rem = s % 60;
+      return String(m).padStart(2, '0') + ':' + String(rem).padStart(2, '0');
+    }
+
+    function updateTimerUI() {
+      if (digitsDisplay) digitsDisplay.textContent = formatTime(countdownRemainingSec);
+      if (titlePreview && inputTitle) titlePreview.textContent = inputTitle.value.trim() || 'SERVICE BEGINS IN';
+      if (statusText) {
+        if (countdownRunning) {
+          statusText.textContent = 'STATUS: RUNNING';
+          statusText.style.color = '#f59e0b';
+        } else if (countdownRemainingSec <= 0) {
+          statusText.textContent = 'STATUS: FINISHED';
+          statusText.style.color = '#ef4444';
+        } else {
+          statusText.textContent = 'STATUS: PAUSED / READY';
+          statusText.style.color = '#10b981';
+        }
+      }
+      if (btnStart) {
+        btnStart.textContent = countdownRunning ? '▶ Running...' : '▶ Start Timer';
+      }
+    }
+
+    function syncCountdown() {
+      countdownTitleText = (inputTitle ? inputTitle.value.trim() : '') || 'Service Begins In';
+      if (countdownProjected) {
+        broadcastDisplayState({
+          countdownActive: true,
+          countdownRemaining: countdownRemainingSec,
+          countdownTotal: countdownTotalSec,
+          countdownTitle: countdownTitleText
+        });
+      } else {
+        broadcastDisplayState({ countdownActive: false });
+      }
+      syncRemoteStatus();
+    }
+
+    function startTimer() {
+      if (countdownRunning) return;
+      if (countdownRemainingSec <= 0) {
+        const mins = parseInt(inputMinutes ? inputMinutes.value : '5', 10) || 5;
+        countdownTotalSec = mins * 60;
+        countdownRemainingSec = countdownTotalSec;
+      }
+      countdownRunning = true;
+      updateTimerUI();
+      syncCountdown();
+
+      if (countdownTimerId) clearInterval(countdownTimerId);
+      countdownTimerId = setInterval(() => {
+        countdownRemainingSec--;
+        if (countdownRemainingSec <= 0) {
+          countdownRemainingSec = 0;
+          pauseTimer();
+        }
+        updateTimerUI();
+        syncCountdown();
+      }, 1000);
+    }
+
+    function pauseTimer() {
+      if (countdownTimerId) {
+        clearInterval(countdownTimerId);
+        countdownTimerId = null;
+      }
+      countdownRunning = false;
+      updateTimerUI();
+      syncCountdown();
+    }
+
+    function resetTimer() {
+      pauseTimer();
+      const mins = parseInt(inputMinutes ? inputMinutes.value : '5', 10) || 5;
+      countdownTotalSec = mins * 60;
+      countdownRemainingSec = countdownTotalSec;
+      updateTimerUI();
+      syncCountdown();
+    }
+
+    if (btnOpenCountdownModal) {
+      btnOpenCountdownModal.addEventListener('click', () => {
+        if (modalCountdown) modalCountdown.classList.add('open');
+        updateTimerUI();
+      });
+    }
+
+    if (btnStart) btnStart.addEventListener('click', startTimer);
+    if (btnPause) btnPause.addEventListener('click', pauseTimer);
+    if (btnReset) btnReset.addEventListener('click', resetTimer);
+
+    if (inputMinutes) {
+      inputMinutes.addEventListener('change', () => {
+        if (!countdownRunning) {
+          const mins = Math.max(1, parseInt(inputMinutes.value, 10) || 5);
+          countdownTotalSec = mins * 60;
+          countdownRemainingSec = countdownTotalSec;
+          updateTimerUI();
+          syncCountdown();
+        }
+      });
+    }
+
+    if (inputTitle) {
+      inputTitle.addEventListener('input', () => {
+        if (titlePreview) titlePreview.textContent = inputTitle.value.trim() || 'SERVICE BEGINS IN';
+        syncCountdown();
+      });
+    }
+
+    // Preset buttons (5, 10, 15, 20 mins)
+    document.querySelectorAll('.btn-countdown-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mins = parseInt(btn.dataset.min, 10) || 5;
+        if (inputMinutes) inputMinutes.value = mins;
+        pauseTimer();
+        countdownTotalSec = mins * 60;
+        countdownRemainingSec = countdownTotalSec;
+        updateTimerUI();
+        syncCountdown();
+      });
+    });
+
+    // Toggle live projector output
+    if (btnProjectToggle) {
+      btnProjectToggle.addEventListener('click', () => {
+        countdownProjected = !countdownProjected;
+        if (countdownProjected) {
+          btnProjectToggle.textContent = '🟢 On Projector (Click to Hide)';
+          btnProjectToggle.style.background = '#10b981';
+          btnProjectToggle.style.borderColor = '#34d399';
+        } else {
+          btnProjectToggle.textContent = '🔴 Send to Projector';
+          btnProjectToggle.style.background = '#dc2626';
+          btnProjectToggle.style.borderColor = '#ef4444';
+        }
+        syncCountdown();
+      });
+    }
+  }
+
+  // =========================================================================
+  // 11g. AMBIENT WORSHIP PAD PLAYER (Continuous Sanctuary Synth Drone)
+  // =========================================================================
+  class AmbientPadSynth {
+    constructor() {
+      this.ctx = null;
+      this.activeKey = null;
+      this.activeGain = null;
+      this.activeOscillators = [];
+      this.tone = 'warm-sanctuary';
+      this.octave = 'normal';
+      this.volume = 0.75;
+      this.fadeDuration = 2.2;
+
+      this.frequencies = {
+        'C': 130.81, 'C#': 138.59, 'D': 146.83, 'D#': 155.56,
+        'E': 164.81, 'F': 174.61, 'F#': 185.00, 'G': 196.00,
+        'G#': 207.65, 'A': 220.00, 'A#': 233.08, 'B': 246.94
+      };
+    }
+
+    ensureContext() {
+      if (!this.ctx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioCtx();
+      }
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume();
+      }
+    }
+
+    playKey(key) {
+      this.ensureContext();
+      const baseFreq = this.frequencies[key];
+      if (!baseFreq) return;
+
+      // Smooth crossfade out old oscillators
+      if (this.activeGain) {
+        const oldGain = this.activeGain;
+        const oldOscs = this.activeOscillators;
+        const now = this.ctx.currentTime;
+        oldGain.gain.setValueAtTime(oldGain.gain.value, now);
+        oldGain.gain.exponentialRampToValueAtTime(0.0001, now + this.fadeDuration);
+        setTimeout(() => {
+          oldOscs.forEach(o => {
+            try { o.stop(); o.disconnect(); } catch (e) {}
+          });
+        }, this.fadeDuration * 1000 + 100);
+      }
+
+      this.activeKey = key;
+      this.activeOscillators = [];
+
+      // Create primary gain node
+      const newGain = this.ctx.createGain();
+      const targetGain = Math.max(0.0001, this.volume * 0.35);
+      newGain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+      newGain.gain.exponentialRampToValueAtTime(targetGain, this.ctx.currentTime + 1.8);
+      newGain.connect(this.ctx.destination);
+      this.activeGain = newGain;
+
+      // Filter
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      let cutoff = 440;
+      if (this.tone === 'celestial-shimmer') cutoff = 720;
+      if (this.tone === 'cathedral-organ') cutoff = 360;
+      if (this.tone === 'deep-atmosphere') cutoff = 320;
+      filter.frequency.setValueAtTime(cutoff, this.ctx.currentTime);
+      filter.Q.setValueAtTime(1.8, this.ctx.currentTime);
+      filter.connect(newGain);
+
+      let octMult = 1.0;
+      if (this.octave === 'sub') octMult = 0.5;
+      if (this.octave === 'high') octMult = 2.0;
+
+      const root = baseFreq * octMult;
+      const fifth = root * 1.498307;
+      const octave = root * 2.0;
+
+      const voices = [
+        { freq: root, detune: -4, type: 'sawtooth', gain: 0.28 },
+        { freq: root, detune: 4, type: 'sawtooth', gain: 0.28 },
+        { freq: root, detune: 0, type: 'sine', gain: 0.45 },
+        { freq: fifth, detune: -3, type: 'sawtooth', gain: 0.22 },
+        { freq: fifth, detune: 3, type: 'sine', gain: 0.3 },
+        { freq: octave, detune: 0, type: 'sine', gain: 0.2 }
+      ];
+
+      voices.forEach(v => {
+        const osc = this.ctx.createOscillator();
+        const vGain = this.ctx.createGain();
+        osc.type = v.type;
+        osc.frequency.setValueAtTime(v.freq, this.ctx.currentTime);
+        osc.detune.setValueAtTime(v.detune, this.ctx.currentTime);
+        vGain.gain.setValueAtTime(v.gain, this.ctx.currentTime);
+
+        osc.connect(vGain);
+        vGain.connect(filter);
+        osc.start();
+        this.activeOscillators.push(osc);
+      });
+    }
+
+    stop() {
+      if (!this.activeGain || !this.ctx) {
+        this.activeKey = null;
+        return;
+      }
+      const oldGain = this.activeGain;
+      const oldOscs = this.activeOscillators;
+      const now = this.ctx.currentTime;
+      oldGain.gain.setValueAtTime(oldGain.gain.value, now);
+      oldGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
+      this.activeKey = null;
+      this.activeGain = null;
+      this.activeOscillators = [];
+      setTimeout(() => {
+        oldOscs.forEach(o => {
+          try { o.stop(); o.disconnect(); } catch (e) {}
+        });
+      }, 2000);
+    }
+
+    setVolume(vol) {
+      this.volume = Math.max(0, Math.min(1, vol));
+      if (this.activeGain && this.ctx) {
+        this.activeGain.gain.setValueAtTime(Math.max(0.0001, this.volume * 0.35), this.ctx.currentTime);
+      }
+    }
+
+    setTone(tone) {
+      this.tone = tone;
+      if (this.activeKey) this.playKey(this.activeKey);
+    }
+
+    setOctave(octave) {
+      this.octave = octave;
+      if (this.activeKey) this.playKey(this.activeKey);
+    }
+  }
+
+  const padSynth = new AmbientPadSynth();
+
+  function initAmbientWorshipPads() {
+    const btnOpenPadsModal = document.getElementById('btn-open-pads-modal');
+    const modalPads = document.getElementById('modal-pads');
+    const nowPlayingText = document.getElementById('pad-now-playing');
+    const toneDescText = document.getElementById('pad-tone-desc');
+    const selectTone = document.getElementById('pad-select-tone');
+    const selectOctave = document.getElementById('pad-select-octave');
+    const volumeSlider = document.getElementById('pad-volume-slider');
+    const volumeLabel = document.getElementById('pad-volume-label');
+    const btnStopPad = document.getElementById('btn-pad-stop');
+    const keyButtons = document.querySelectorAll('.pad-key-btn');
+
+    if (btnOpenPadsModal) {
+      btnOpenPadsModal.addEventListener('click', () => {
+        if (modalPads) modalPads.classList.add('open');
+      });
+    }
+
+    keyButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.key;
+        if (!key) return;
+
+        keyButtons.forEach(b => b.classList.remove('pad-active'));
+        btn.classList.add('pad-active');
+
+        padSynth.playKey(key);
+        if (nowPlayingText) {
+          nowPlayingText.textContent = `▶ Playing: Key of ${key}`;
+          nowPlayingText.style.color = '#10b981';
+        }
+        if (btnOpenPadsModal) {
+          btnOpenPadsModal.style.color = '#34d399';
+          btnOpenPadsModal.style.borderColor = '#10b981';
+        }
+      });
+    });
+
+    if (btnStopPad) {
+      btnStopPad.addEventListener('click', () => {
+        padSynth.stop();
+        keyButtons.forEach(b => b.classList.remove('pad-active'));
+        if (nowPlayingText) {
+          nowPlayingText.textContent = 'Pad Silent (Tap a Key Below)';
+          nowPlayingText.style.color = '#f59e0b';
+        }
+        if (btnOpenPadsModal) {
+          btnOpenPadsModal.style.color = '#a855f7';
+          btnOpenPadsModal.style.borderColor = 'rgba(168, 85, 247, 0.35)';
+        }
+      });
+    }
+
+    if (selectTone) {
+      selectTone.addEventListener('change', () => {
+        padSynth.setTone(selectTone.value);
+        if (toneDescText) {
+          toneDescText.textContent = selectTone.options[selectTone.selectedIndex].text;
+        }
+      });
+    }
+
+    if (selectOctave) {
+      selectOctave.addEventListener('change', () => {
+        padSynth.setOctave(selectOctave.value);
+      });
+    }
+
+    if (volumeSlider) {
+      volumeSlider.addEventListener('input', () => {
+        const val = parseInt(volumeSlider.value, 10);
+        if (volumeLabel) volumeLabel.textContent = `${val}%`;
+        padSynth.setVolume(val / 100);
+      });
+    }
+  }
+
+  // =========================================================================
+  // 11h. PARALLEL DUAL-BIBLE SCRIPTURE COMPARISON CONTROLLER
+  // =========================================================================
+  async function loadSecondaryBibleData(version = 'rsv') {
+    const safeVer = ['kjv', 'rsv', 'gnt'].includes(String(version).toLowerCase())
+      ? String(version).toLowerCase()
+      : 'rsv';
+
+    secondaryBibleVersion = safeVer;
+
+    if (bibleVersionsCache[safeVer]) {
+      secondaryBibleDatabase = bibleVersionsCache[safeVer];
+      return secondaryBibleDatabase;
+    }
+
+    let data = null;
+    if (window.zionApi && window.zionApi.getBibleData) {
+      data = await window.zionApi.getBibleData(safeVer);
+    }
+    if (!data) {
+      try {
+        const res = await fetch(`assets/bibles/${safeVer}.json`);
+        data = await res.json();
+      } catch (e) {
+        console.warn(`Could not load secondary ${safeVer.toUpperCase()} Bible JSON:`, e);
+      }
+    }
+
+    if (data && data.books) {
+      bibleVersionsCache[safeVer] = data;
+      secondaryBibleDatabase = data;
+    }
+    return secondaryBibleDatabase;
+  }
+
+  function initDualBibleComparison() {
+    const compareToggle = document.getElementById('bible-compare-toggle');
+    const secondaryWrap = document.getElementById('bible-compare-secondary-wrap');
+    const secondarySelect = document.getElementById('bible-version-secondary');
+
+    if (compareToggle) {
+      compareToggle.addEventListener('change', async () => {
+        isDualBibleCompare = compareToggle.checked;
+        if (secondaryWrap) secondaryWrap.style.display = isDualBibleCompare ? 'flex' : 'none';
+        if (isDualBibleCompare) {
+          await loadSecondaryBibleData(secondarySelect ? secondarySelect.value : 'rsv');
+        }
+        doBibleLookup();
+      });
+    }
+
+    if (secondarySelect) {
+      secondarySelect.addEventListener('change', async () => {
+        await loadSecondaryBibleData(secondarySelect.value);
+        if (isDualBibleCompare) doBibleLookup();
+      });
+    }
   }
 
   // =========================================================================
@@ -3604,6 +4208,10 @@
     initYouTubeModal();
     initRemoteModal();
     initRemoteActionListener();
+    initStageModal();
+    initCountdownTimer();
+    initDualBibleComparison();
+    initAmbientWorshipPads();
     setTimeout(() => syncRemoteStatus(), 500);
   }
 
