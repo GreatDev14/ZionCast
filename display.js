@@ -610,7 +610,7 @@
         youtubeLayer.style.display = 'block';
         youtubeLayer.classList.add('youtube-active');
         const muteParam = state.youtubeMuted ? 1 : 0;
-        const targetUrl = `https://www.youtube-nocookie.com/embed/${state.youtubeVideoId}?autoplay=1&mute=${muteParam}&controls=1&rel=0&modestbranding=1&enablejsapi=1`;
+        const targetUrl = `https://www.youtube.com/embed/${state.youtubeVideoId}?autoplay=1&mute=${muteParam}&controls=1&rel=0&modestbranding=1&enablejsapi=1&origin=https%3A%2F%2Fwww.youtube.com`;
         if (youtubeIframe.src !== targetUrl) {
           youtubeIframe.src = targetUrl;
         }
@@ -621,7 +621,7 @@
         setTimeout(() => {
           if (state.backgroundType !== 'youtube') {
             youtubeLayer.style.display = 'none';
-            youtubeIframe.src = '';
+            youtubeIframe.src = 'about:blank';
           }
         }, 350);
       }

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen, ipcMain, dialog, Menu, shell } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, dialog, Menu, shell, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -268,6 +268,21 @@ function identifyScreens() {
 
 // App lifecycle
 app.whenReady().then(() => {
+  // Fix YouTube Embed Error 153: bypass missing file:// referrer by injecting valid origin & referer
+  const ytFilter = {
+    urls: [
+      '*://*.youtube.com/*',
+      '*://*.youtube-nocookie.com/*',
+      '*://*.googlevideo.com/*'
+    ]
+  };
+
+  session.defaultSession.webRequest.onBeforeSendHeaders(ytFilter, (details, callback) => {
+    details.requestHeaders['Referer'] = 'https://www.youtube.com/';
+    details.requestHeaders['Origin'] = 'https://www.youtube.com';
+    callback({ cancel: false, requestHeaders: details.requestHeaders });
+  });
+
   createControlWindow();
 
   // Initialize Mobile Remote Server
