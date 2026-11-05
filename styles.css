@@ -2699,3 +2699,56 @@ body {
   margin: 6px 0 10px 0;
   font-size: 0.8rem;
 }
+
+/* ==========================================================================
+   LIVE SANCTUARY CLOCK ON AUDIENCE TV (FOR CHURCHES WITH ONE SCREEN)
+   ========================================================================== */
+.display-sanctuary-clock {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+  z-index: 10;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 22px;
+  background: rgba(13, 17, 23, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1.5px solid rgba(245, 158, 11, 0.5);
+  border-radius: 9999px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.7), 0 0 16px rgba(245, 158, 11, 0.2);
+  font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+  font-size: clamp(20px, 2.2vw, 32px);
+  font-weight: 800;
+  color: #f59e0b;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 0.3s ease;
+}
+
+.display-sanctuary-clock.visible {
+  display: flex !important;
+}
+
+.display-sanctuary-clock .clock-icon {
+  font-size: 0.85em;
+}
+
+/* Top Header horizontal scrollbar protection so buttons never get cut off */
+.top-header {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.top-header::-webkit-scrollbar {
+  height: 4px;
+}
+
+.top-header::-webkit-scrollbar-thumb {
+  background: rgba(245, 158, 11, 0.3);
+  border-radius: 4px;
+}

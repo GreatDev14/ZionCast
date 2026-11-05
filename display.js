@@ -806,6 +806,29 @@
         countdownLayer.classList.remove('active');
       }
     }
+
+    // 8. Live Sanctuary Clock Overlay for Entire Congregation
+    const sanctuaryClock = document.getElementById('display-sanctuary-clock');
+    const clockText = document.getElementById('display-clock-text');
+    if (sanctuaryClock && clockText) {
+      if (state.showClockOnTv) {
+        sanctuaryClock.classList.add('visible');
+        if (!window.__sanctuaryClockInterval) {
+          const updateClock = () => {
+            const now = new Date();
+            clockText.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          };
+          updateClock();
+          window.__sanctuaryClockInterval = setInterval(updateClock, 1000);
+        }
+      } else {
+        sanctuaryClock.classList.remove('visible');
+        if (window.__sanctuaryClockInterval) {
+          clearInterval(window.__sanctuaryClockInterval);
+          window.__sanctuaryClockInterval = null;
+        }
+      }
+    }
   }
 
   // =========================================================================

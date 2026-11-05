@@ -41,6 +41,7 @@
     bannerLayout: 'bar',
     bannerAutoDismiss: 60,
     brightness: 100,
+    showClockOnTv: false,
 
     // YouTube Live & Online Stream Player
     youtubeVideoId: '',
@@ -986,7 +987,12 @@
       youtubeUrl: state.youtubeUrl || '',
       youtubeTitle: state.youtubeTitle || '',
       youtubeMuted: !!state.youtubeMuted,
-      youtubeActive: !!state.youtubeActive
+      youtubeActive: !!state.youtubeActive,
+      showClockOnTv: !!state.showClockOnTv,
+      countdownActive: !!countdownRunning,
+      countdownRemaining: Math.floor(countdownRemainingSec),
+      countdownTotal: Math.floor(countdownTotalSec),
+      countdownTitle: countdownTitleText || 'Service Begins In'
     };
 
     // 1. Electron IPC Send
@@ -2821,6 +2827,49 @@
   }
 
   function initRemoteModal() {
+    const btnOpenRemoteModalBottom = document.getElementById('btn-open-remote-modal-bottom');
+    if (btnOpenRemoteModalBottom && btnOpenRemoteModal) {
+      btnOpenRemoteModalBottom.addEventListener('click', () => {
+        btnOpenRemoteModal.click();
+      });
+    }
+
+    const btnOpenCountdownBottom = document.getElementById('btn-open-countdown-bottom');
+    const btnOpenCountdownModal = document.getElementById('btn-open-countdown-modal');
+    if (btnOpenCountdownBottom && btnOpenCountdownModal) {
+      btnOpenCountdownBottom.addEventListener('click', () => {
+        btnOpenCountdownModal.click();
+      });
+    }
+
+    const btnOpenPadsBottom = document.getElementById('btn-open-pads-bottom');
+    const btnOpenPadsModal = document.getElementById('btn-open-pads-modal');
+    if (btnOpenPadsBottom && btnOpenPadsModal) {
+      btnOpenPadsBottom.addEventListener('click', () => {
+        btnOpenPadsModal.click();
+      });
+    }
+
+    const btnToggleTvClock = document.getElementById('btn-toggle-tv-clock');
+    if (btnToggleTvClock) {
+      btnToggleTvClock.addEventListener('click', () => {
+        state.showClockOnTv = !state.showClockOnTv;
+        if (state.showClockOnTv) {
+          btnToggleTvClock.innerHTML = '<span>🕒 TV Clock: ON</span>';
+          btnToggleTvClock.style.color = '#10b981';
+          btnToggleTvClock.style.borderColor = '#34d399';
+          btnToggleTvClock.style.background = 'rgba(16, 185, 129, 0.2)';
+        } else {
+          btnToggleTvClock.innerHTML = '<span>🕒 TV Clock: OFF</span>';
+          btnToggleTvClock.style.color = '#f59e0b';
+          btnToggleTvClock.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+          btnToggleTvClock.style.background = 'rgba(245, 158, 11, 0.12)';
+        }
+        broadcastDisplayState();
+        triggerAutoSave();
+      });
+    }
+
     if (btnOpenRemoteModal) {
       btnOpenRemoteModal.addEventListener('click', async () => {
         if (modalRemote) modalRemote.classList.add('open');
@@ -2884,6 +2933,9 @@
         toggleClearText();
       } else if (action === 'theme') {
         toggleThemeOnly();
+      } else if (action === 'toggle-clock') {
+        const btnToggleTvClock = document.getElementById('btn-toggle-tv-clock');
+        if (btnToggleTvClock) btnToggleTvClock.click();
       } else if (action === 'alert') {
         if (data.text) {
           state.bannerText = data.text;

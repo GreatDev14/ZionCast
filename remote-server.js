@@ -715,6 +715,9 @@ class RemoteServer {
     <button id="btn-remote-theme" class="btn-quick">
       🎨 Theme Only
     </button>
+    <button id="btn-remote-clock" class="btn-quick" style="border-color: rgba(245, 158, 11, 0.4); color: #f59e0b;">
+      🕒 TV Clock
+    </button>
   </div>
 
   <!-- Content Workspace -->
@@ -918,6 +921,10 @@ class RemoteServer {
     document.getElementById('btn-remote-blackout').addEventListener('click', () => sendAction('blackout'));
     document.getElementById('btn-remote-clear').addEventListener('click', () => sendAction('clear'));
     document.getElementById('btn-remote-theme').addEventListener('click', () => sendAction('theme'));
+    const btnClock = document.getElementById('btn-remote-clock');
+    if (btnClock) {
+      btnClock.addEventListener('click', () => sendAction('toggle-clock'));
+    }
 
     // Drawer modal
     const drawerModal = document.getElementById('modal-drawer');
