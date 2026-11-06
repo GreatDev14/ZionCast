@@ -526,6 +526,10 @@
   // =========================================================================
   // STATE APPLICATION ENGINE
   // =========================================================================
+  if (window.zionApi && window.zionApi.getRemoteInfo) {
+    window.zionApi.getRemoteInfo().then(i => { if (i && i.port) { window.__zcPort = i.port; applyDisplayState({}); } }).catch(() => {});
+  }
+
   function applyDisplayState(newState) {
     state = { ...state, ...newState };
 
@@ -610,7 +614,7 @@
         youtubeLayer.style.display = 'block';
         youtubeLayer.classList.add('youtube-active');
         const muteParam = state.youtubeMuted ? 1 : 0;
-        const targetUrl = `https://www.youtube-nocookie.com/embed/${state.youtubeVideoId}?autoplay=1&mute=${muteParam}&controls=1&rel=0&modestbranding=1&playsinline=1`;
+        const targetUrl = `http://127.0.0.1:${window.__zcPort || 3000}/embed?v=${encodeURIComponent(state.youtubeVideoId)}&autoplay=1&mute=${muteParam}`;
         if (youtubeIframe.src !== targetUrl) {
           youtubeIframe.src = targetUrl;
         }

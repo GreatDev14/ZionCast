@@ -2737,18 +2737,15 @@ body {
   font-size: 0.85em;
 }
 
-/* Top Header horizontal scrollbar protection so buttons never get cut off */
+/* Top header wraps into tidy rows instead of scrolling */
 .top-header {
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
+  height: auto !important;
+  min-height: 62px;
+  flex-wrap: wrap;
+  row-gap: 6px;
+  padding: 6px 14px !important;
+  overflow: visible !important;
 }
-
-.top-header::-webkit-scrollbar {
-  height: 4px;
-}
-
-.top-header::-webkit-scrollbar-thumb {
-  background: rgba(245, 158, 11, 0.3);
-  border-radius: 4px;
-}
+.top-header .quick-control-bar { flex-wrap: wrap; row-gap: 4px; }
+.top-header .tv-output-section { flex-wrap: wrap; row-gap: 4px; margin-left: auto; justify-content: flex-end; }
+.top-header .btn-fast, .top-header .btn-launch-tv { white-space: nowrap; }

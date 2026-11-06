@@ -954,28 +954,20 @@ class RemoteServer {
   }
 
   getEmbedHtml(vid, autoplay = '1', mute = '0') {
+    const safe = String(vid).replace(/[^A-Za-z0-9_-]/g, '');
     return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>ZionCast YouTube Stream</title>
-  <style>
-    * { margin:0; padding:0; box-sizing:border-box; overflow:hidden; }
-    html, body { width:100vw; height:100vh; background:#000; }
-    iframe { width:100%; height:100%; border:none; }
-  </style>
-</head>
-<body>
-  <iframe 
-    src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(vid)}?autoplay=${autoplay}&mute=${mute}&controls=1&rel=0&playsinline=1&modestbranding=1" 
-    referrerpolicy="strict-origin-when-cross-origin" 
-    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-    allowfullscreen>
-  </iframe>
-</body>
-</html>`;
+<html><head><meta charset="UTF-8">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<style>*{margin:0;padding:0;overflow:hidden}html,body{width:100%;height:100%;background:#000}iframe{width:100%;height:100%;border:0}</style>
+</head><body>
+<script>
+  var f=document.createElement('iframe');
+  f.src='https://www.youtube.com/embed/${safe}?autoplay=${autoplay === '0' ? 0 : 1}&mute=${mute === '1' ? 1 : 0}&controls=1&rel=0&playsinline=1&enablejsapi=1&origin='+encodeURIComponent(location.origin);
+  f.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';
+  f.referrerPolicy='strict-origin-when-cross-origin';
+  f.allowFullscreen=true;
+  document.body.appendChild(f);
+</script></body></html>`;
   }
 
   getLowerThirdsHtml() {
