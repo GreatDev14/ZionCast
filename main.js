@@ -72,7 +72,8 @@ function createControlWindow() {
       nodeIntegration: false,
       sandbox: false,
       webSecurity: false,
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      autoplayPolicy: 'no-user-gesture-required'
     }
   });
 
@@ -160,7 +161,8 @@ function launchDisplayWindow(targetDisplayId = null) {
       nodeIntegration: false,
       sandbox: false,
       webSecurity: false,
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      autoplayPolicy: 'no-user-gesture-required'
     }
   });
 
@@ -307,10 +309,11 @@ function identifyScreens() {
 
 // App lifecycle
 app.whenReady().then(() => {
-  // Fix YouTube Embed Errors 152 & 153:
-  // 1. Neutralize Electron detection by supplying desktop Chrome User-Agent
-  // 2. Supply valid Referer header so YouTube allows iframe embed
-  // 3. DO NOT inject fake Origin header (prevents Error 152-4 origin spoofing rejection)
+  // Fix YouTube Embed Errors 152 & 153 and Video Playback Buffering:
+  // 1. Desktop Chrome User-Agent prevents bot / Electron blocking
+  // 2. Supply valid Referer (https://www.youtube.com/) for YouTube iframe embeds
+  // 3. For *.googlevideo.com/* media fragments, pass Origin & Referer so video chunk streaming starts immediately
+  // 4. In onHeadersReceived, strip X-Frame-Options & enable CORS so iframes and media streams never stall
   const ytFilter = {
     urls: [
       '*://*.youtube.com/*',
@@ -321,18 +324,33 @@ app.whenReady().then(() => {
   };
 
   session.defaultSession.webRequest.onBeforeSendHeaders(ytFilter, (details, callback) => {
-    // Desktop Chrome User-Agent (prevents bot detection)
+    // Desktop Chrome User-Agent
     details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-    // Supply valid Referer so YouTube doesn't reject file:// or empty referer (prevents Error 153)
-    if (!details.requestHeaders['Referer'] || details.requestHeaders['Referer'].startsWith('file://')) {
+    if (details.url.includes('googlevideo.com')) {
+      // GoogleVideo CDN media stream chunks require valid YouTube origin & referer
+      details.requestHeaders['Origin'] = 'https://www.youtube.com';
       details.requestHeaders['Referer'] = 'https://www.youtube.com/';
+    } else {
+      // Supply valid Referer so YouTube doesn't reject file:// or empty referer (prevents Error 153)
+      if (!details.requestHeaders['Referer'] || details.requestHeaders['Referer'].startsWith('file://')) {
+        details.requestHeaders['Referer'] = 'https://www.youtube.com/';
+      }
+      // Never spoof cross-origin 'Origin' header on GET embeds (causes Error 152-4)
+      delete details.requestHeaders['Origin'];
     }
 
-    // Never spoof cross-origin 'Origin' header on GET embeds (causes Error 152-4)
-    delete details.requestHeaders['Origin'];
-
     callback({ cancel: false, requestHeaders: details.requestHeaders });
+  });
+
+  session.defaultSession.webRequest.onHeadersReceived(ytFilter, (details, callback) => {
+    const responseHeaders = { ...details.responseHeaders };
+    delete responseHeaders['x-frame-options'];
+    delete responseHeaders['X-Frame-Options'];
+    responseHeaders['Access-Control-Allow-Origin'] = ['*'];
+    responseHeaders['Access-Control-Allow-Credentials'] = ['true'];
+    responseHeaders['Access-Control-Allow-Methods'] = ['GET, HEAD, OPTIONS'];
+    callback({ cancel: false, responseHeaders });
   });
 
   createControlWindow();

@@ -613,6 +613,8 @@
       if (youtubeLayer && youtubeIframe) {
         youtubeLayer.style.display = 'block';
         youtubeLayer.classList.add('youtube-active');
+        youtubeLayer.style.zIndex = '15';
+        youtubeLayer.style.pointerEvents = 'auto';
         const muteParam = state.youtubeMuted ? 1 : 0;
         const targetUrl = `http://127.0.0.1:${window.__zcPort || 3000}/embed?v=${encodeURIComponent(state.youtubeVideoId)}&autoplay=1&mute=${muteParam}`;
         if (youtubeIframe.src !== targetUrl) {
@@ -622,6 +624,8 @@
     } else {
       if (youtubeLayer && youtubeIframe) {
         youtubeLayer.classList.remove('youtube-active');
+        youtubeLayer.style.zIndex = '3';
+        youtubeLayer.style.pointerEvents = 'none';
         setTimeout(() => {
           if (state.backgroundType !== 'youtube') {
             youtubeLayer.style.display = 'none';
@@ -664,7 +668,30 @@
     }
 
     // 5. Text Styling, Visibility & Smooth Slide Crossfade
-    const isTextHidden = state.clearText || state.themeOnly || state.blackout || !state.activeSlide;
+    const isYouTubePlaying = state.backgroundType === 'youtube' || (state.activeItem && state.activeItem.type === 'youtube');
+    const hasSlideLyrics = state.activeSlide && state.activeSlide.body && state.activeSlide.body.trim().length > 0;
+
+    // If pure YouTube stream without lyrics, hide scrim and hide textContainer so video is 100% clean
+    if (isYouTubePlaying && !hasSlideLyrics) {
+      if (scrim) {
+        scrim.style.opacity = '0';
+        scrim.style.pointerEvents = 'none';
+      }
+      textContainer.style.display = 'none';
+    } else {
+      textContainer.style.display = 'flex';
+      if (scrim) {
+        if (state.backgroundType === 'youtube') {
+          scrim.style.opacity = '0.35';
+          scrim.style.pointerEvents = 'none';
+        } else {
+          scrim.style.opacity = '1';
+          scrim.style.pointerEvents = 'none';
+        }
+      }
+    }
+
+    const isTextHidden = state.clearText || state.themeOnly || state.blackout || !state.activeSlide || (isYouTubePlaying && !hasSlideLyrics);
 
     if (isTextHidden) {
       textContainer.classList.add('fade-out');
@@ -673,12 +700,20 @@
       const currentSignature = `${state.activeSlide.label || ''}__${state.activeSlide.body || ''}`;
 
       const applySlideContent = () => {
-        // Update slide title / label badge
+        // Update slide title / label badge (prevent duplicate text if title and label are identical)
         if (state.activeSlide.label || state.activeItem) {
           const itemTitle = state.activeItem ? state.activeItem.title : '';
           const slideLabel = state.activeSlide.label || '';
-          badgeTitle.textContent = itemTitle && slideLabel ? `${itemTitle} • ${slideLabel}` : (itemTitle || slideLabel);
-          badgeTitle.style.display = 'block';
+          if (itemTitle && slideLabel) {
+            badgeTitle.textContent = (itemTitle.trim() === slideLabel.trim()) ? itemTitle : `${itemTitle} • ${slideLabel}`;
+          } else {
+            badgeTitle.textContent = itemTitle || slideLabel;
+          }
+          if (isYouTubePlaying && !hasSlideLyrics) {
+            badgeTitle.style.display = 'none';
+          } else {
+            badgeTitle.style.display = 'block';
+          }
         } else {
           badgeTitle.style.display = 'none';
         }
@@ -855,3 +890,13 @@
   });
 
 })();
+
+  // Auto-hide mouse cursor after 2.5s of inactivity on TV output
+  let cursorHideTimer = null;
+  window.addEventListener('mousemove', () => {
+    document.body.style.cursor = 'default';
+    clearTimeout(cursorHideTimer);
+    cursorHideTimer = setTimeout(() => {
+      document.body.style.cursor = 'none';
+    }, 2500);
+  });
