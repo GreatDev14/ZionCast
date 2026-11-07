@@ -2914,6 +2914,63 @@
     }
   }
 
+  function projectRemoteScripture(data, pushLive = true) {
+    const versionAbbr = (data.versionAbbr || data.version || currentBibleVersion || 'KJV').toUpperCase();
+    const vNum = data.verse || '1';
+    const itemTitle = `${data.book} ${data.chapter}:${vNum} (${versionAbbr})`;
+    const slideBody = `"${data.text}"\n\n— ${data.book} ${data.chapter}:${vNum} (${versionAbbr})`;
+
+    const scriptureItem = {
+      id: `bible-${Date.now()}`,
+      title: itemTitle,
+      type: 'scripture',
+      slides: [{
+        label: itemTitle,
+        body: slideBody
+      }]
+    };
+
+    // Add to Order of Service list
+    const existingIdx = serviceSchedule.findIndex(s => s.title === itemTitle);
+    if (existingIdx === -1) {
+      serviceSchedule.push(scriptureItem);
+      renderOrderOfService();
+      saveStoredLibrary();
+    }
+
+    if (pushLive) {
+      state.activeItem = scriptureItem;
+      state.activeSlideIndex = 0;
+      state.previewSlideIndex = 0;
+      state.blackout = false;
+      state.clearText = false;
+      state.themeOnly = false;
+      btnFastBlackout.classList.remove('active-blackout');
+      btnFastClear.classList.remove('active-clear');
+      btnFastTheme.classList.remove('active-theme');
+
+      activeItemTitle.textContent = itemTitle;
+      activeItemMeta.textContent = `Holy Bible (${versionAbbr})`;
+      renderSlideTiles();
+      updateOperatorPreview(0);
+
+      // Auto launch TV if closed
+      if (window.zionApi && !state.displayOpen) {
+        const targetScreenId = selectTargetScreen ? selectTargetScreen.value : null;
+        window.zionApi.launchDisplay(targetScreenId).then(() => {
+          updateTvStatusUI(true);
+          setTimeout(() => broadcastDisplayState(), 200);
+        });
+      }
+
+      broadcastDisplayState();
+      triggerAutoSave();
+      showToast(`📖 Projected ${itemTitle} Live!`);
+    } else {
+      showToast(`📖 Added ${itemTitle} to Service`);
+    }
+  }
+
   function initRemoteActionListener() {
     if (!window.zionApi || !window.zionApi.onRemoteAction) return;
 
@@ -2943,6 +3000,26 @@
           broadcastDisplayState();
           triggerAutoSave();
         }
+      } else if (action === 'project-scripture') {
+        if (data && data.book && data.chapter) {
+          projectRemoteScripture(data, true);
+        }
+      } else if (action === 'add-scripture-service') {
+        if (data && data.book && data.chapter) {
+          projectRemoteScripture(data, false);
+        }
+      } else if (action === 'stage-message') {
+        if (data && data.text) {
+          stageAlertMessageText = data.text;
+          stageAlertMessageActive = true;
+          syncRemoteStatus();
+          showToast(`🤫 Secret note sent to Preacher Stage Display: "${data.text}"`);
+        }
+      } else if (action === 'clear-stage-message') {
+        stageAlertMessageText = '';
+        stageAlertMessageActive = false;
+        syncRemoteStatus();
+        showToast('Stage screen note cleared');
       }
     });
   }

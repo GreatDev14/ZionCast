@@ -5,6 +5,8 @@
  */
 
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const os = require('os');
 const QRCode = require('qrcode');
 
@@ -38,6 +40,7 @@ class RemoteServer {
       countdownTitle: 'Service Starts In'
     };
     this.onActionCallback = null;
+    this.bibleCache = {};
   }
 
   getLocalIps() {
@@ -183,6 +186,11 @@ class RemoteServer {
       req.on('end', () => {
         try {
           const parsed = JSON.parse(body || '{}');
+          if (parsed.action === 'stage-message' && parsed.data && parsed.data.text) {
+            this.updateStatus({ stageMessage: parsed.data.text, stageMessageActive: true });
+          } else if (parsed.action === 'clear-stage-message') {
+            this.updateStatus({ stageMessage: '', stageMessageActive: false });
+          }
           if (this.onActionCallback) {
             this.onActionCallback(parsed.action, parsed.data || {});
           }
@@ -207,6 +215,16 @@ class RemoteServer {
     if (url.pathname === '/lower-thirds' || url.pathname === '/obs' || url.pathname === '/overlay') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(this.getLowerThirdsHtml());
+      return;
+    }
+
+    // 5b. Bible Lookup API for Mobile Phone Remote
+    if (url.pathname === '/api/bible/lookup' && req.method === 'GET') {
+      const q = url.searchParams.get('q') || url.searchParams.get('query') || '';
+      const ver = url.searchParams.get('v') || url.searchParams.get('version') || 'kjv';
+      const result = this.lookupBible(q, ver);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
       return;
     }
 
@@ -577,6 +595,42 @@ class RemoteServer {
       margin-top: 8px;
     }
 
+    .chip-stage-msg {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid rgba(168, 85, 247, 0.25);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+      font-family: inherit;
+      flex-shrink: 0;
+    }
+    .chip-stage-msg:active {
+      background: #a855f7;
+      color: #fff;
+    }
+
+    .chip-book {
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+      font-family: inherit;
+      flex-shrink: 0;
+    }
+    .chip-book:active {
+      background: #f59e0b;
+      color: #000;
+    }
+
     .btn-tool-secondary {
       background: #141b27;
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -763,13 +817,19 @@ class RemoteServer {
       </button>
     </div>
 
-    <!-- Slide List Jump & Nursery Alert Trigger -->
+    <!-- Slide List Jump, Bible Scripture Search, Secret Preacher Note, & Nursery Alert Trigger -->
     <div class="secondary-tools-row">
       <button id="btn-open-drawer" class="btn-tool-secondary">
         📑 All Slides (<span id="drawer-count">0</span>)
       </button>
-      <button id="btn-send-alert-prompt" class="btn-tool-secondary">
-        📢 Send Alert
+      <button id="btn-open-bible-drawer" class="btn-tool-secondary" style="border-color: rgba(245, 158, 11, 0.45); color: #f59e0b; font-weight: 800;">
+        📖 Bible Scriptures
+      </button>
+      <button id="btn-open-stage-msg-drawer" class="btn-tool-secondary" style="border-color: rgba(168, 85, 247, 0.45); color: #c084fc; font-weight: 800;">
+        🤫 Preacher Screen
+      </button>
+      <button id="btn-send-alert-prompt" class="btn-tool-secondary" style="border-color: rgba(239, 68, 68, 0.4); color: #f87171; font-weight: 800;">
+        📢 Audience TV Alert
       </button>
     </div>
 
@@ -787,6 +847,115 @@ class RemoteServer {
       </div>
     </div>
   </div>
+
+  <!-- Bible Scripture Search Drawer -->
+  <div id="modal-bible-drawer" class="modal-drawer">
+    <div class="drawer-content" style="max-height: 88vh;">
+      <div class="drawer-header">
+        <span class="drawer-title" style="display: flex; align-items: center; gap: 6px;">
+          <span>📖</span> Quick Bible Scriptures
+        </span>
+        <button id="btn-close-bible-drawer" class="drawer-close-btn">&times;</button>
+      </div>
+
+      <!-- Search Input & Version Selector -->
+      <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+        <input id="mobile-bible-input" type="text" placeholder="e.g. John 3:16, Psalm 23, Gen 1:1" style="flex: 1; background: #1a2232; border: 1.5px solid rgba(245, 158, 11, 0.4); border-radius: 10px; color: #fff; padding: 12px 14px; font-size: 0.95rem; font-family: inherit; outline: none;">
+        <select id="mobile-bible-ver" style="background: #1a2232; border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; color: #f59e0b; font-weight: 800; padding: 0 8px; font-family: inherit; outline: none;">
+          <option value="kjv">KJV</option>
+          <option value="rsv">RSV</option>
+          <option value="gnt">GNT</option>
+        </select>
+        <button id="btn-mobile-bible-search" style="background: #f59e0b; color: #000; border: none; border-radius: 10px; font-weight: 800; padding: 0 14px; font-size: 1rem; cursor: pointer;">🔍</button>
+      </div>
+
+      <!-- Quick Book Shortcuts Chips (Horizontally Scrollable) -->
+      <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 8px; -webkit-overflow-scrolling: touch;">
+        <button class="chip-book" data-ref="John 3:16">John 3:16</button>
+        <button class="chip-book" data-ref="Psalm 23:1">Psalm 23</button>
+        <button class="chip-book" data-ref="Romans 8:28">Rom 8:28</button>
+        <button class="chip-book" data-ref="Genesis 1:1">Gen 1:1</button>
+        <button class="chip-book" data-ref="Philippians 4:13">Phil 4:13</button>
+        <button class="chip-book" data-ref="Matthew 6:33">Matt 6:33</button>
+        <button class="chip-book" data-ref="Isaiah 40:31">Isa 40:31</button>
+        <button class="chip-book" data-ref="Proverbs 3:5">Prov 3:5</button>
+      </div>
+
+      <!-- Verse Result Preview Card -->
+      <div id="mobile-bible-result-card" style="display: none; background: #131926; border: 1.5px solid rgba(245, 158, 11, 0.45); border-radius: 12px; padding: 14px; margin-bottom: 12px; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 200px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span id="mobile-bible-result-ref" style="font-size: 0.95rem; font-weight: 800; color: #f59e0b;">John 3:16 (KJV)</span>
+          <span style="font-size: 0.68rem; padding: 2px 6px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-radius: 4px; font-weight: 800; letter-spacing: 0.05em;">PREVIEW</span>
+        </div>
+        <div id="mobile-bible-result-text" style="font-size: 1.05rem; line-height: 1.45; color: #ffffff;"></div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div id="mobile-bible-actions" style="display: none; grid-template-columns: 1.4fr 1fr; gap: 8px; margin-top: auto;">
+        <button id="btn-mobile-project-live" style="height: 52px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; border: none; border-radius: 12px; font-family: inherit; font-size: 0.95rem; font-weight: 900; letter-spacing: 0.03em; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);">
+          🔴 PROJECT TO TV
+        </button>
+        <button id="btn-mobile-add-service" style="height: 52px; background: #1e293b; color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; font-family: inherit; font-size: 0.85rem; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer;">
+          ➕ Add to Service
+        </button>
+      </div>
+
+      <div id="mobile-bible-loading" style="display: none; padding: 20px; text-align: center; color: #f59e0b; font-weight: 700; font-size: 0.9rem;">
+        Searching Holy Bible...
+      </div>
+      <div id="mobile-bible-error" style="display: none; padding: 12px; text-align: center; color: #ef4444; font-size: 0.85rem; background: rgba(239,68,68,0.1); border-radius: 8px;"></div>
+    </div>
+  </div>
+
+  <!-- Secret Stage Message Drawer (Preacher & Choir Screen) -->
+  <div id="modal-stage-msg-drawer" class="modal-drawer">
+    <div class="drawer-content" style="max-height: 88vh;">
+      <div class="drawer-header">
+        <span class="drawer-title" style="display: flex; align-items: center; gap: 6px;">
+          <span>🤫</span> Private Preacher Note
+        </span>
+        <button id="btn-close-stage-msg-drawer" class="drawer-close-btn">&times;</button>
+      </div>
+
+      <div style="font-size: 0.78rem; color: #94a3b8; margin-bottom: 12px; line-height: 1.35; padding: 6px 10px; background: rgba(168, 85, 247, 0.1); border-left: 3px solid #a855f7; border-radius: 4px;">
+        🔒 <strong>Private Confidence Monitor:</strong> Displayed ONLY on the stage TV facing the preacher & choir. Congregation projector will NOT see this!
+      </div>
+
+      <!-- Quick 1-Tap Preset Buttons -->
+      <label style="font-size: 0.72rem; font-weight: 800; color: #c084fc; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; display: block;">Quick Presets</label>
+      <div style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; -webkit-overflow-scrolling: touch;">
+        <button class="chip-stage-msg" data-msg="Pastor, 5 Minutes Remaining">⏱️ 5 Mins Left</button>
+        <button class="chip-stage-msg" data-msg="Please Wrap Up Sermon">⏳ Wrap Up</button>
+        <button class="chip-stage-msg" data-msg="Prepare for Holy Communion">🍞 Communion</button>
+        <button class="chip-stage-msg" data-msg="Preacher Mic Battery Low">🎤 Mic Low</button>
+        <button class="chip-stage-msg" data-msg="Parent #104 Report to Nursery">👶 Nursery #104</button>
+        <button class="chip-stage-msg" data-msg="Pastor, Speak Closer to Mic">🔊 Speak Louder</button>
+        <button class="chip-stage-msg" data-msg="Call Altar Ministry Team">🕊️ Altar Call</button>
+      </div>
+
+      <!-- Message Textarea -->
+      <textarea id="mobile-stage-msg-input" placeholder="Type custom private message to pastor..." rows="3" style="width: 100%; background: #1a2232; border: 1.5px solid rgba(168, 85, 247, 0.4); border-radius: 10px; color: #fff; padding: 12px 14px; font-size: 0.95rem; font-family: inherit; outline: none; resize: none; margin-bottom: 12px;"></textarea>
+
+      <!-- Active Status Indicator -->
+      <div id="mobile-stage-active-status" style="display: none; padding: 10px 12px; background: rgba(168, 85, 247, 0.15); border: 1px solid #a855f7; border-radius: 8px; margin-bottom: 12px; justify-content: space-between; align-items: center;">
+        <div style="font-size: 0.82rem; color: #e9d5ff;">
+          Active on Stage: <strong id="mobile-stage-active-text" style="color: #fff;"></strong>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 8px; margin-top: auto;">
+        <button id="btn-mobile-send-stage-msg" style="height: 52px; background: linear-gradient(135deg, #a855f7, #7c3aed); color: #fff; border: none; border-radius: 12px; font-family: inherit; font-size: 0.95rem; font-weight: 900; letter-spacing: 0.03em; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);">
+          🚀 FLASH TO STAGE
+        </button>
+        <button id="btn-mobile-clear-stage-msg" style="height: 52px; background: #1e293b; color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; font-family: inherit; font-size: 0.85rem; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer;">
+          ❌ Clear Note
+        </button>
+      </div>
+    </div>
+  </div>
+
+
 
   <script>
     let currentStatus = {};
@@ -828,6 +997,16 @@ class RemoteServer {
       // Update Next Slide Preview
       document.getElementById('label-next-tag').textContent = s.nextSlideLabel || 'End of Item';
       document.getElementById('label-next-body').textContent = s.nextSlideBody || 'End of current presentation';
+
+      // Reflect stage message status on mobile
+      if (typeof mobileStageActiveStatus !== 'undefined' && mobileStageActiveStatus) {
+        if (s.stageMessageActive && s.stageMessage) {
+          mobileStageActiveStatus.style.display = 'flex';
+          if (mobileStageActiveText) mobileStageActiveText.textContent = s.stageMessage;
+        } else {
+          mobileStageActiveStatus.style.display = 'none';
+        }
+      }
 
       // Update Blackout & Clear Curtains
       const blackoutCurtain = document.getElementById('blackout-curtain');
@@ -951,6 +1130,100 @@ class RemoteServer {
   </script>
 </body>
 </html>`;
+  }
+
+
+  getBibleData(version = 'kjv') {
+    const safeVer = ['kjv', 'rsv', 'gnt'].includes(String(version).toLowerCase()) ? String(version).toLowerCase() : 'kjv';
+    if (this.bibleCache[safeVer]) return this.bibleCache[safeVer];
+    try {
+      const p = path.join(__dirname, 'assets', 'bibles', `${safeVer}.json`);
+      if (fs.existsSync(p)) {
+        const raw = fs.readFileSync(p, 'utf-8');
+        this.bibleCache[safeVer] = JSON.parse(raw);
+        return this.bibleCache[safeVer];
+      }
+    } catch (e) {
+      console.warn(`[Remote Server] Error loading ${safeVer} bible:`, e.message);
+    }
+    return null;
+  }
+
+  lookupBible(query, version = 'kjv') {
+    if (!query || typeof query !== 'string') return { success: false, error: 'Query required' };
+    const bData = this.getBibleData(version);
+    if (!bData || !bData.books) return { success: false, error: 'Bible version not loaded' };
+
+    let queryClean = query.trim();
+    const verMatch = queryClean.match(/\b(kjv|rsv|gnt)\b/i);
+    let targetVer = version;
+    if (verMatch) {
+      targetVer = verMatch[1].toLowerCase();
+      queryClean = queryClean.replace(/\b(kjv|rsv|gnt)\b/gi, '').trim();
+    }
+
+    const bible = (targetVer !== version) ? (this.getBibleData(targetVer) || bData) : bData;
+    const versionAbbr = bible.abbreviation || targetVer.toUpperCase();
+
+    const match = queryClean.match(/^([1-3]?\s*[a-zA-Z]+)\s*(\d+)?:?(\d+)?/i);
+    if (!match) return { success: false, error: 'Could not parse reference (try e.g. John 3:16)' };
+
+    const rawBook = match[1].trim().toLowerCase().replace(/\s+/g, ' ');
+    const allBooks = Object.keys(bible.books);
+    
+    let foundBook = allBooks.find(b => b.toLowerCase() === rawBook);
+    if (!foundBook) {
+      foundBook = allBooks.find(b => b.toLowerCase().startsWith(rawBook));
+    }
+    if (!foundBook) {
+      const abbrMap = {
+        'gen': 'Genesis', 'exo': 'Exodus', 'lev': 'Leviticus', 'num': 'Numbers', 'deu': 'Deuteronomy',
+        'jos': 'Joshua', 'jdg': 'Judges', 'rut': 'Ruth', 'psa': 'Psalms', 'psalms': 'Psalms', 'psalm': 'Psalms',
+        'pro': 'Proverbs', 'ecc': 'Ecclesiastes', 'isa': 'Isaiah', 'jer': 'Jeremiah', 'lam': 'Lamentations',
+        'ezk': 'Ezekiel', 'dan': 'Daniel', 'mat': 'Matthew', 'matt': 'Matthew', 'mrk': 'Mark', 'luk': 'Luke',
+        'joh': 'John', 'act': 'Acts', 'rom': 'Romans', '1co': '1 Corinthians', '2co': '2 Corinthians',
+        'gal': 'Galatians', 'eph': 'Ephesians', 'php': 'Philippians', 'col': 'Colossians',
+        '1th': '1 Thessalonians', '2th': '2 Thessalonians', '1ti': '1 Timothy', '2ti': '2 Timothy',
+        'tit': 'Titus', 'phm': 'Philemon', 'heb': 'Hebrews', 'jas': 'James', '1pe': '1 Peter', '2pe': '2 Peter',
+        '1jo': '1 John', '2jo': '2 John', '3jo': '3 John', 'jde': 'Jude', 'rev': 'Revelation'
+      };
+      const mapped = abbrMap[rawBook.replace(/\s+/g, '')];
+      if (mapped && bible.books[mapped]) foundBook = mapped;
+    }
+
+    if (!foundBook) return { success: false, error: `Book '${match[1]}' not found` };
+
+    const bookObj = bible.books[foundBook];
+    const chNum = match[2] || '1';
+    const chObj = bookObj[chNum];
+    if (!chObj) return { success: false, error: `Chapter ${chNum} not found in ${foundBook}` };
+
+    const vNum = match[3] || '1';
+    let text = chObj[vNum];
+
+    if (text) {
+      return {
+        success: true,
+        book: foundBook,
+        chapter: chNum,
+        verse: vNum,
+        version: targetVer,
+        versionAbbr: versionAbbr,
+        reference: `${foundBook} ${chNum}:${vNum} (${versionAbbr})`,
+        text: text
+      };
+    }
+
+    return {
+      success: true,
+      book: foundBook,
+      chapter: chNum,
+      verse: '1',
+      version: targetVer,
+      versionAbbr: versionAbbr,
+      reference: `${foundBook} ${chNum}:1 (${versionAbbr})`,
+      text: chObj['1'] || Object.values(chObj)[0]
+    };
   }
 
   getEmbedHtml(vid, autoplay = '1', mute = '0') {
