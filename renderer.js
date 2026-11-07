@@ -1493,14 +1493,64 @@
       ctx.arc(w * 0.5, h * 0.5, w * 0.4, 0, Math.PI * 2);
       ctx.fill();
     } else if (bgId === 'cross-majesty') {
-      const g = ctx.createRadialGradient(w * 0.5, h * 0.4, 10, w * 0.5, h * 0.45, w * 0.6);
-      g.addColorStop(0, '#311b05');
+      const g = ctx.createRadialGradient(w * 0.5, h * 0.38, 8, w * 0.5, h * 0.45, w * 0.62);
+      g.addColorStop(0, '#5a2d08');
+      g.addColorStop(0.5, '#1f0f03');
       g.addColorStop(1, '#050301');
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-      ctx.fillRect(w * 0.5 - 6, h * 0.2, 12, h * 0.6);
-      ctx.fillRect(w * 0.5 - 30, h * 0.35, 60, 12);
+      const cw = Math.max(5, h * 0.036);
+      const ch = h * 0.52;
+      const bw = h * 0.30;
+      ctx.fillStyle = 'rgba(10, 5, 2, 0.85)';
+      ctx.fillRect(w * 0.5 - cw * 0.5, h * 0.18, cw, ch);
+      ctx.fillRect(w * 0.5 - bw * 0.5, h * 0.18 + ch * 0.24, bw, cw);
+    } else if (bgId === 'calvary-cross-glory') {
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, '#160826');
+      g.addColorStop(0.55, '#4a1242');
+      g.addColorStop(1, '#451a03');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+      const halo = ctx.createRadialGradient(w * 0.5, h * 0.38, 4, w * 0.5, h * 0.38, h * 0.36);
+      halo.addColorStop(0, 'rgba(254, 240, 138, 0.45)');
+      halo.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(0, 0, w, h);
+      const cw = Math.max(5, h * 0.034);
+      const ch = h * 0.56;
+      const bw = h * 0.32;
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.65)';
+      ctx.fillRect(w * 0.5 - cw * 0.5, h * 0.17, cw, ch);
+      ctx.fillRect(w * 0.5 - bw * 0.5, h * 0.17 + ch * 0.23, bw, cw);
+    } else if (bgId === 'royal-crown-velvet') {
+      const g = ctx.createLinearGradient(0, 0, w, h);
+      g.addColorStop(0, '#17072b');
+      g.addColorStop(0.55, '#4c1d95');
+      g.addColorStop(1, '#291504');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    } else if (bgId === 'holy-communion-crimson') {
+      const g = ctx.createRadialGradient(w * 0.5, h * 0.75, 10, w * 0.5, h * 0.5, w * 0.7);
+      g.addColorStop(0, '#6b0820');
+      g.addColorStop(0.5, '#360411');
+      g.addColorStop(1, '#0d0104');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    } else if (bgId === 'dove-celestial-sky') {
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, '#075985');
+      g.addColorStop(0.5, '#082f49');
+      g.addColorStop(1, '#020b16');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    } else if (bgId === 'shekinah-glory-gold') {
+      const g = ctx.createRadialGradient(w * 0.5, h * 0.45, 10, w * 0.5, h * 0.5, w * 0.7);
+      g.addColorStop(0, '#713f12');
+      g.addColorStop(0.5, '#3f2008');
+      g.addColorStop(1, '#0c0702');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
     } else if (bgId === 'emerald-sanctuary') {
       const g = ctx.createLinearGradient(0, 0, w, h);
       g.addColorStop(0, '#021c14');
@@ -2238,10 +2288,16 @@
         card.classList.add('active');
       }
 
-      card.style.background = `linear-gradient(135deg, ${preset.primaryColor} 0%, ${preset.secondaryColor} 50%, ${preset.accentColor} 100%)`;
+      const isCrossPreset = preset.id.includes('cross');
+      card.style.background = `linear-gradient(135deg, ${preset.primaryColor} 0%, ${preset.secondaryColor} 55%, ${preset.accentColor} 100%)`;
+      card.style.flexDirection = 'column';
+      card.style.alignItems = 'flex-start';
+      card.style.justifyContent = 'flex-end';
+      card.style.gap = '2px';
       card.innerHTML = `
-        <span style="font-weight: 700;">${preset.name}</span>
-        <span style="font-size: 0.65rem; opacity: 0.75; text-transform: uppercase;">Built-in</span>
+        ${isCrossPreset ? '<span style="position: absolute; top: 4px; right: 8px; font-size: 1.45rem; line-height: 1; color: #fde68a; opacity: 0.85; text-shadow: 0 0 12px rgba(251, 191, 36, 0.9); pointer-events: none;">✝</span>' : ''}
+        <span style="font-weight: 700; line-height: 1.15;">${escapeHtml(preset.name)}</span>
+        <span style="font-size: 0.6rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.04em; color: #fde68a;">${escapeHtml(preset.category || 'Built-in')}</span>
       `;
 
       card.addEventListener('click', () => {
@@ -2835,12 +2891,11 @@
       themePreviewBox.style.backgroundSize = 'cover';
     } else {
       themePreviewBox.style.backgroundImage = 'none';
-      if (preset === 'celestial-clouds') {
+      const matchedPreset = backgroundPresets.find(p => p.id === preset);
+      if (matchedPreset) {
+        themePreviewBox.style.background = `linear-gradient(135deg, ${matchedPreset.primaryColor} 0%, ${matchedPreset.secondaryColor} 55%, ${matchedPreset.accentColor} 100%)`;
+      } else if (preset === 'celestial-clouds') {
         themePreviewBox.style.background = 'radial-gradient(circle at 50% 40%, #581c87 0%, #090d16 100%)';
-      } else if (preset === 'golden-sanctuary') {
-        themePreviewBox.style.background = 'radial-gradient(circle at 50% 20%, #78350f 0%, #120b04 100%)';
-      } else if (preset === 'deep-gradient-pulse') {
-        themePreviewBox.style.background = 'linear-gradient(135deg, #0c1a3b 0%, #1e1b4b 100%)';
       } else {
         themePreviewBox.style.background = '#0d111a';
       }
@@ -5160,7 +5215,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.3.2';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.3.3';
         }
       } catch (err) {
         console.warn('Update check warning:', err);

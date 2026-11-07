@@ -405,31 +405,34 @@
       }
 
     } else if (bgId === 'cross-majesty') {
-      // Cross of Majesty: Reverent backlit glowing Cross
-      const grad = ctx.createRadialGradient(w * 0.5, h * 0.4, 20, w * 0.5, h * 0.45, w * 0.65);
-      grad.addColorStop(0, '#311b05');
-      grad.addColorStop(0.4, '#170c02');
+      // Cross of Majesty: Reverent backlit glowing Cross (proportional across all resolutions)
+      const grad = ctx.createRadialGradient(w * 0.5, h * 0.38, h * 0.03, w * 0.5, h * 0.45, w * 0.65);
+      grad.addColorStop(0, '#452205');
+      grad.addColorStop(0.42, '#1c0e03');
       grad.addColorStop(1, '#050301');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
 
-      const halo = ctx.createRadialGradient(w * 0.5, h * 0.38, 10, w * 0.5, h * 0.38, 160 + Math.sin(animTime * 1.5) * 15);
-      halo.addColorStop(0, 'rgba(245, 158, 11, 0.35)');
-      halo.addColorStop(0.5, 'rgba(217, 119, 6, 0.12)');
+      const haloR = h * 0.32 + Math.sin(animTime * 1.4) * (h * 0.02);
+      const halo = ctx.createRadialGradient(w * 0.5, h * 0.38, h * 0.02, w * 0.5, h * 0.38, haloR);
+      halo.addColorStop(0, 'rgba(251, 191, 36, 0.42)');
+      halo.addColorStop(0.45, 'rgba(217, 119, 6, 0.15)');
       halo.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = halo;
-      ctx.beginPath();
-      ctx.arc(w * 0.5, h * 0.38, 200, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillRect(0, 0, w, h);
 
-      const crossW = 28;
-      const crossH = 260;
-      const barW = 160;
-      const barH = 28;
-      const crossY = h * 0.22;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+      const crossW = Math.max(16, h * 0.036);
+      const crossH = h * 0.50;
+      const barW = h * 0.30;
+      const barH = crossW;
+      const crossY = h * 0.18;
+      ctx.save();
+      ctx.shadowColor = 'rgba(251, 191, 36, 0.55)';
+      ctx.shadowBlur = Math.max(14, h * 0.025);
+      ctx.fillStyle = 'rgba(12, 6, 2, 0.85)';
       ctx.fillRect(w * 0.5 - crossW * 0.5, crossY, crossW, crossH);
-      ctx.fillRect(w * 0.5 - barW * 0.5, crossY + 60, barW, barH);
+      ctx.fillRect(w * 0.5 - barW * 0.5, crossY + crossH * 0.24, barW, barH);
+      ctx.restore();
 
     } else if (bgId === 'emerald-sanctuary') {
       // Emerald Sanctuary: Deep forest emerald and golden amber
@@ -452,6 +455,201 @@
       aura.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = aura;
       ctx.fillRect(0, 0, w, h);
+
+    } else if (bgId === 'calvary-cross-glory') {
+      // Calvary Cross of Glory: Illuminated Golden Cross on Calvary Hill with radiant sunbeams & twilight sky
+      const sky = ctx.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, '#120624');
+      sky.addColorStop(0.5, '#3b0f3f');
+      sky.addColorStop(0.85, '#6b2214');
+      sky.addColorStop(1, '#1a0805');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, h);
+
+      const cx = w * 0.5;
+      const cy = h * 0.38;
+
+      // Rotating heavenly glory rays behind the Cross
+      ctx.save();
+      ctx.translate(cx, cy);
+      for (let r = 0; r < 8; r++) {
+        const angle = (r * Math.PI) / 4 + Math.sin(animTime * 0.35) * 0.08;
+        ctx.save();
+        ctx.rotate(angle);
+        const rayGrad = ctx.createLinearGradient(0, 0, w * 0.55, 0);
+        rayGrad.addColorStop(0, 'rgba(253, 224, 71, 0.18)');
+        rayGrad.addColorStop(0.5, 'rgba(245, 158, 11, 0.06)');
+        rayGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = rayGrad;
+        ctx.beginPath();
+        ctx.moveTo(0, -h * 0.02);
+        ctx.lineTo(w * 0.55, -h * 0.11);
+        ctx.lineTo(w * 0.55, h * 0.11);
+        ctx.lineTo(0, h * 0.02);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+
+      // Golden radiance halo
+      const halo = ctx.createRadialGradient(cx, cy, h * 0.02, cx, cy, h * 0.38);
+      halo.addColorStop(0, 'rgba(254, 240, 138, 0.45)');
+      halo.addColorStop(0.4, 'rgba(245, 158, 11, 0.18)');
+      halo.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(0, 0, w, h);
+
+      // Calvary Hill silhouette at bottom
+      ctx.fillStyle = '#09030c';
+      ctx.beginPath();
+      ctx.moveTo(0, h);
+      ctx.quadraticCurveTo(cx, h * 0.72, w, h);
+      ctx.closePath();
+      ctx.fill();
+
+      // Illuminated Golden-Ivory Cross standing on Calvary Hill
+      const crossW = Math.max(14, h * 0.032);
+      const crossH = h * 0.62;
+      const barW = h * 0.34;
+      const crossTop = h * 0.17;
+      ctx.save();
+      ctx.shadowColor = 'rgba(251, 191, 36, 0.85)';
+      ctx.shadowBlur = Math.max(18, h * 0.035);
+      const crossGrad = ctx.createLinearGradient(cx, crossTop, cx, crossTop + crossH);
+      crossGrad.addColorStop(0, 'rgba(254, 243, 199, 0.55)');
+      crossGrad.addColorStop(0.55, 'rgba(217, 119, 6, 0.45)');
+      crossGrad.addColorStop(1, 'rgba(45, 18, 6, 0.85)');
+      ctx.fillStyle = crossGrad;
+      ctx.fillRect(cx - crossW * 0.5, crossTop, crossW, crossH);
+      ctx.fillRect(cx - barW * 0.5, crossTop + crossH * 0.23, barW, crossW);
+      ctx.restore();
+
+      // Gentle rising golden dust motes
+      for (let i = 0; i < 28; i++) {
+        const mx = (w * ((i * 53) % 100) / 100) + Math.sin(animTime + i) * 18;
+        const my = h - ((animTime * 45 + i * 67) % h);
+        ctx.fillStyle = `rgba(253, 224, 71, ${0.2 + (i % 4) * 0.1})`;
+        ctx.beginPath();
+        ctx.arc(mx, my, (i % 3) + 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+    } else if (bgId === 'royal-crown-velvet') {
+      // Royal Crown Velvet: Imperial purple & sweeping liquid-gold silk ribbons
+      const bg = ctx.createLinearGradient(0, 0, w, h);
+      bg.addColorStop(0, '#140526');
+      bg.addColorStop(0.5, '#2e1065');
+      bg.addColorStop(1, '#090314');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+
+      for (let band = 0; band < 3; band++) {
+        ctx.fillStyle = band === 1 ? 'rgba(245, 158, 11, 0.09)' : 'rgba(168, 85, 247, 0.08)';
+        ctx.beginPath();
+        const baseY = h * (0.28 + band * 0.22);
+        ctx.moveTo(0, baseY);
+        for (let x = 0; x <= w; x += 36) {
+          const y = baseY + Math.sin(animTime * (0.8 + band * 0.25) + x * 0.004 + band) * (h * 0.07);
+          ctx.lineTo(x, y);
+        }
+        ctx.lineTo(w, h);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      const crownGlow = ctx.createRadialGradient(w * 0.5, h * 0.22, 15, w * 0.5, h * 0.3, w * 0.5);
+      crownGlow.addColorStop(0, 'rgba(251, 191, 36, 0.18)');
+      crownGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = crownGlow;
+      ctx.fillRect(0, 0, w, h);
+
+    } else if (bgId === 'holy-communion-crimson') {
+      // Holy Communion Crimson: Deep covenant wine velvet & warm candlelit glow
+      const bg = ctx.createRadialGradient(w * 0.5, h * 0.78, 20, w * 0.5, h * 0.5, w * 0.75);
+      bg.addColorStop(0, '#6b0820');
+      bg.addColorStop(0.45, '#360411');
+      bg.addColorStop(1, '#0d0104');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+
+      const candle = ctx.createRadialGradient(
+        w * 0.5 + Math.sin(animTime * 1.4) * 20,
+        h * 0.9,
+        15,
+        w * 0.5,
+        h * 0.85,
+        w * 0.45
+      );
+      candle.addColorStop(0, 'rgba(251, 191, 36, 0.22)');
+      candle.addColorStop(0.5, 'rgba(244, 63, 94, 0.1)');
+      candle.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = candle;
+      ctx.fillRect(0, 0, w, h);
+
+      for (let i = 0; i < 24; i++) {
+        const px = (w * ((i * 41) % 100) / 100) + Math.sin(animTime * 1.2 + i) * 16;
+        const py = h - ((animTime * 38 + i * 59) % h);
+        ctx.fillStyle = `rgba(253, 186, 116, ${0.18 + (i % 3) * 0.12})`;
+        ctx.beginPath();
+        ctx.arc(px, py, (i % 3) + 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+    } else if (bgId === 'dove-celestial-sky') {
+      // Heavenly Dove & Sky: Peaceful sapphire-azure sky with silver-white descending glory beams
+      const sky = ctx.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, '#082f49');
+      sky.addColorStop(0.55, '#051e34');
+      sky.addColorStop(1, '#020b16');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, h);
+
+      const topLight = ctx.createRadialGradient(w * 0.5, -h * 0.05, 20, w * 0.5, h * 0.25, w * 0.65);
+      topLight.addColorStop(0, 'rgba(224, 242, 254, 0.30)');
+      topLight.addColorStop(0.45, 'rgba(56, 189, 248, 0.12)');
+      topLight.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = topLight;
+      ctx.fillRect(0, 0, w, h);
+
+      for (let b = 0; b < 3; b++) {
+        const ox = w * (0.32 + b * 0.18) + Math.sin(animTime * 0.45 + b) * 45;
+        ctx.fillStyle = 'rgba(186, 230, 253, 0.06)';
+        ctx.beginPath();
+        ctx.moveTo(ox - 24, 0);
+        ctx.lineTo(ox + 24, 0);
+        ctx.lineTo(ox + w * 0.18, h);
+        ctx.lineTo(ox - w * 0.18, h);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+    } else if (bgId === 'shekinah-glory-gold') {
+      // Shekinah Glory Cloud: Swirling temple bronze, ivory & warm golden cloud layers
+      const bg = ctx.createRadialGradient(
+        w * 0.5 + Math.sin(animTime * 0.4) * (w * 0.15),
+        h * 0.45 + Math.cos(animTime * 0.35) * (h * 0.12),
+        20,
+        w * 0.5,
+        h * 0.5,
+        w * 0.75
+      );
+      bg.addColorStop(0, '#713f12');
+      bg.addColorStop(0.45, '#3f2008');
+      bg.addColorStop(1, '#0c0702');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+
+      for (let c = 0; c < 3; c++) {
+        const cx = w * (0.3 + c * 0.2) + Math.sin(animTime * 0.35 + c * 2) * 70;
+        const cy = h * (0.38 + (c % 2) * 0.22) + Math.cos(animTime * 0.3 + c) * 40;
+        const puff = ctx.createRadialGradient(cx, cy, 10, cx, cy, w * 0.32);
+        puff.addColorStop(0, 'rgba(254, 240, 138, 0.12)');
+        puff.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = puff;
+        ctx.fillRect(0, 0, w, h);
+      }
     }
 
     animationFrameId = requestAnimationFrame(renderProceduralLoop);
