@@ -146,7 +146,7 @@
 
 <button id="btn-check-updates" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: var(--accent-gold); border-color: rgba(245, 158, 11, 0.35);" title="Check GitHub for latest ZionCast updates">
         <span id="update-badge-icon">🔄</span>
-        <span id="update-badge-text">v1.3.1</span>
+        <span id="update-badge-text">v1.3.2</span>
       </button>
     </div>
   </header>
@@ -156,11 +156,14 @@
     
     <!-- ================= 1. LEFT PANEL: LIBRARY ================= -->
     <section class="panel panel-left">
-      <div class="panel-header">
+      <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between;">
         <div class="panel-title">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
           Media Library
         </div>
+        <button id="btn-quick-announcement" class="btn-fast" style="padding: 3px 9px; font-size: 0.72rem; color: var(--accent-gold); border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.1); font-weight: 700;" title="Create Announcement or Sermon Slide">
+          📢 + Slide
+        </button>
       </div>
 
       <!-- Tabs Navigation -->
@@ -1271,6 +1274,26 @@ My chains are gone, I've been set free..."></textarea>
       </div>
     </div>
   </div>
+
+  <!-- Non-Native Confirmation Modal (Preserves Electron Win32 Input Focus) -->
+  <div id="modal-confirm-dialog" class="modal-overlay" style="z-index: 95000;">
+    <div class="modal-container" style="max-width: 420px;">
+      <div class="modal-header">
+        <span class="modal-title" id="confirm-modal-title">Confirm Action</span>
+        <button class="modal-close-btn" id="btn-confirm-close">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 18px 20px;">
+        <p id="confirm-modal-message" style="font-size: 0.9rem; color: var(--text-bright); line-height: 1.5;"></p>
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end; gap: 10px;">
+        <button id="btn-confirm-cancel" class="btn-secondary">Cancel</button>
+        <button id="btn-confirm-ok" class="btn-primary" style="background: linear-gradient(135deg, #dc2626, #ef4444); border-color: #f87171;">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Non-Blocking Toast Container -->
+  <div id="zc-toast-container" class="zc-toast-container"></div>
 
 <script src="renderer.js"></script>
 </body>

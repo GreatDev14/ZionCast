@@ -827,9 +827,135 @@
     }
   }
 
+  // =========================================================================
+  // 4b. NON-BLOCKING TOAST, IN-APP CONFIRM & KEYBOARD FOCUS GUARD (Win32 Safe)
+  // =========================================================================
+  function ensureRendererFocus() {
+    if (window.zionApi && typeof window.zionApi.ensureControlFocus === 'function') {
+      window.zionApi.ensureControlFocus();
+    }
+  }
+
+  function focusInputSafely(el, delayMs = 30) {
+    if (!el) return;
+    setTimeout(() => {
+      ensureRendererFocus();
+      try {
+        el.focus({ preventScroll: false });
+        if (typeof el.setSelectionRange === 'function' && el.type !== 'number' && el.type !== 'color' && el.type !== 'range') {
+          const len = (el.value || '').length;
+          el.setSelectionRange(len, len);
+        }
+      } catch (_) {}
+    }, delayMs);
+  }
+
+  function flashInvalidInput(el) {
+    if (!el) return;
+    el.classList.add('input-invalid-flash');
+    focusInputSafely(el, 15);
+    setTimeout(() => el.classList.remove('input-invalid-flash'), 1800);
+  }
+
+  function showToast(message, type = 'info') {
+    const container = document.getElementById('zc-toast-container');
+    if (!container) {
+      console.log('[Toast]', type, message);
+      return;
+    }
+    const icons = { success: '✓', warning: '⚠️', error: '✕', info: 'ℹ️' };
+    const toast = document.createElement('div');
+    toast.className = `zc-toast toast-${type}`;
+    toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${escapeHtml(String(message))}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.25s ease';
+      setTimeout(() => toast.remove(), 260);
+    }, 3400);
+  }
+
+  // Prevent any accidental native synchronous window.alert() from detaching Win32 keyboard focus
+  window.alert = (msg) => showToast(String(msg || ''), 'warning');
+
+  function askConfirm(message, title = 'Confirm Action', confirmLabel = 'Delete') {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('modal-confirm-dialog');
+      const titleEl = document.getElementById('confirm-modal-title');
+      const msgEl = document.getElementById('confirm-modal-message');
+      const btnOk = document.getElementById('btn-confirm-ok');
+      const btnCancel = document.getElementById('btn-confirm-cancel');
+      const btnClose = document.getElementById('btn-confirm-close');
+      const prevFocused = document.activeElement;
+
+      if (!modal || !btnOk || !btnCancel) {
+        resolve(true);
+        return;
+      }
+
+      if (titleEl) titleEl.textContent = title;
+      if (msgEl) msgEl.textContent = message;
+      btnOk.textContent = confirmLabel;
+      modal.classList.add('open');
+      setTimeout(() => btnOk.focus(), 20);
+
+      let settled = false;
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        modal.classList.remove('open');
+        window.removeEventListener('keydown', onKey, true);
+        btnOk.onclick = null;
+        btnCancel.onclick = null;
+        if (btnClose) btnClose.onclick = null;
+        ensureRendererFocus();
+        if (prevFocused && (prevFocused.tagName === 'INPUT' || prevFocused.tagName === 'TEXTAREA')) {
+          focusInputSafely(prevFocused, 20);
+        }
+        resolve(result);
+      };
+
+      const onKey = (e) => {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          e.stopPropagation();
+          finish(false);
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          finish(true);
+        }
+      };
+
+      window.addEventListener('keydown', onKey, true);
+      btnOk.onclick = () => finish(true);
+      btnCancel.onclick = () => finish(false);
+      if (btnClose) btnClose.onclick = () => finish(false);
+    });
+  }
+
+  // Global first-click focus recovery: clicking any input/textarea always restores OS window focus immediately
+  document.addEventListener('mousedown', (e) => {
+    const target = e.target && e.target.closest
+      ? e.target.closest('input, textarea, [contenteditable="true"], select')
+      : null;
+    if (target && !target.disabled && !target.readOnly) {
+      if (!document.hasFocus()) {
+        ensureRendererFocus();
+      }
+      if (document.activeElement !== target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        setTimeout(() => {
+          if (document.activeElement !== target) {
+            target.focus();
+          }
+        }, 0);
+      }
+    }
+  }, true);
+
   async function toggleTvOutput() {
     if (!window.zionApi) {
-      alert('ZionCast is running inside a browser tab. Dual-screen projector management requires Electron desktop.');
+      showToast('Dual-screen projector management requires ZionCast Desktop.', 'warning');
       return;
     }
 
@@ -1643,11 +1769,14 @@
           return;
         }
         if (e.target.closest('.delete-song')) {
-          if (confirm(`Delete song "${song.title}" from library?`)) {
-            songsLibrary = songsLibrary.filter(s => s.id !== song.id);
-            saveStoredLibrary();
-            renderSongsList(songsSearchInput.value);
-          }
+          askConfirm(`Delete song "${song.title}" from library?`, 'Delete Song', 'Delete').then((yes) => {
+            if (yes) {
+              songsLibrary = songsLibrary.filter(s => s.id !== song.id);
+              saveStoredLibrary();
+              renderSongsList(songsSearchInput ? songsSearchInput.value : '');
+              showToast(`Deleted "${song.title}"`, 'info');
+            }
+          });
           return;
         }
         loadPresentationItem(song, 'song', false);
@@ -1695,11 +1824,14 @@
           return;
         }
         if (e.target.closest('.delete-custom')) {
-          if (confirm(`Delete slide "${custom.title}"?`)) {
-            customSlidesLibrary = customSlidesLibrary.filter(c => c.id !== custom.id);
-            saveStoredLibrary();
-            renderCustomSlidesList(customSearchInput.value);
-          }
+          askConfirm(`Delete slide "${custom.title}"?`, 'Delete Slide', 'Delete').then((yes) => {
+            if (yes) {
+              customSlidesLibrary = customSlidesLibrary.filter(c => c.id !== custom.id);
+              saveStoredLibrary();
+              renderCustomSlidesList(customSearchInput ? customSearchInput.value : '');
+              showToast(`Deleted "${custom.title}"`, 'info');
+            }
+          });
           return;
         }
         loadPresentationItem(custom, 'custom', false);
@@ -1846,23 +1978,102 @@
         }
       }
 
-      // Parse reference query e.g. "John 3:16", "Romans 8:28", "Psalm 23", "Gen 1:1"
-      const match = queryClean.match(/^([1-3]?\s?[a-zA-Z]+)\s*(\d+)?:?(\d+)?/i);
+      const BOOK_ALIASES = {
+        gn: 'Genesis', dt: 'Deuteronomy', jsh: 'Joshua', jdg: 'Judges', sm: '1 Samuel',
+        ps: 'Psalms', psalm: 'Psalms', prv: 'Proverbs', sg: 'Song of Solomon', song: 'Song of Solomon',
+        mt: 'Matthew', mk: 'Mark', mrk: 'Mark', lk: 'Luke', luk: 'Luke', jn: 'John', jhn: 'John',
+        rm: 'Romans', php: 'Philippians', col: 'Colossians', heb: 'Hebrews', jas: 'James',
+        jm: 'James', jud: 'Jude', rv: 'Revelation'
+      };
+      // Parse reference query e.g. "John 3:16", "John 3:16-18", "1 Cor 13:4", "Psalm 23", or full-text keyword search
+      const match = queryClean.match(/^([1-3]?\s*[a-zA-Z][a-zA-Z\s]*?)\s*(\d+)(?:\s*:\s*(\d+)(?:\s*-\s*(\d+))?)?$/i)
+        || queryClean.match(/^([1-3]?\s*[a-zA-Z]+)$/i);
+      let matchedRef = false;
+      var rangeEndVerse = null;
       if (match) {
-        const rawBook = match[1].trim().toLowerCase();
-        const foundBook = Object.keys(bibleDatabase.books).find(b =>
-          b.toLowerCase() === rawBook || b.toLowerCase().startsWith(rawBook)
-        );
-        if (foundBook) {
+        const rawBook = match[1].trim().toLowerCase().replace(/\./g, '');
+        const aliasTarget = BOOK_ALIASES[rawBook];
+        const foundBook = Object.keys(bibleDatabase.books).find(b => {
+          const bl = b.toLowerCase();
+          return (aliasTarget && bl === aliasTarget.toLowerCase()) || bl === rawBook || bl.startsWith(rawBook);
+        });
+        if (foundBook && (match[2] || rawBook.length >= 3)) {
+          matchedRef = true;
           targetBook = foundBook;
           targetChapter = match[2] || '1';
           targetVerse = match[3] || 'all';
+          if (match[3] && match[4]) {
+            rangeEndVerse = parseInt(match[4], 10);
+          }
           if (bibleBookSelect) bibleBookSelect.value = targetBook;
           updateChapterDropdown(false);
           if (bibleChapterSelect) bibleChapterSelect.value = targetChapter;
           updateVerseDropdown(false);
-          if (bibleVerseSelect) bibleVerseSelect.value = targetVerse;
+          if (bibleVerseSelect) bibleVerseSelect.value = (targetVerse === 'all' || rangeEndVerse) ? 'all' : targetVerse;
         }
+      }
+
+      // If query was not a book/chapter reference, perform fast full-text Scripture phrase search!
+      if (!matchedRef && queryClean.length >= 2 && bibleVersesList) {
+        const needle = queryClean.toLowerCase();
+        const versionAbbrSearch = bibleDatabase.abbreviation || currentBibleVersion.toUpperCase();
+        const keywordHits = [];
+        outerSearch:
+        for (const [bName, chMap] of Object.entries(bibleDatabase.books)) {
+          for (const [cNum, vMap] of Object.entries(chMap)) {
+            for (const [vNum, vTxt] of Object.entries(vMap)) {
+              if (String(vTxt).toLowerCase().includes(needle)) {
+                keywordHits.push({ book: bName, chapter: cNum, verse: vNum, text: vTxt });
+                if (keywordHits.length >= 40) break outerSearch;
+              }
+            }
+          }
+        }
+        bibleVersesList.innerHTML = '';
+        if (keywordHits.length === 0) {
+          bibleVersesList.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 0.8rem;">No verses matching "<strong>${escapeHtml(queryClean)}</strong>" in ${escapeHtml(versionAbbrSearch)}.</div>`;
+          return;
+        }
+        const hitSlides = keywordHits.map(h => ({
+          label: `${h.book} ${h.chapter}:${h.verse} (${versionAbbrSearch})`,
+          body: `"${h.text}"\n\n— ${h.book} ${h.chapter}:${h.verse} (${versionAbbrSearch})`
+        }));
+        const searchPres = {
+          id: `bible-search-${Date.now()}`,
+          title: `Search: "${queryClean}" (${versionAbbrSearch})`,
+          slides: hitSlides
+        };
+        keywordHits.forEach((h, idx) => {
+          const card = document.createElement('div');
+          card.className = 'lib-item-card';
+          card.innerHTML = `
+            <div class="lib-item-header">
+              <span class="lib-item-title" style="color: var(--accent-gold);">${escapeHtml(h.book)} ${h.chapter}:${h.verse}</span>
+              <span class="lib-item-badge">${escapeHtml(versionAbbrSearch)}</span>
+            </div>
+            <div style="font-size: 0.78rem; color: var(--text-main); line-height: 1.35;">${escapeHtml(h.text)}</div>
+            <div class="lib-item-actions">
+              <button class="btn-mini add-service" title="Add Verse to Order of Service">+ Service</button>
+            </div>
+          `;
+          const singlePres = {
+            id: `bible-${h.book}-${h.chapter}-${h.verse}-${currentBibleVersion}`,
+            title: `${h.book} ${h.chapter}:${h.verse} (${versionAbbrSearch})`,
+            slides: [hitSlides[idx]]
+          };
+          card.addEventListener('dblclick', () => loadPresentationItem(singlePres, 'bible', true));
+          card.addEventListener('click', (ev) => {
+            if (ev.target.closest('.add-service')) {
+              addToServiceOrder('bible', singlePres.title, singlePres);
+              return;
+            }
+            loadPresentationItem(searchPres, 'bible', false);
+            updateOperatorPreview(idx);
+          });
+          bibleVersesList.appendChild(card);
+        });
+        loadPresentationItem(searchPres, 'bible', false);
+        return;
       }
     }
 
@@ -1877,7 +2088,12 @@
     }
 
     const versesToDisplay = (targetVerse && targetVerse !== 'all')
-      ? (chObj[targetVerse] ? [targetVerse] : Object.keys(chObj))
+      ? (typeof rangeEndVerse === 'number' && rangeEndVerse >= parseInt(targetVerse, 10)
+          ? Object.keys(chObj).filter(v => {
+              const vn = parseInt(v, 10);
+              return vn >= parseInt(targetVerse, 10) && vn <= rangeEndVerse;
+            })
+          : (chObj[targetVerse] ? [targetVerse] : Object.keys(chObj)))
       : Object.keys(chObj);
 
     // Build presentation slides for this scripture
@@ -2078,11 +2294,14 @@
 
       card.addEventListener('click', (e) => {
         if (e.target.closest('.btn-del-theme')) {
-          if (confirm(`Delete custom theme "${theme.name}"?`)) {
-            customThemes.splice(index, 1);
-            saveStoredLibrary();
-            renderThemesPresetGrid();
-          }
+          askConfirm(`Delete custom theme "${theme.name}"?`, 'Delete Theme', 'Delete').then((yes) => {
+            if (yes) {
+              customThemes.splice(index, 1);
+              saveStoredLibrary();
+              renderThemesPresetGrid();
+              showToast(`Deleted theme "${theme.name}"`, 'info');
+            }
+          });
           return;
         }
 
@@ -2207,11 +2426,14 @@
             return;
           }
           if (e.target.closest('.btn-del-custom')) {
-            if (confirm(`Delete announcement slide "${custom.title}"?`)) {
-              customSlidesLibrary = customSlidesLibrary.filter(c => c.id !== custom.id);
-              saveStoredLibrary();
-              renderMediaGallery(mediaSearchInput ? mediaSearchInput.value : '');
-            }
+            askConfirm(`Delete announcement slide "${custom.title}"?`, 'Delete Announcement', 'Delete').then((yes) => {
+              if (yes) {
+                customSlidesLibrary = customSlidesLibrary.filter(c => c.id !== custom.id);
+                saveStoredLibrary();
+                renderMediaGallery(mediaSearchInput ? mediaSearchInput.value : '');
+                showToast(`Deleted "${custom.title}"`, 'info');
+              }
+            });
             return;
           }
 
@@ -2310,11 +2532,14 @@
             return;
           }
           if (e.target.closest('.btn-del-media')) {
-            if (confirm(`Remove "${item.title}" from Media Library?`)) {
-              mediaLibrary = mediaLibrary.filter(m => m.id !== item.id);
-              saveStoredLibrary();
-              renderMediaGallery(mediaSearchInput ? mediaSearchInput.value : '');
-            }
+            askConfirm(`Remove "${item.title}" from Media Library?`, 'Remove Media', 'Remove').then((yes) => {
+              if (yes) {
+                mediaLibrary = mediaLibrary.filter(m => m.id !== item.id);
+                saveStoredLibrary();
+                renderMediaGallery(mediaSearchInput ? mediaSearchInput.value : '');
+                showToast(`Removed "${item.title}"`, 'info');
+              }
+            });
             return;
           }
 
@@ -2362,7 +2587,7 @@
   function projectYouTubeLive(item, muted = false) {
     const videoId = item.videoId || extractYouTubeId(item.url);
     if (!videoId) {
-      alert('Could not determine a valid YouTube video ID from the provided link.');
+      showToast('Could not determine a valid YouTube video ID from the provided link.', 'warning');
       return;
     }
 
@@ -2424,7 +2649,7 @@
   function setYouTubeAsBackground(item, muted = true) {
     const videoId = item.videoId || extractYouTubeId(item.url);
     if (!videoId) {
-      alert('Could not determine a valid YouTube video ID.');
+      showToast('Could not determine a valid YouTube video ID.', 'warning');
       return;
     }
 
@@ -2508,6 +2733,7 @@
     btnOpenThemeBuilder.addEventListener('click', () => {
       if (modalThemeBuilder) modalThemeBuilder.classList.add('open');
       updateThemePreview();
+      focusInputSafely(themeFormName);
     });
 
     if (themeFormBgType) {
@@ -2557,7 +2783,8 @@
       btnSaveCustomTheme.addEventListener('click', () => {
         const name = (themeFormName ? themeFormName.value : '').trim();
         if (!name) {
-          alert('Please enter a name for your custom theme.');
+          showToast('Please enter a name for your custom theme.', 'warning');
+          flashInvalidInput(themeFormName);
           return;
         }
 
@@ -2672,11 +2899,12 @@
         const actualType = isVideoFile(filePath) ? 'video' : (isImageFile(filePath) ? 'image' : chosenType);
 
         if (!title) {
-          alert('Please enter a title for this media.');
+          showToast('Please enter a title for this media.', 'warning');
+          flashInvalidInput(uploadFormTitle);
           return;
         }
         if (!filePath) {
-          alert('Please browse and select a media file from your computer.');
+          showToast('Please browse and select a media file from your computer.', 'warning');
           return;
         }
 
@@ -2710,6 +2938,7 @@
     if (uploadFormTitle) uploadFormTitle.value = '';
     if (uploadFormFilePath) uploadFormFilePath.value = '';
     if (modalUploadMedia) modalUploadMedia.classList.add('open');
+    focusInputSafely(uploadFormTitle);
   }
 
   function getActiveCameraDevice() {
@@ -2738,7 +2967,7 @@
         const targetDevice = getActiveCameraDevice();
 
         if (!targetDevice) {
-          alert('No camera detected. Please connect Reincubate Camo, DroidCam, OBS Virtual Cam, or a USB/HDMI capture card, then click Refresh Cameras ↺.');
+          showToast('No camera detected. Connect Camo, DroidCam, OBS Virtual Cam, or USB/HDMI capture, then click Refresh ↺.', 'warning');
           return;
         }
 
@@ -2767,7 +2996,7 @@
         const targetDevice = getActiveCameraDevice();
 
         if (!targetDevice) {
-          alert('No camera detected. Please connect Reincubate Camo, DroidCam, OBS Virtual Cam, or a USB/HDMI capture card, then click Refresh Cameras ↺.');
+          showToast('No camera detected. Connect Camo, DroidCam, OBS Virtual Cam, or USB/HDMI capture, then click Refresh ↺.', 'warning');
           return;
         }
 
@@ -2848,7 +3077,8 @@
         const raw = (youtubeUrlInput ? youtubeUrlInput.value : '').trim();
         const vid = extractYouTubeId(raw);
         if (!vid) {
-          alert('Please enter a valid YouTube video or live stream link.');
+          showToast('Please enter a valid YouTube video or live stream link.', 'warning');
+          flashInvalidInput(youtubeUrlInput);
           return;
         }
         const title = (youtubeTitleInput && youtubeTitleInput.value.trim()) || `YouTube Stream (${vid})`;
@@ -2872,7 +3102,8 @@
         const raw = (youtubeUrlInput ? youtubeUrlInput.value : '').trim();
         const vid = extractYouTubeId(raw);
         if (!vid) {
-          alert('Please enter a valid YouTube video or live stream link.');
+          showToast('Please enter a valid YouTube video or live stream link.', 'warning');
+          flashInvalidInput(youtubeUrlInput);
           return;
         }
         const title = (youtubeTitleInput && youtubeTitleInput.value.trim()) || `YouTube Live (${vid})`;
@@ -2900,7 +3131,8 @@
         const raw = (youtubeUrlInput ? youtubeUrlInput.value : '').trim();
         const vid = extractYouTubeId(raw);
         if (!vid) {
-          alert('Please enter a valid YouTube video link.');
+          showToast('Please enter a valid YouTube video link.', 'warning');
+          flashInvalidInput(youtubeUrlInput);
           return;
         }
         const title = (youtubeTitleInput && youtubeTitleInput.value.trim()) || `YouTube Background (${vid})`;
@@ -4031,12 +4263,16 @@
   }
 
   function clearAllServiceItems() {
-    if (confirm('Clear entire Sunday Order of Service?')) {
-      serviceOrder = [];
-      selectedServiceIndex = -1;
-      saveStoredLibrary();
-      renderServiceOrderList();
-    }
+    if (serviceOrder.length === 0) return;
+    askConfirm('Clear entire Sunday Order of Service?', 'Clear Service Order', 'Clear All').then((yes) => {
+      if (yes) {
+        serviceOrder = [];
+        selectedServiceIndex = -1;
+        saveStoredLibrary();
+        renderServiceOrderList();
+        showToast('Order of Service cleared', 'info');
+      }
+    });
   }
 
   // =========================================================================
@@ -4114,6 +4350,7 @@
     }
 
     modalSong.classList.add('open');
+    focusInputSafely(document.getElementById('song-form-title'));
   }
 
   // =========================================================================
@@ -4337,6 +4574,7 @@
         bannerStyleButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.style === state.bannerStyle));
         bannerLayoutButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.layout === state.bannerLayout));
         updateBannerModalPreview();
+        focusInputSafely(bannerInputText);
       });
     }
 
@@ -4344,14 +4582,24 @@
     if (btnPubBanner) {
       btnPubBanner.addEventListener('click', () => {
         const text = bannerInputText ? bannerInputText.value.trim() : '';
-        if (text) {
-          state.bannerText = text;
-          state.bannerActive = true;
-          if (btnOpenBanner) {
-            btnOpenBanner.style.color = 'var(--accent-red)';
-            btnOpenBanner.style.borderColor = 'var(--accent-red)';
-            btnOpenBanner.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.4)';
-          }
+        if (!text) {
+          showToast('Please enter alert banner text first.', 'warning');
+          flashInvalidInput(bannerInputText);
+          return;
+        }
+        state.bannerText = text;
+        state.bannerActive = true;
+        if (btnOpenBanner) {
+          btnOpenBanner.style.color = 'var(--accent-red)';
+          btnOpenBanner.style.borderColor = 'var(--accent-red)';
+          btnOpenBanner.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.4)';
+        }
+        if (window.zionApi && !state.displayOpen) {
+          const targetScreenId = selectTargetScreen ? selectTargetScreen.value : null;
+          window.zionApi.launchDisplay(targetScreenId).then(() => {
+            updateTvStatusUI(true);
+            setTimeout(() => broadcastDisplayState(), 200);
+          });
         }
         if (modalBanner) modalBanner.classList.remove('open');
         broadcastDisplayState();
@@ -4440,15 +4688,17 @@
           targetPane.classList.add('active');
         }
 
-        // Auto-refresh pane content when switching tabs
+        // Auto-refresh pane content & auto-focus primary search input when switching tabs
         if (tabId === 'tab-media') {
           renderMediaGallery(mediaSearchInput ? mediaSearchInput.value : '');
         } else if (tabId === 'tab-themes') {
           renderThemesPresetGrid();
         } else if (tabId === 'tab-songs') {
           renderSongsList(songsSearchInput ? songsSearchInput.value : '');
+          focusInputSafely(songsSearchInput);
         } else if (tabId === 'tab-bibles') {
           if (!bibleDatabase) loadBibleData();
+          focusInputSafely(bibleQuickSearch);
         } else if (tabId === 'tab-camera') {
           enumerateVideoDevices();
         }
@@ -4555,7 +4805,7 @@
               title: serviceTitleInput ? serviceTitleInput.value : 'Service Order',
               items: serviceOrder
             }, null, 2));
-            alert('Service order saved successfully!');
+            showToast('Service order saved successfully!', 'success');
           }
         }
       });
@@ -4578,9 +4828,10 @@
                   if (parsed.title && serviceTitleInput) serviceTitleInput.value = parsed.title;
                   saveStoredLibrary();
                   renderServiceOrderList();
+                  showToast(`Loaded "${parsed.title || 'Service Order'}"`, 'success');
                 }
               } catch (err) {
-                alert('Failed to parse service file: ' + err.message);
+                showToast('Failed to parse service file: ' + err.message, 'error');
               }
             }
           }
@@ -4595,12 +4846,19 @@
     const btnImportSongModal = document.getElementById('btn-import-song-modal');
     if (btnImportSongModal) btnImportSongModal.addEventListener('click', () => {
       if (modalImport) modalImport.classList.add('open');
+      focusInputSafely(document.getElementById('import-raw-text'));
     });
 
-    const btnAddCustomModal = document.getElementById('btn-add-custom-modal');
-    if (btnAddCustomModal) btnAddCustomModal.addEventListener('click', () => {
+    const openCustomAnnouncementModal = () => {
       if (modalCustom) modalCustom.classList.add('open');
-    });
+      focusInputSafely(document.getElementById('custom-form-title'));
+    };
+
+    const btnAddCustomModal = document.getElementById('btn-add-custom-modal');
+    if (btnAddCustomModal) btnAddCustomModal.addEventListener('click', openCustomAnnouncementModal);
+
+    const btnQuickAnnouncement = document.getElementById('btn-quick-announcement');
+    if (btnQuickAnnouncement) btnQuickAnnouncement.addEventListener('click', openCustomAnnouncementModal);
 
     // Modal Close buttons
     document.querySelectorAll('[data-close]').forEach(btn => {
@@ -4621,7 +4879,8 @@
         const rawLyrics = (document.getElementById('song-form-lyrics')?.value || '').trim();
 
         if (!title) {
-          alert('Please enter a song title.');
+          showToast('Please enter a song title.', 'warning');
+          flashInvalidInput(document.getElementById('song-form-title'));
           return;
         }
 
@@ -4652,7 +4911,7 @@
         saveStoredLibrary();
         renderSongsList(songsSearchInput ? songsSearchInput.value : '');
         if (modalImport) modalImport.classList.remove('open');
-        alert(`Imported "${parsed.title}" with ${parsed.slides.length} slides!`);
+        showToast(`Imported "${parsed.title}" (${parsed.slides.length} slides)`, 'success');
       });
     }
 
@@ -4666,7 +4925,8 @@
         const theme = document.getElementById('custom-form-theme')?.value || 'celestial-clouds';
 
         if (!title) {
-          alert('Please enter a title for the announcement.');
+          showToast('Please enter a title for the announcement slide.', 'warning');
+          flashInvalidInput(document.getElementById('custom-form-title'));
           return;
         }
 
@@ -4700,6 +4960,7 @@
 
         // Automatically load newly created announcement into operator desk preview!
         loadPresentationItem(newCustom, 'custom', false);
+        showToast(`Saved announcement "${title}"`, 'success');
       });
     }
 
@@ -4741,9 +5002,32 @@
   // =========================================================================
   function attachKeyboardShortcuts() {
     window.addEventListener('keydown', (e) => {
-      // Don't trigger presentation hotkeys while typing inside inputs or textareas
+      // Never intercept Ctrl/Cmd/Alt shortcuts (e.g. Ctrl+C, Ctrl+V, Ctrl+A)
+      if (e.ctrlKey || e.metaKey || e.altKey) {
+        return;
+      }
+
+      // Close topmost open modal on Escape; never fire live presentation hotkeys while a modal is open!
+      const openModals = document.querySelectorAll('.modal-overlay.open');
+      if (openModals.length > 0) {
+        if (e.key === 'Escape') {
+          const topModal = openModals[openModals.length - 1];
+          if (topModal && topModal.id !== 'modal-confirm-dialog') {
+            e.preventDefault();
+            topModal.classList.remove('open');
+          }
+        }
+        return;
+      }
+
+      // Don't trigger presentation hotkeys while focused inside inputs, textareas, selects, or editable areas
       const activeEl = document.activeElement;
-      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+      if (activeEl && (
+        activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.tagName === 'SELECT' ||
+        activeEl.isContentEditable
+      )) {
         return;
       }
 
@@ -4876,7 +5160,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.3.1';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.3.2';
         }
       } catch (err) {
         console.warn('Update check warning:', err);

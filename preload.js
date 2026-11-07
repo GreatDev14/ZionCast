@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('zionApi', {
 
   // Window utilities
   toggleFullscreen: () => ipcRenderer.invoke('toggle-fullscreen'),
+  ensureControlFocus: () => ipcRenderer.send('ensure-control-focus'),
 
   // Native File dialogs & System operations
   openFileDialog: (options) => ipcRenderer.invoke('open-file-dialog', options),
@@ -50,7 +51,7 @@ contextBridge.exposeInMainWorld('zionApi', {
   // In-app Updates & External Links
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
-  getVersion: () => '1.3.1',
+  getVersion: () => '1.3.2',
 
   // Mobile Wi-Fi Remote Control APIs
   getRemoteInfo: () => ipcRenderer.invoke('get-remote-info'),

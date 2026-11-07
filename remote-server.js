@@ -355,6 +355,11 @@ class RemoteServer {
       -webkit-tap-highlight-color: transparent;
     }
 
+    input, textarea {
+      -webkit-user-select: text !important;
+      user-select: text !important;
+    }
+
     body {
       background: #080c14;
       color: #f1f5f9;

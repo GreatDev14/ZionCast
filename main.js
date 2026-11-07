@@ -122,6 +122,13 @@ function resolveTargetDisplay(targetId = null) {
   return secondary || primaryDisplay;
 }
 
+function restoreControlFocus() {
+  if (controlWindow && !controlWindow.isDestroyed() && controlWindow.isVisible() && !controlWindow.isMinimized()) {
+    controlWindow.focus();
+    controlWindow.webContents.focus();
+  }
+}
+
 function launchDisplayWindow(targetDisplayId = null) {
   if (targetDisplayId) selectedDisplayId = targetDisplayId;
 
@@ -130,14 +137,17 @@ function launchDisplayWindow(targetDisplayId = null) {
   const isSecondary = targetDisplay.id !== primaryDisplay.id;
 
   if (displayWindow && !displayWindow.isDestroyed()) {
-    // Reposition existing window to target display
+    // Reposition existing window to target display without stealing keyboard focus from Control Desk
     displayWindow.setFullScreen(false);
     displayWindow.setBounds(targetDisplay.bounds);
     if (isSecondary) {
       displayWindow.setFullScreen(true);
       displayWindow.setAlwaysOnTop(true, 'screen-saver');
     }
-    displayWindow.show();
+    displayWindow.showInactive();
+    if (isSecondary) {
+      restoreControlFocus();
+    }
     displayWindow.webContents.send('display-state-update', {
       ...currentDisplayState,
       remotePort: remoteServer.port || 3000
@@ -192,7 +202,8 @@ function launchDisplayWindow(targetDisplayId = null) {
       displayWindow.setFullScreen(true);
       displayWindow.setAlwaysOnTop(true, 'screen-saver');
     }
-    displayWindow.show();
+    displayWindow.showInactive();
+    restoreControlFocus();
     displayWindow.webContents.send('display-state-update', {
       ...currentDisplayState,
       remotePort: remoteServer.port || 3000
@@ -203,6 +214,7 @@ function launchDisplayWindow(targetDisplayId = null) {
   displayWindow.on('closed', () => {
     displayWindow = null;
     notifyControlDisplayStatus();
+    restoreControlFocus();
   });
 
   notifyControlDisplayStatus();
@@ -213,10 +225,15 @@ function launchStageDisplayWindow() {
   const allDisplays = screen.getAllDisplays();
   const primaryDisplay = screen.getPrimaryDisplay();
   const targetDisplay = allDisplays.length > 2 ? allDisplays[2] : (allDisplays.length > 1 ? allDisplays[1] : primaryDisplay);
+  const isSecondary = targetDisplay.id !== primaryDisplay.id;
 
   if (stageWindow && !stageWindow.isDestroyed()) {
-    stageWindow.show();
-    stageWindow.focus();
+    if (isSecondary) {
+      stageWindow.showInactive();
+      restoreControlFocus();
+    } else {
+      stageWindow.show();
+    }
     return { success: true };
   }
 
@@ -228,6 +245,7 @@ function launchStageDisplayWindow() {
     y: targetDisplay.bounds.y + 30,
     width: Math.min(1280, targetDisplay.bounds.width - 60),
     height: Math.min(760, targetDisplay.bounds.height - 60),
+    show: false,
     title: 'ZionCast - Preacher & Choir Stage Display',
     backgroundColor: '#07090e',
     icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
@@ -239,9 +257,20 @@ function launchStageDisplayWindow() {
 
   stageWindow.loadURL(stageUrl);
 
+  stageWindow.once('ready-to-show', () => {
+    if (!stageWindow || stageWindow.isDestroyed()) return;
+    if (isSecondary) {
+      stageWindow.showInactive();
+      restoreControlFocus();
+    } else {
+      stageWindow.show();
+    }
+  });
+
   stageWindow.on('closed', () => {
     stageWindow = null;
     notifyControlDisplayStatus();
+    restoreControlFocus();
   });
 
   return { success: true };
@@ -317,7 +346,7 @@ function identifyScreens() {
     `;
 
     overlay.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-    overlay.show();
+    overlay.showInactive();
     overlayWindows.push(overlay);
   });
 
@@ -325,6 +354,7 @@ function identifyScreens() {
     overlayWindows.forEach(win => {
       if (!win.isDestroyed()) win.close();
     });
+    restoreControlFocus();
   }, 3500);
 }
 
@@ -504,7 +534,7 @@ ipcMain.handle('get-display-status', () => {
   };
 });
 
-// Real-time State Synchronization Handler (Auto-wakes display if not open)
+// Real-time State Synchronization Handler
 ipcMain.on('sync-to-display', (event, payload) => {
   currentDisplayState = {
     ...currentDisplayState,
@@ -512,13 +542,20 @@ ipcMain.on('sync-to-display', (event, payload) => {
     remotePort: remoteServer.port || 3000
   };
 
-  // If displayWindow is not open, automatically launch it on the projector!
-  if (!displayWindow || displayWindow.isDestroyed()) {
+  if (displayWindow && !displayWindow.isDestroyed()) {
+    displayWindow.webContents.send('display-state-update', currentDisplayState);
+  } else if (payload && payload._autoWake) {
     launchDisplayWindow(selectedDisplayId);
-    return;
   }
+});
 
-  displayWindow.webContents.send('display-state-update', currentDisplayState);
+// Explicit Keyboard Focus Recovery for Control Desk Inputs
+ipcMain.on('ensure-control-focus', () => {
+  if (controlWindow && !controlWindow.isDestroyed()) {
+    if (controlWindow.isMinimized()) controlWindow.restore();
+    controlWindow.focus();
+    controlWindow.webContents.focus();
+  }
 });
 
 ipcMain.handle('get-display-state', () => {
@@ -557,7 +594,7 @@ ipcMain.handle('open-file-dialog', async (event, options = {}) => {
     'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico', 'tiff', 'tif', 'avif', 'jfif', 'heic', 'heif',
     'mp4', 'webm', 'mov', 'mkv', 'avi', 'm4v', 'wmv', 'flv', 'ogv', '3gp', 'ts', 'mts', 'm2ts', 'vob', 'mpg', 'mpeg'
   ];
-  return await dialog.showOpenDialog(controlWindow, {
+  const result = await dialog.showOpenDialog(controlWindow, {
     title: options.title || 'Select File',
     properties: options.properties || ['openFile'],
     filters: options.filters || [
@@ -568,11 +605,13 @@ ipcMain.handle('open-file-dialog', async (event, options = {}) => {
       { name: 'All Files (*.*)', extensions: ['*'] }
     ]
   });
+  restoreControlFocus();
+  return result;
 });
 
 ipcMain.handle('save-file-dialog', async (event, options = {}) => {
   if (!controlWindow) return null;
-  return await dialog.showSaveDialog(controlWindow, {
+  const result = await dialog.showSaveDialog(controlWindow, {
     title: options.title || 'Save File',
     defaultPath: options.defaultPath || 'ServiceOrder.json',
     filters: options.filters || [
@@ -580,6 +619,8 @@ ipcMain.handle('save-file-dialog', async (event, options = {}) => {
       { name: 'Text File', extensions: ['txt'] }
     ]
   });
+  restoreControlFocus();
+  return result;
 });
 
 ipcMain.handle('read-file', async (event, filePath) => {

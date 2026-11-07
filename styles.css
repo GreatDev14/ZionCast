@@ -55,6 +55,28 @@
   user-select: none;
 }
 
+input,
+textarea,
+[contenteditable="true"],
+.input-search,
+.form-input,
+.form-textarea {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  pointer-events: auto !important;
+  cursor: text;
+}
+
+input[type="range"],
+input[type="checkbox"],
+input[type="radio"],
+input[type="color"],
+select,
+.select-custom {
+  pointer-events: auto !important;
+  cursor: pointer;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--bg-deep);
@@ -2898,3 +2920,61 @@ body {
 .top-header .quick-control-bar { flex-wrap: wrap; row-gap: 4px; }
 .top-header .tv-output-section { flex-wrap: wrap; row-gap: 4px; margin-left: auto; justify-content: flex-end; }
 .top-header .btn-fast, .top-header .btn-launch-tv { white-space: nowrap; }
+
+/* Non-blocking Toast Notifications & In-App Confirmation Modal (Prevents Win32 Focus Loss) */
+.zc-toast-container {
+  position: fixed;
+  bottom: 44px;
+  right: 18px;
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+  max-width: 390px;
+}
+
+.zc-toast {
+  background: rgba(15, 23, 42, 0.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  border-left: 4px solid #38bdf8;
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #f8fafc;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  pointer-events: auto;
+  animation: zcToastSlideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.zc-toast.toast-success {
+  border-color: rgba(16, 185, 129, 0.5);
+  border-left-color: #10b981;
+}
+
+.zc-toast.toast-warning {
+  border-color: rgba(245, 158, 11, 0.55);
+  border-left-color: #f59e0b;
+}
+
+.zc-toast.toast-error {
+  border-color: rgba(239, 68, 68, 0.55);
+  border-left-color: #ef4444;
+}
+
+@keyframes zcToastSlideIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.input-invalid-flash {
+  border-color: #f59e0b !important;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.32) !important;
+}
