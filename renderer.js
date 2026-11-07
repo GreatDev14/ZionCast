@@ -4839,6 +4839,7 @@
             }
             if (btnDownloadUpdate) {
               btnDownloadUpdate.style.display = 'inline-flex';
+              btnDownloadUpdate.textContent = '⬇️ Download v' + res.latestVersion;
               btnDownloadUpdate.onclick = () => {
                 if (window.zionApi && window.zionApi.openExternalUrl) {
                   window.zionApi.openExternalUrl(res.downloadUrl || res.releaseUrl);
@@ -4864,9 +4865,18 @@
           if (manual) {
             if (updateModalTitle) updateModalTitle.textContent = 'Could not check for updates';
             if (updateModalSubtitle) updateModalSubtitle.textContent = res?.error || 'Check internet connection and try again.';
+            if (btnDownloadUpdate) {
+              btnDownloadUpdate.style.display = 'inline-flex';
+              btnDownloadUpdate.textContent = '🌐 Open Releases Page';
+              btnDownloadUpdate.onclick = () => {
+                const url = 'https://github.com/GreatDev14/ZionCast/releases/latest';
+                if (window.zionApi && window.zionApi.openExternalUrl) window.zionApi.openExternalUrl(url);
+                else window.open(url, '_blank');
+              };
+            }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.3.0';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.3.1';
         }
       } catch (err) {
         console.warn('Update check warning:', err);

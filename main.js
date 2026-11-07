@@ -660,10 +660,59 @@ ipcMain.handle('open-external-url', async (event, url) => {
   return false;
 });
 
-// In-app Update Checker (queries official GitHub Releases API)
-ipcMain.handle('check-for-updates', async () => {
+// In-app Update Checker (queries GitHub Releases API with zero-rate-limit Web Redirect & Raw fallbacks)
+function compareSemver(currentVersion, latestVer) {
+  const parseVer = v => String(v || '').replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+  const curParts = parseVer(currentVersion);
+  const latParts = parseVer(latestVer);
+  for (let i = 0; i < Math.max(curParts.length, latParts.length); i++) {
+    const c = curParts[i] || 0;
+    const l = latParts[i] || 0;
+    if (l > c) return true;
+    if (l < c) return false;
+  }
+  return false;
+}
+
+function checkUpdatesViaRedirect(currentVersion) {
   return new Promise((resolve) => {
-    const currentVersion = app.getVersion();
+    const req = https.get({
+      hostname: 'github.com',
+      path: '/GreatDev14/ZionCast/releases/latest',
+      headers: {
+        'User-Agent': `ZionCast-Desktop/${currentVersion}`,
+        'Accept': 'text/html'
+      },
+      timeout: 8000
+    }, (res) => {
+      res.resume();
+      const loc = res.headers && res.headers.location ? String(res.headers.location) : '';
+      const tagMatch = loc.match(/\/releases\/tag\/v?([0-9]+\.[0-9]+\.[0-9]+)/i);
+      if ((res.statusCode === 301 || res.statusCode === 302) && tagMatch) {
+        const latestVer = tagMatch[1];
+        const latestTag = `v${latestVer}`;
+        resolve({
+          success: true,
+          hasUpdate: compareSemver(currentVersion, latestVer),
+          currentVersion,
+          latestVersion: latestVer,
+          releaseName: `ZionCast ${latestTag}`,
+          releaseNotes: `ZionCast ${latestTag} is available on GitHub Releases.`,
+          releaseUrl: `https://github.com/GreatDev14/ZionCast/releases/tag/${latestTag}`,
+          downloadUrl: `https://github.com/GreatDev14/ZionCast/releases/download/${latestTag}/ZionCast-Setup-${latestVer}.exe`
+        });
+      } else {
+        resolve(null);
+      }
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+
+ipcMain.handle('check-for-updates', async () => {
+  const currentVersion = app.getVersion();
+  const apiResult = await new Promise((resolve) => {
     const options = {
       hostname: 'api.github.com',
       path: '/repos/GreatDev14/ZionCast/releases/latest',
@@ -671,7 +720,7 @@ ipcMain.handle('check-for-updates', async () => {
         'User-Agent': `ZionCast-Desktop/${currentVersion}`,
         'Accept': 'application/vnd.github+json'
       },
-      timeout: 8000
+      timeout: 6000
     };
 
     const req = https.get(options, (res) => {
@@ -682,8 +731,8 @@ ipcMain.handle('check-for-updates', async () => {
           if (res.statusCode === 200) {
             const data = JSON.parse(body);
             const latestTag = data.tag_name || '';
-            const latestVer = latestTag.replace(/^v/, '');
-            let downloadUrl = 'https://github.com/GreatDev14/ZionCast/releases/latest';
+            const latestVer = latestTag.replace(/^v/i, '');
+            let downloadUrl = `https://github.com/GreatDev14/ZionCast/releases/download/v${latestVer}/ZionCast-Setup-${latestVer}.exe`;
             if (Array.isArray(data.assets)) {
               const exeAsset = data.assets.find(a => a.name.endsWith('.exe') && !a.name.includes('Portable'));
               if (exeAsset && exeAsset.browser_download_url) {
@@ -691,20 +740,9 @@ ipcMain.handle('check-for-updates', async () => {
               }
             }
 
-            const parseVer = v => v.split('.').map(n => parseInt(n, 10) || 0);
-            const curParts = parseVer(currentVersion);
-            const latParts = parseVer(latestVer);
-            let hasUpdate = false;
-            for (let i = 0; i < Math.max(curParts.length, latParts.length); i++) {
-              const c = curParts[i] || 0;
-              const l = latParts[i] || 0;
-              if (l > c) { hasUpdate = true; break; }
-              if (l < c) { hasUpdate = false; break; }
-            }
-
             resolve({
               success: true,
-              hasUpdate,
+              hasUpdate: compareSemver(currentVersion, latestVer),
               currentVersion,
               latestVersion: latestVer,
               releaseName: data.name || latestTag,
@@ -713,7 +751,7 @@ ipcMain.handle('check-for-updates', async () => {
               downloadUrl
             });
           } else {
-            resolve({ success: false, error: `GitHub HTTP ${res.statusCode}`, currentVersion });
+            resolve({ success: false, statusCode: res.statusCode, error: `GitHub HTTP ${res.statusCode}`, currentVersion });
           }
         } catch (e) {
           resolve({ success: false, error: e.message, currentVersion });
@@ -729,5 +767,17 @@ ipcMain.handle('check-for-updates', async () => {
       resolve({ success: false, error: 'Check request timed out', currentVersion });
     });
   });
+
+  if (apiResult && apiResult.success) {
+    return apiResult;
+  }
+
+  // Fallback when api.github.com returns HTTP 403 (IP rate limit on shared Wi-Fi / mobile carrier NAT)
+  const redirectFallback = await checkUpdatesViaRedirect(currentVersion);
+  if (redirectFallback && redirectFallback.success) {
+    return redirectFallback;
+  }
+
+  return apiResult || { success: false, error: 'Could not reach GitHub Releases', currentVersion };
 });
 
