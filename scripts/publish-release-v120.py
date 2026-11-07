@@ -54,7 +54,6 @@ body_notes = """## ZionCast v1.2.0 Release Notes
 - **Portable Edition**: `ZionCast-Portable-1.2.0.zip`
 """
 
-# 1. Create or fetch release
 req = urllib.request.Request(f'https://api.github.com/repos/GreatDev14/ZionCast/releases/tags/{tag}', headers=headers)
 try:
     with urllib.request.urlopen(req) as resp:
@@ -84,7 +83,6 @@ except urllib.error.HTTPError as e:
     else:
         raise
 
-# 2. Upload assets
 files_to_upload = [
     r'dist\ZionCast-Setup-1.2.0.exe',
     r'dist\ZionCast-Portable-1.2.0.zip'
@@ -98,56 +96,67 @@ for filepath in files_to_upload:
     filename = os.path.basename(filepath)
     filesize = os.path.getsize(filepath)
 
-    chk_req = urllib.request.Request(f'https://api.github.com/repos/GreatDev14/ZionCast/releases/{release_id}/assets', headers=headers)
-    with urllib.request.urlopen(chk_req) as resp:
-        assets = json.loads(resp.read().decode('utf-8'))
-    
-    existing = next((a for a in assets if a['name'] == filename), None)
-    if existing:
-        if existing['size'] == filesize:
-            print(f"[EXISTS] {filename} ({filesize/1024/1024:.1f} MB) already matches. Skipping.")
-            continue
-        else:
-            print(f"Deleting older asset {filename} (ID {existing['id']})...")
-            del_req = urllib.request.Request(
-                f"https://api.github.com/repos/GreatDev14/ZionCast/releases/assets/{existing['id']}",
-                headers=headers,
-                method='DELETE'
-            )
-            with urllib.request.urlopen(del_req) as del_resp:
-                print(f"Deleted old asset: HTTP {del_resp.status}")
+    max_attempts = 5
+    for attempt in range(1, max_attempts + 1):
+        try:
+            chk_req = urllib.request.Request(f'https://api.github.com/repos/GreatDev14/ZionCast/releases/{release_id}/assets', headers=headers)
+            with urllib.request.urlopen(chk_req) as resp:
+                assets = json.loads(resp.read().decode('utf-8'))
+            
+            existing = next((a for a in assets if a['name'] == filename), None)
+            if existing:
+                if existing['size'] == filesize and existing.get('state') == 'uploaded':
+                    print(f"[EXISTS] {filename} ({filesize/1024/1024:.1f} MB) already matches. Skipping.")
+                    break
+                else:
+                    print(f"Deleting incomplete/old asset {filename} (ID {existing['id']})...")
+                    del_req = urllib.request.Request(
+                        f"https://api.github.com/repos/GreatDev14/ZionCast/releases/assets/{existing['id']}",
+                        headers=headers,
+                        method='DELETE'
+                    )
+                    with urllib.request.urlopen(del_req) as del_resp:
+                        print(f"Deleted old asset: HTTP {del_resp.status}")
 
-    print(f"\n>>> Uploading {filename} ({filesize / 1024 / 1024:.1f} MB) to GitHub Release...")
-    conn = http.client.HTTPSConnection('uploads.github.com', timeout=600)
-    upload_path = f"/repos/GreatDev14/ZionCast/releases/{release_id}/assets?name={filename}"
-    conn.putrequest('POST', upload_path)
-    conn.putheader('Authorization', f'Bearer {token}')
-    conn.putheader('Content-Type', 'application/octet-stream')
-    conn.putheader('Accept', 'application/vnd.github+json')
-    conn.putheader('Content-Length', str(filesize))
-    conn.putheader('User-Agent', 'ZionCast-Release-Tool')
-    conn.endheaders()
+            print(f"\n>>> Uploading {filename} ({filesize / 1024 / 1024:.1f} MB) to GitHub Release (Attempt {attempt}/{max_attempts})...")
+            conn = http.client.HTTPSConnection('uploads.github.com', timeout=600)
+            upload_path = f"/repos/GreatDev14/ZionCast/releases/{release_id}/assets?name={filename}"
+            conn.putrequest('POST', upload_path)
+            conn.putheader('Authorization', f'Bearer {token}')
+            conn.putheader('Content-Type', 'application/octet-stream')
+            conn.putheader('Accept', 'application/vnd.github+json')
+            conn.putheader('Content-Length', str(filesize))
+            conn.putheader('User-Agent', 'ZionCast-Release-Tool')
+            conn.endheaders()
 
-    CHUNK = 512 * 1024
-    sent_bytes = 0
-    start_time = time.time()
-    last_pct = -1
+            CHUNK = 256 * 1024
+            sent_bytes = 0
+            start_time = time.time()
+            last_pct = -1
 
-    with open(filepath, 'rb') as f:
-        while True:
-            chunk = f.read(CHUNK)
-            if not chunk:
+            with open(filepath, 'rb') as f:
+                while True:
+                    chunk = f.read(CHUNK)
+                    if not chunk:
+                        break
+                    conn.send(chunk)
+                    sent_bytes += len(chunk)
+                    pct = int((sent_bytes / filesize) * 100)
+                    if pct != last_pct and (pct % 10 == 0 or pct == 100):
+                        elapsed = time.time() - start_time
+                        mbps = (sent_bytes / 1024 / 1024) / max(0.1, elapsed)
+                        print(f"  [{pct}%] {sent_bytes / 1024 / 1024:.1f} MB / {filesize / 1024 / 1024:.1f} MB ({mbps:.2f} MB/s)", flush=True)
+                        last_pct = pct
+
+            res = conn.getresponse()
+            print(f"Upload complete for {filename}: HTTP {res.status} {res.reason}")
+            if res.status in (200, 201):
                 break
-            conn.send(chunk)
-            sent_bytes += len(chunk)
-            pct = int((sent_bytes / filesize) * 100)
-            if pct != last_pct and (pct % 10 == 0 or pct == 100):
-                elapsed = time.time() - start_time
-                mbps = (sent_bytes / 1024 / 1024) / max(0.1, elapsed)
-                print(f"  [{pct}%] {sent_bytes / 1024 / 1024:.1f} MB / {filesize / 1024 / 1024:.1f} MB ({mbps:.2f} MB/s)")
-                last_pct = pct
-
-    res = conn.getresponse()
-    print(f"Upload complete for {filename}: HTTP {res.status} {res.reason}")
+        except Exception as err:
+            print(f"Attempt {attempt} failed: {err}")
+            if attempt < max_attempts:
+                time.sleep(3)
+            else:
+                raise
 
 print("\nAll assets successfully published to GitHub Release v1.2.0!")
