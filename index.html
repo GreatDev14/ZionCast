@@ -146,7 +146,7 @@
 
 <button id="btn-check-updates" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: var(--accent-gold); border-color: rgba(245, 158, 11, 0.35);" title="Check GitHub for latest ZionCast updates">
         <span id="update-badge-icon">🔄</span>
-        <span id="update-badge-text">v1.2.1</span>
+        <span id="update-badge-text">v1.3.0</span>
       </button>
     </div>
   </header>
@@ -950,7 +950,7 @@ My chains are gone, I've been set free..."></textarea>
       <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px;">
         <div id="update-modal-banner" style="padding: 12px 14px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-sm);">
           <div style="font-weight: 800; font-size: 0.95rem; color: var(--accent-gold);" id="update-modal-title">Checking for updates...</div>
-          <div style="font-size: 0.78rem; color: var(--text-dim); margin-top: 4px;" id="update-modal-subtitle">Current installed version: v1.2.1</div>
+          <div style="font-size: 0.78rem; color: var(--text-dim); margin-top: 4px;" id="update-modal-subtitle">Current installed version: v1.3.0</div>
         </div>
         <div id="update-modal-notes-wrap" style="display: none;">
           <label class="form-label" style="margin-bottom: 4px;">What's New in this Release:</label>
@@ -1147,14 +1147,35 @@ My chains are gone, I've been set free..."></textarea>
           <button class="btn-secondary btn-countdown-preset" data-min="20" style="font-weight: 700; padding: 6px 14px;">20 Min</button>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left;">
+        <div style="display: grid; grid-template-columns: 1.3fr 0.7fr; gap: 10px; text-align: left;">
           <div class="form-group">
-            <label class="form-label">Countdown Title:</label>
+            <label class="form-label">Countdown Label:</label>
             <input type="text" id="countdown-input-title" class="form-input" value="Service Begins In">
           </div>
           <div class="form-group">
-            <label class="form-label">Custom Duration (Minutes):</label>
+            <label class="form-label">Duration (Mins):</label>
             <input type="number" id="countdown-input-minutes" class="form-input" min="1" max="180" value="5">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 10px; text-align: left;">
+          <div class="form-group">
+            <label class="form-label">TV Position (Flyer-Friendly):</label>
+            <select id="countdown-select-position" class="form-input">
+              <option value="top-right" selected>↗ Top-Right Corner (Best for Flyers)</option>
+              <option value="top-left">↖ Top-Left Corner</option>
+              <option value="bottom-left">↙ Bottom-Left Corner</option>
+              <option value="bottom-center">⬇ Bottom-Center Pill</option>
+              <option value="center">🎯 Center Glass Card</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Badge Size:</label>
+            <select id="countdown-select-size" class="form-input">
+              <option value="compact" selected>Compact HUD Pill</option>
+              <option value="medium">Medium Card</option>
+              <option value="large">Large Hall Card</option>
+            </select>
           </div>
         </div>
 

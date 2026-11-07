@@ -788,11 +788,14 @@
     const isYouTubePlaying = state.backgroundType === 'youtube' || (state.activeItem && state.activeItem.type === 'youtube');
 
     if (!showLyricsNow) {
-      if (isYouTubePlaying || (state.cameraEnabled && state.cameraMode === 'preacher')) {
-        if (scrim) {
+      // Do NOT darken flyers, videos, YouTube streams, or preacher camera when no lyrics are overlaid!
+      if (scrim) {
+        if (state.backgroundType === 'image' || state.backgroundType === 'video' || isYouTubePlaying || (state.cameraEnabled && state.cameraMode === 'preacher')) {
           scrim.style.opacity = '0';
-          scrim.style.pointerEvents = 'none';
+        } else if (bVal <= 100) {
+          scrim.style.opacity = '0.35';
         }
+        scrim.style.pointerEvents = 'none';
       }
       if (!hasSlideLyrics) {
         textContainer.style.display = 'none';
@@ -940,30 +943,53 @@
       ticker.classList.remove('active');
     }
 
-    // 7. Pre-Service Countdown Timer Overlay Layer
+    // 7. Pre-Service Countdown Timer Overlay Layer (Sleek Broadcast HUD)
     const countdownLayer = document.getElementById('display-countdown-layer');
     const countdownTitle = document.getElementById('display-countdown-title');
     const countdownDigits = document.getElementById('display-countdown-digits');
     const countdownSub = document.getElementById('display-countdown-sub');
+    const countdownProgressBar = document.getElementById('display-countdown-progress-bar');
 
     if (countdownLayer && countdownDigits) {
+      const pos = ['top-right', 'top-left', 'bottom-left', 'bottom-center', 'center'].includes(state.countdownPosition)
+        ? state.countdownPosition
+        : 'top-right';
+      const sz = ['compact', 'medium', 'large'].includes(state.countdownSize)
+        ? state.countdownSize
+        : 'compact';
+
       if (state.countdownActive && state.countdownRemaining !== undefined) {
-        countdownLayer.classList.add('active');
-        if (countdownTitle) countdownTitle.textContent = state.countdownTitle || 'SERVICE BEGINS IN';
         const rem = Math.max(0, Math.floor(state.countdownRemaining));
+        const total = Math.max(1, Math.floor(state.countdownTotal || 300));
+        const pct = Math.max(0, Math.min(100, (rem / total) * 100));
+
+        const classes = ['display-countdown-wrapper', 'active', 'pos-' + pos, 'size-' + sz];
+        if (pos === 'top-right' && state.showClockOnTv) classes.push('clock-offset');
+        if (rem > 0 && rem <= 60) classes.push('urgent');
+        if (rem <= 0) classes.push('finished');
+        countdownLayer.className = classes.join(' ');
+
+        if (countdownTitle) {
+          countdownTitle.textContent = rem <= 0
+            ? 'LIVE NOW'
+            : (state.countdownTitle || 'SERVICE BEGINS IN');
+        }
         const m = Math.floor(rem / 60);
         const s = rem % 60;
         countdownDigits.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+
         if (countdownSub) {
           if (rem <= 0) {
-            countdownDigits.textContent = '00:00';
-            countdownSub.textContent = '✨ Welcome to Zion Sanctuary • Service Has Begun ✨';
+            countdownSub.textContent = '✨ Service Has Begun • Welcome!';
           } else {
-            countdownSub.textContent = state.countdownSub || 'Welcome to Worship • Please take your seats';
+            countdownSub.textContent = state.countdownSub || 'Welcome to Worship';
           }
         }
+        if (countdownProgressBar) {
+          countdownProgressBar.style.width = (rem <= 0 ? 100 : pct) + '%';
+        }
       } else {
-        countdownLayer.classList.remove('active');
+        countdownLayer.className = 'display-countdown-wrapper pos-' + pos + ' size-' + sz;
       }
     }
 

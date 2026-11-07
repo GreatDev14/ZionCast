@@ -437,6 +437,11 @@
   let countdownRunning = false;
   let countdownProjected = false;
   let countdownTitleText = 'Service Begins In';
+  let countdownPosition = 'top-right';
+  let countdownSize = 'compact';
+  let countdownSubText = 'Welcome to Worship';
+  let remoteLibraryVersion = 1;
+  let remoteControlCountdown = null;
 
   // Dual-Bible Scripture Comparison State
   let isDualBibleCompare = false;
@@ -470,9 +475,11 @@
     }, 200);
   }
 
-  // Alias for backward compatibility
+  // Alias for backward compatibility + push updated catalog/serviceOrder to Mobile Remote
   function saveStoredLibrary() {
+    remoteLibraryVersion++;
     triggerAutoSave();
+    syncRemoteStatus(true);
   }
 
   async function persistAllData() {
@@ -505,6 +512,9 @@
         bannerLayout: state.bannerLayout,
         bannerAutoDismiss: state.bannerAutoDismiss,
         brightness: typeof state.brightness === 'number' ? state.brightness : 100,
+        showClockOnTv: !!state.showClockOnTv,
+        countdownPosition: countdownPosition || 'top-right',
+        countdownSize: countdownSize || 'compact',
         activeItemId: state.activeItem ? state.activeItem.id : null,
         activeItemSource: state.activeItemSource,
         activeSlideIndex: state.activeSlideIndex
@@ -667,6 +677,26 @@
           if (toolbarBrightness) toolbarBrightness.value = state.brightness;
           if (badgeBrightness) badgeBrightness.textContent = `${state.brightness}%`;
         }
+        if (s.countdownPosition) {
+          countdownPosition = s.countdownPosition;
+          const selPos = document.getElementById('countdown-select-position');
+          if (selPos) selPos.value = countdownPosition;
+        }
+        if (s.countdownSize) {
+          countdownSize = s.countdownSize;
+          const selSz = document.getElementById('countdown-select-size');
+          if (selSz) selSz.value = countdownSize;
+        }
+        if (s.showClockOnTv !== undefined) {
+          state.showClockOnTv = !!s.showClockOnTv;
+          const btnToggleTvClock = document.getElementById('btn-toggle-tv-clock');
+          if (btnToggleTvClock && state.showClockOnTv) {
+            btnToggleTvClock.innerHTML = '<span>🕒 TV Clock: ON</span>';
+            btnToggleTvClock.style.color = '#10b981';
+            btnToggleTvClock.style.borderColor = '#34d399';
+            btnToggleTvClock.style.background = 'rgba(16, 185, 129, 0.2)';
+          }
+        }
       }
     }
   }
@@ -713,8 +743,9 @@
     }).catch(console.warn);
     queryDisplays().catch(console.warn);
 
-    // Initial sync
+    // Initial sync (including full Songs/Media/Notices catalog & Order of Service for Mobile Remote)
     broadcastDisplayState();
+    syncRemoteStatus(true);
 
     // Listen for displays changed event via IPC instead of aggressive polling
     if (window.zionApi && window.zionApi.onDisplaysChanged) {
@@ -1083,10 +1114,14 @@
       youtubeMuted: !!state.youtubeMuted,
       youtubeActive: !!state.youtubeActive,
       showClockOnTv: !!state.showClockOnTv,
-      countdownActive: !!countdownRunning,
+      countdownActive: !!countdownProjected,
+      countdownRunning: !!countdownRunning,
       countdownRemaining: Math.floor(countdownRemainingSec),
       countdownTotal: Math.floor(countdownTotalSec),
-      countdownTitle: countdownTitleText || 'Service Begins In'
+      countdownTitle: countdownTitleText || 'Service Begins In',
+      countdownPosition: countdownPosition || 'top-right',
+      countdownSize: countdownSize || 'compact',
+      countdownSub: countdownSubText || 'Welcome to Worship'
     };
 
     // 1. Electron IPC Send
@@ -1374,7 +1409,10 @@
         };
       }
     } else if (type === 'media') {
-      const isVideo = item.type === 'video';
+      const isVideo = isVideoFile(item.url || item.title || item.type) || item.type === 'video';
+      state.youtubeActive = false;
+      state.youtubeVideoId = '';
+      if (activeYoutubeBar) activeYoutubeBar.style.display = 'none';
       state.backgroundType = isVideo ? 'video' : 'image';
       state.customBgUrl = item.url;
       state.clearText = true;
@@ -2902,7 +2940,7 @@
   // =========================================================================
   // 11d. MOBILE WI-FI REMOTE CONTROL SYNCHRONIZATION
   // =========================================================================
-  function syncRemoteStatus() {
+  function syncRemoteStatus(includeLibrary = false) {
     if (!window.zionApi || !window.zionApi.updateRemoteStatus) return;
 
     let slidesList = [];
@@ -2934,6 +2972,35 @@
       }
     }
 
+    let liveSvcIndex = -1;
+    if (state.activeItem) {
+      if (selectedServiceIndex >= 0 && selectedServiceIndex < serviceOrder.length) {
+        const sel = serviceOrder[selectedServiceIndex];
+        if ((sel.data && sel.data.id && sel.data.id === state.activeItem.id) || sel.title === state.activeItem.title || sel.data?.title === state.activeItem.title) {
+          liveSvcIndex = selectedServiceIndex;
+        }
+      }
+      if (liveSvcIndex === -1) {
+        liveSvcIndex = serviceOrder.findIndex(it =>
+          (it.data && it.data.id && state.activeItem.id === it.data.id) ||
+          it.title === state.activeItem.title
+        );
+      }
+    }
+
+    const mappedServiceOrder = serviceOrder.map((item, idx) => {
+      const dataSlides = item.data && Array.isArray(item.data.slides) ? item.data.slides.length : 1;
+      const isLive = idx === liveSvcIndex;
+      return {
+        index: idx,
+        id: item.id,
+        type: item.type || 'item',
+        title: item.title,
+        slideCount: dataSlides,
+        isLive
+      };
+    });
+
     const statusPayload = {
       activeItemTitle: state.activeItem ? state.activeItem.title : 'ZionCast Broadcast',
       currentSlideIndex: state.activeSlideIndex || 0,
@@ -2946,15 +3013,45 @@
       blackout: !!state.blackout,
       clearText: !!state.clearText,
       themeOnly: !!state.themeOnly,
+      showClockOnTv: !!state.showClockOnTv,
       bannerActive: !!state.bannerActive,
       bannerText: state.bannerText || '',
       stageMessage: stageAlertMessageText || '',
       stageMessageActive: !!stageAlertMessageActive,
-      countdownActive: !!countdownRunning,
+      countdownActive: !!countdownProjected,
+      countdownProjected: !!countdownProjected,
+      countdownRunning: !!countdownRunning,
       countdownRemaining: Math.floor(countdownRemainingSec),
       countdownTotal: Math.floor(countdownTotalSec),
-      countdownTitle: countdownTitleText || 'Service Begins In'
+      countdownTitle: countdownTitleText || 'Service Begins In',
+      countdownPosition: countdownPosition || 'top-right',
+      countdownSize: countdownSize || 'compact',
+      serviceTitle: serviceTitleInput ? (serviceTitleInput.value || 'Sunday Worship Service') : 'Sunday Worship Service',
+      serviceOrder: mappedServiceOrder,
+      libraryVersion: remoteLibraryVersion
     };
+
+    if (includeLibrary) {
+      statusPayload.libraryCatalog = {
+        songs: songsLibrary.map(s => ({
+          id: s.id,
+          title: s.title,
+          subtitle: (s.author ? `${s.author} • ` : '') + `${s.slides ? s.slides.length : 1} slides`
+        })),
+        media: mediaLibrary.map(m => ({
+          id: m.id,
+          title: m.title,
+          subtitle: (m.type === 'youtube' || m.videoId)
+            ? 'YouTube Stream'
+            : (isVideoFile(m.url || m.title || m.type) ? 'Motion Video' : 'Church Flyer / Image')
+        })),
+        custom: customSlidesLibrary.map(c => ({
+          id: c.id,
+          title: c.title,
+          subtitle: c.subtitle || (c.slides && c.slides[0] && c.slides[0].body ? c.slides[0].body.split('\n')[0] : 'Notice')
+        }))
+      };
+    }
 
     window.zionApi.updateRemoteStatus(statusPayload);
   }
@@ -3069,54 +3166,35 @@
     const versionAbbr = (data.versionAbbr || data.version || currentBibleVersion || 'KJV').toUpperCase();
     const vNum = data.verse || '1';
     const itemTitle = `${data.book} ${data.chapter}:${vNum} (${versionAbbr})`;
-    const slideBody = `"${data.text}"\n\n— ${data.book} ${data.chapter}:${vNum} (${versionAbbr})`;
+    const slideBody = `"${data.text || ''}"\n\n— ${data.book} ${data.chapter}:${vNum} (${versionAbbr})`;
 
-    const scriptureItem = {
-      id: `bible-${Date.now()}`,
-      title: itemTitle,
-      type: 'scripture',
-      slides: [{
-        label: itemTitle,
-        body: slideBody
-      }]
-    };
+    const slides = (Array.isArray(data.slides) && data.slides.length > 0)
+      ? data.slides
+      : [{ label: itemTitle, body: slideBody }];
 
-    // Add to Order of Service list
-    const existingIdx = serviceOrder.findIndex(s => s.title === itemTitle);
-    if (existingIdx === -1) {
+    let targetSvcIdx = serviceOrder.findIndex(s => s.title === itemTitle);
+    let scriptureItem = targetSvcIdx !== -1 && serviceOrder[targetSvcIdx].data
+      ? serviceOrder[targetSvcIdx].data
+      : {
+          id: `bible-${Date.now()}`,
+          title: itemTitle,
+          type: 'scripture',
+          slides
+        };
+
+    if (targetSvcIdx === -1) {
       addToServiceOrder('scripture', itemTitle, scriptureItem);
+      targetSvcIdx = serviceOrder.length - 1;
     }
 
     if (pushLive) {
-      state.activeItem = scriptureItem;
-      state.activeSlideIndex = 0;
-      state.previewSlideIndex = 0;
-      state.blackout = false;
-      state.clearText = false;
-      state.themeOnly = false;
-      btnFastBlackout.classList.remove('active-blackout');
-      btnFastClear.classList.remove('active-clear');
-      btnFastTheme.classList.remove('active-theme');
-
-      activeItemTitle.textContent = itemTitle;
-      activeItemMeta.textContent = `Holy Bible (${versionAbbr})`;
-      renderSlideTiles();
-      updateOperatorPreview(0);
-
-      // Auto launch TV if closed
-      if (window.zionApi && !state.displayOpen) {
-        const targetScreenId = selectTargetScreen ? selectTargetScreen.value : null;
-        window.zionApi.launchDisplay(targetScreenId).then(() => {
-          updateTvStatusUI(true);
-          setTimeout(() => broadcastDisplayState(), 200);
-        });
-      }
-
-      broadcastDisplayState();
-      triggerAutoSave();
+      selectedServiceIndex = targetSvcIdx;
+      renderServiceOrderList();
+      loadPresentationItem(scriptureItem, 'scripture', true);
       showToast(`📖 Projected ${itemTitle} Live!`);
     } else {
-      showToast(`📖 Added ${itemTitle} to Service`);
+      syncRemoteStatus();
+      showToast(`📖 Added ${itemTitle} to Order of Service`);
     }
   }
 
@@ -3130,7 +3208,7 @@
       } else if (action === 'prev') {
         prevSlide();
       } else if (action === 'goto') {
-        if (typeof data.index === 'number') {
+        if (data && typeof data.index === 'number') {
           goLiveSlide(data.index);
         }
       } else if (action === 'blackout') {
@@ -3143,12 +3221,18 @@
         const btnToggleTvClock = document.getElementById('btn-toggle-tv-clock');
         if (btnToggleTvClock) btnToggleTvClock.click();
       } else if (action === 'alert') {
-        if (data.text) {
+        if (data && data.text) {
           state.bannerText = data.text;
           state.bannerActive = true;
           broadcastDisplayState();
           triggerAutoSave();
+          showToast(`📢 TV Alert: "${data.text}"`);
         }
+      } else if (action === 'clear-alert') {
+        state.bannerActive = false;
+        broadcastDisplayState();
+        triggerAutoSave();
+        showToast('TV Alert Cleared');
       } else if (action === 'project-scripture') {
         if (data && data.book && data.chapter) {
           projectRemoteScripture(data, true);
@@ -3156,6 +3240,98 @@
       } else if (action === 'add-scripture-service') {
         if (data && data.book && data.chapter) {
           projectRemoteScripture(data, false);
+        }
+      } else if (action === 'service-launch') {
+        const idx = data && typeof data.index === 'number' ? data.index : -1;
+        if (idx >= 0 && idx < serviceOrder.length) {
+          const svcItem = serviceOrder[idx];
+          selectedServiceIndex = idx;
+          renderServiceOrderList();
+          loadPresentationItem(svcItem.data, svcItem.type, true);
+          showToast(`▶ Launched "${svcItem.title}" from Mobile`);
+        }
+      } else if (action === 'service-move') {
+        const idx = data && typeof data.index === 'number' ? data.index : -1;
+        const dir = data && typeof data.direction === 'number' ? data.direction : 0;
+        const targetIdx = idx + dir;
+        if (idx >= 0 && idx < serviceOrder.length && targetIdx >= 0 && targetIdx < serviceOrder.length) {
+          const tmp = serviceOrder[idx];
+          serviceOrder[idx] = serviceOrder[targetIdx];
+          serviceOrder[targetIdx] = tmp;
+          if (selectedServiceIndex === idx) selectedServiceIndex = targetIdx;
+          else if (selectedServiceIndex === targetIdx) selectedServiceIndex = idx;
+          saveStoredLibrary();
+          renderServiceOrderList();
+        }
+      } else if (action === 'service-remove') {
+        const idx = data && typeof data.index === 'number' ? data.index : -1;
+        if (idx >= 0 && idx < serviceOrder.length) {
+          const removed = serviceOrder.splice(idx, 1)[0];
+          if (selectedServiceIndex >= serviceOrder.length) {
+            selectedServiceIndex = serviceOrder.length - 1;
+          }
+          saveStoredLibrary();
+          renderServiceOrderList();
+          if (removed) showToast(`Removed "${removed.title}" from Order of Service`);
+        }
+      } else if (action === 'service-add-library-item') {
+        if (!data || !data.category || !data.id) return;
+        let found = null;
+        let svcType = 'song';
+        if (data.category === 'songs') {
+          found = songsLibrary.find(s => s.id === data.id);
+          svcType = 'song';
+        } else if (data.category === 'media') {
+          found = mediaLibrary.find(m => m.id === data.id);
+          svcType = (found && (found.type === 'youtube' || found.videoId)) ? 'youtube' : 'media';
+        } else if (data.category === 'custom') {
+          found = customSlidesLibrary.find(c => c.id === data.id);
+          svcType = 'custom';
+        }
+        if (found) {
+          addToServiceOrder(svcType, found.title, found);
+          if (data.goLive) {
+            selectedServiceIndex = serviceOrder.length - 1;
+            renderServiceOrderList();
+            loadPresentationItem(found, svcType, true);
+            showToast(`⚡ Projected "${found.title}" Live!`);
+          } else {
+            showToast(`➕ Added "${found.title}" to Order of Service`);
+          }
+        }
+      } else if (action === 'service-add-custom-note') {
+        if (!data) return;
+        const title = String(data.title || 'Sanctuary Notice').trim();
+        const bodyRaw = String(data.body || title).trim();
+        const chunks = bodyRaw.split(/\n\s*\n/).filter(c => c.trim().length > 0);
+        const slides = chunks.length > 0
+          ? chunks.map((chunk, i) => ({
+              label: chunks.length > 1 ? `Slide ${i + 1}` : 'Notice',
+              body: chunk.trim() === title ? title : `${title}\n\n${chunk.trim()}`
+            }))
+          : [{ label: 'Notice', body: title }];
+        const newCustom = {
+          id: `custom-${Date.now()}`,
+          title,
+          subtitle: 'Mobile Remote Slide',
+          theme: 'celestial-clouds',
+          slides
+        };
+        customSlidesLibrary.unshift(newCustom);
+        renderCustomSlidesList(customSearchInput ? customSearchInput.value : '');
+        renderMediaGallery(mediaSearchInput ? mediaSearchInput.value : '');
+        addToServiceOrder('custom', title, newCustom);
+        if (data.goLive) {
+          selectedServiceIndex = serviceOrder.length - 1;
+          renderServiceOrderList();
+          loadPresentationItem(newCustom, 'custom', true);
+          showToast(`⚡ Projected "${title}" Live!`);
+        } else {
+          showToast(`➕ Added "${title}" to Order of Service`);
+        }
+      } else if (action === 'countdown-control') {
+        if (typeof remoteControlCountdown === 'function' && data) {
+          remoteControlCountdown(data);
         }
       } else if (action === 'stage-message') {
         if (data && data.text) {
@@ -3278,7 +3454,7 @@
   }
 
   // =========================================================================
-  // 11f. PRE-SERVICE COUNTDOWN TIMER CONTROLLER
+  // 11f. PRE-SERVICE COUNTDOWN TIMER CONTROLLER (SLEEK BROADCAST HUD)
   // =========================================================================
   function initCountdownTimer() {
     const btnOpenCountdownModal = document.getElementById('btn-open-countdown-modal');
@@ -3288,6 +3464,8 @@
     const statusText = document.getElementById('countdown-ctrl-status');
     const inputTitle = document.getElementById('countdown-input-title');
     const inputMinutes = document.getElementById('countdown-input-minutes');
+    const selectPosition = document.getElementById('countdown-select-position');
+    const selectSize = document.getElementById('countdown-select-size');
     const btnStart = document.getElementById('btn-countdown-start');
     const btnPause = document.getElementById('btn-countdown-pause');
     const btnReset = document.getElementById('btn-countdown-reset');
@@ -3300,18 +3478,35 @@
       return String(m).padStart(2, '0') + ':' + String(rem).padStart(2, '0');
     }
 
+    function setCountdownProjectedUI(projected) {
+      countdownProjected = !!projected;
+      if (btnProjectToggle) {
+        if (countdownProjected) {
+          btnProjectToggle.textContent = '🟢 Showing on TV (Click to Hide)';
+          btnProjectToggle.style.background = '#10b981';
+          btnProjectToggle.style.borderColor = '#34d399';
+        } else {
+          btnProjectToggle.textContent = '🔴 Send to Projector';
+          btnProjectToggle.style.background = '#dc2626';
+          btnProjectToggle.style.borderColor = '#ef4444';
+        }
+      }
+    }
+
     function updateTimerUI() {
       if (digitsDisplay) digitsDisplay.textContent = formatTime(countdownRemainingSec);
       if (titlePreview && inputTitle) titlePreview.textContent = inputTitle.value.trim() || 'SERVICE BEGINS IN';
+      if (selectPosition && selectPosition.value !== countdownPosition) selectPosition.value = countdownPosition;
+      if (selectSize && selectSize.value !== countdownSize) selectSize.value = countdownSize;
       if (statusText) {
         if (countdownRunning) {
-          statusText.textContent = 'STATUS: RUNNING';
+          statusText.textContent = countdownProjected ? 'STATUS: LIVE ON TV' : 'STATUS: RUNNING (HIDDEN)';
           statusText.style.color = '#f59e0b';
         } else if (countdownRemainingSec <= 0) {
           statusText.textContent = 'STATUS: FINISHED';
-          statusText.style.color = '#ef4444';
+          statusText.style.color = '#10b981';
         } else {
-          statusText.textContent = 'STATUS: PAUSED / READY';
+          statusText.textContent = countdownProjected ? 'STATUS: PAUSED ON TV' : 'STATUS: READY';
           statusText.style.color = '#10b981';
         }
       }
@@ -3322,17 +3517,7 @@
 
     function syncCountdown() {
       countdownTitleText = (inputTitle ? inputTitle.value.trim() : '') || 'Service Begins In';
-      if (countdownProjected) {
-        broadcastDisplayState({
-          countdownActive: true,
-          countdownRemaining: countdownRemainingSec,
-          countdownTotal: countdownTotalSec,
-          countdownTitle: countdownTitleText
-        });
-      } else {
-        broadcastDisplayState({ countdownActive: false });
-      }
-      syncRemoteStatus();
+      broadcastDisplayState();
     }
 
     function startTimer() {
@@ -3343,6 +3528,18 @@
         countdownRemainingSec = countdownTotalSec;
       }
       countdownRunning = true;
+      // Automatically show on TV when operator starts countdown!
+      setCountdownProjectedUI(true);
+
+      // Auto-launch TV output if not yet open
+      if (window.zionApi && !state.displayOpen) {
+        const targetScreenId = selectTargetScreen ? selectTargetScreen.value : null;
+        window.zionApi.launchDisplay(targetScreenId).then(() => {
+          updateTvStatusUI(true);
+          setTimeout(() => broadcastDisplayState(), 200);
+        });
+      }
+
       updateTimerUI();
       syncCountdown();
 
@@ -3377,6 +3574,36 @@
       syncCountdown();
     }
 
+    // Expose remote control hook for smartphones
+    remoteControlCountdown = (payload) => {
+      if (!payload || !payload.cmd) return;
+      if (payload.cmd === 'start') {
+        startTimer();
+      } else if (payload.cmd === 'pause') {
+        pauseTimer();
+      } else if (payload.cmd === 'reset') {
+        resetTimer();
+      } else if (payload.cmd === 'toggle-project') {
+        setCountdownProjectedUI(!countdownProjected);
+        updateTimerUI();
+        syncCountdown();
+      } else if (payload.cmd === 'set-minutes') {
+        const mins = Math.max(1, parseInt(payload.minutes, 10) || 5);
+        if (inputMinutes) inputMinutes.value = mins;
+        pauseTimer();
+        countdownTotalSec = mins * 60;
+        countdownRemainingSec = countdownTotalSec;
+        updateTimerUI();
+        syncCountdown();
+      } else if (payload.cmd === 'set-style') {
+        if (payload.position) countdownPosition = payload.position;
+        if (payload.size) countdownSize = payload.size;
+        updateTimerUI();
+        syncCountdown();
+        triggerAutoSave();
+      }
+    };
+
     if (btnOpenCountdownModal) {
       btnOpenCountdownModal.addEventListener('click', () => {
         if (modalCountdown) modalCountdown.classList.add('open');
@@ -3387,6 +3614,22 @@
     if (btnStart) btnStart.addEventListener('click', startTimer);
     if (btnPause) btnPause.addEventListener('click', pauseTimer);
     if (btnReset) btnReset.addEventListener('click', resetTimer);
+
+    if (selectPosition) {
+      selectPosition.addEventListener('change', () => {
+        countdownPosition = selectPosition.value || 'top-right';
+        syncCountdown();
+        triggerAutoSave();
+      });
+    }
+
+    if (selectSize) {
+      selectSize.addEventListener('change', () => {
+        countdownSize = selectSize.value || 'compact';
+        syncCountdown();
+        triggerAutoSave();
+      });
+    }
 
     if (inputMinutes) {
       inputMinutes.addEventListener('change', () => {
@@ -3423,16 +3666,8 @@
     // Toggle live projector output
     if (btnProjectToggle) {
       btnProjectToggle.addEventListener('click', () => {
-        countdownProjected = !countdownProjected;
-        if (countdownProjected) {
-          btnProjectToggle.textContent = '🟢 On Projector (Click to Hide)';
-          btnProjectToggle.style.background = '#10b981';
-          btnProjectToggle.style.borderColor = '#34d399';
-        } else {
-          btnProjectToggle.textContent = '🔴 Send to Projector';
-          btnProjectToggle.style.background = '#dc2626';
-          btnProjectToggle.style.borderColor = '#ef4444';
-        }
+        setCountdownProjectedUI(!countdownProjected);
+        updateTimerUI();
         syncCountdown();
       });
     }
@@ -4492,7 +4727,13 @@
     initCountdownTimer();
     initDualBibleComparison();
     initAmbientWorshipPads();
-    setTimeout(() => syncRemoteStatus(), 500);
+    if (serviceTitleInput) {
+      serviceTitleInput.addEventListener('input', () => {
+        triggerAutoSave();
+        syncRemoteStatus();
+      });
+    }
+    setTimeout(() => syncRemoteStatus(true), 500);
   }
 
   // =========================================================================
@@ -4625,7 +4866,7 @@
             if (updateModalSubtitle) updateModalSubtitle.textContent = res?.error || 'Check internet connection and try again.';
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.2.1';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.3.0';
         }
       } catch (err) {
         console.warn('Update check warning:', err);

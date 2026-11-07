@@ -2509,69 +2509,217 @@ body {
 }
 
 /* ==========================================================================
-   AUDIENCE DISPLAY: COUNTDOWN TIMER OVERLAY
+   AUDIENCE DISPLAY: SLEEK BROADCAST HUD COUNTDOWN OVERLAY
    ========================================================================== */
 .display-countdown-wrapper {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 25;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  z-index: 28;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              top 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .display-countdown-wrapper.active {
   opacity: 1;
-  pointer-events: auto;
+}
+
+/* Position Variants (Default: Top-Right Corner so Flyers Stay 100% Clear!) */
+.display-countdown-wrapper.pos-top-right {
+  top: 24px;
+  right: 28px;
+}
+.display-countdown-wrapper.pos-top-right.clock-offset {
+  top: 86px;
+}
+.display-countdown-wrapper.pos-top-left {
+  top: 24px;
+  left: 28px;
+}
+.display-countdown-wrapper.pos-bottom-left {
+  bottom: 28px;
+  left: 28px;
+}
+.display-countdown-wrapper.pos-bottom-center {
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.display-countdown-wrapper.pos-center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .display-countdown-card {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 70px;
-  background: radial-gradient(circle at center, rgba(13, 17, 23, 0.94) 0%, rgba(7, 10, 15, 0.97) 100%);
-  border: 2px solid rgba(245, 158, 11, 0.5);
-  border-radius: 28px;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85), 0 0 40px rgba(245, 158, 11, 0.2);
-  backdrop-filter: blur(16px);
+  background: linear-gradient(145deg, rgba(10, 14, 24, 0.76) 0%, rgba(15, 23, 42, 0.68) 100%);
+  backdrop-filter: blur(22px) saturate(165%);
+  -webkit-backdrop-filter: blur(22px) saturate(165%);
+  border: 1px solid rgba(251, 191, 36, 0.42);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55),
+              inset 0 1px 0 rgba(255, 255, 255, 0.14),
+              0 0 24px rgba(245, 158, 11, 0.14);
   text-align: center;
+  font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+}
+
+.display-countdown-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.display-countdown-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 9999px;
+  background: #fbbf24;
+  box-shadow: 0 0 8px #f59e0b;
+  animation: pulse-badge 1.6s infinite;
+  flex-shrink: 0;
 }
 
 .display-countdown-title {
-  font-size: clamp(20px, 2.5vw, 36px);
   font-weight: 800;
-  color: #f59e0b;
-  letter-spacing: 0.18em;
+  color: #fbbf24;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  margin-bottom: 12px;
-  text-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.75);
+  white-space: nowrap;
 }
 
 .display-countdown-digits {
-  font-size: clamp(70px, 12vw, 160px);
   font-weight: 900;
   color: #ffffff;
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
-  line-height: 1;
-  margin: 10px 0;
-  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.9);
+  line-height: 1.04;
+  text-shadow: 0 3px 16px rgba(0, 0, 0, 0.8);
 }
 
 .display-countdown-sub {
-  font-size: clamp(14px, 1.8vw, 24px);
-  color: #94a3b8;
+  color: rgba(226, 232, 240, 0.88);
   font-weight: 600;
-  letter-spacing: 0.06em;
-  margin-top: 14px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75);
+}
+
+.display-countdown-progress-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.display-countdown-progress-bar {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #f59e0b 0%, #fde68a 100%);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.75);
+  transition: width 0.95s linear;
+}
+
+/* Size 1: Compact Pill (Default - Clean & Non-Intrusive Over Flyers) */
+.display-countdown-wrapper.size-compact .display-countdown-card {
+  padding: 11px 22px 14px 22px;
+  border-radius: 18px;
+  min-width: 168px;
+}
+.display-countdown-wrapper.size-compact .display-countdown-title {
+  font-size: clamp(10px, 0.85vw, 12.5px);
+}
+.display-countdown-wrapper.size-compact .display-countdown-digits {
+  font-size: clamp(28px, 3.1vw, 44px);
+  margin-top: 3px;
+}
+.display-countdown-wrapper.size-compact .display-countdown-sub {
+  display: none;
+}
+.display-countdown-wrapper.size-compact.finished .display-countdown-sub {
+  display: block;
+  font-size: 11.5px;
+  margin-top: 3px;
+  color: #34d399;
+}
+
+/* Size 2: Medium Broadcast Card */
+.display-countdown-wrapper.size-medium .display-countdown-card {
+  padding: 16px 30px 20px 30px;
+  border-radius: 22px;
+  min-width: 240px;
+}
+.display-countdown-wrapper.size-medium .display-countdown-title {
+  font-size: clamp(12px, 1.05vw, 15px);
+}
+.display-countdown-wrapper.size-medium .display-countdown-digits {
+  font-size: clamp(40px, 4.6vw, 66px);
+  margin: 5px 0 3px 0;
+}
+.display-countdown-wrapper.size-medium .display-countdown-sub {
+  font-size: clamp(11.5px, 0.95vw, 14px);
+}
+.display-countdown-wrapper.size-medium .display-countdown-progress-track {
+  height: 4px;
+}
+
+/* Size 3: Large Hall Glass Card */
+.display-countdown-wrapper.size-large .display-countdown-card {
+  padding: 26px 46px 30px 46px;
+  border-radius: 26px;
+  min-width: 340px;
+}
+.display-countdown-wrapper.size-large .display-countdown-title {
+  font-size: clamp(14px, 1.5vw, 22px);
+}
+.display-countdown-wrapper.size-large .display-countdown-digits {
+  font-size: clamp(58px, 7.2vw, 108px);
+  margin: 8px 0 6px 0;
+}
+.display-countdown-wrapper.size-large .display-countdown-sub {
+  font-size: clamp(13px, 1.25vw, 18px);
+}
+.display-countdown-wrapper.size-large .display-countdown-progress-track {
+  height: 5px;
+}
+
+/* Urgent Last 60 Seconds State */
+.display-countdown-wrapper.urgent .display-countdown-card {
+  border-color: rgba(248, 113, 113, 0.65);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.6), 0 0 26px rgba(239, 68, 68, 0.28);
+}
+.display-countdown-wrapper.urgent .display-countdown-dot {
+  background: #f87171;
+  box-shadow: 0 0 10px #ef4444;
+}
+.display-countdown-wrapper.urgent .display-countdown-title {
+  color: #fca5a5;
+}
+.display-countdown-wrapper.urgent .display-countdown-progress-bar {
+  background: linear-gradient(90deg, #ef4444 0%, #fbbf24 100%);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+}
+
+/* Finished State (00:00) */
+.display-countdown-wrapper.finished .display-countdown-card {
+  border-color: rgba(52, 211, 153, 0.65);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.6), 0 0 28px rgba(16, 185, 129, 0.3);
+}
+.display-countdown-wrapper.finished .display-countdown-dot {
+  background: #34d399;
+  box-shadow: 0 0 10px #10b981;
+}
+.display-countdown-wrapper.finished .display-countdown-title {
+  color: #6ee7b7;
 }
 
 /* ==========================================================================
