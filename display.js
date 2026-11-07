@@ -15,6 +15,7 @@
   const textContainer = document.getElementById('display-text-container');
   const badgeTitle = document.getElementById('display-badge');
   const bodyText = document.getElementById('display-body');
+  const subtitleText = document.getElementById('display-subtitle');
   const ticker = document.getElementById('display-ticker');
   const dimmerCurtain = document.getElementById('display-dimmer');
   const blackoutCurtain = document.getElementById('display-blackout');
@@ -763,20 +764,19 @@
         activeCameraStream = null;
       }
 
-      const resolvedId = await resolveDisplayCameraId(deviceId, deviceLabel);
       let stream = null;
-
-      try {
-        stream = await openCameraStreamWithFallbacks(resolvedId);
-      } catch (firstErr) {
-        console.warn('[Display Camera] Initial acquire failed, requesting Control Desk camera release:', firstErr);
-        // Exclusive single-client Windows driver (e.g. DroidCam / USB HDMI capture): release Control Desk handle & retry!
-        if (window.zionApi && window.zionApi.requestCameraRelease) {
-          window.zionApi.requestCameraRelease();
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        try {
+          const tryId = await resolveDisplayCameraId(deviceId, deviceLabel);
+          stream = await openCameraStreamWithFallbacks(tryId);
+          if (stream) break;
+        } catch (camErr) {
+          console.warn(`[Display Camera] Acquire attempt ${attempt}/4 failed, requesting Control Desk camera release:`, camErr);
+          if (window.zionApi && window.zionApi.requestCameraRelease) {
+            window.zionApi.requestCameraRelease();
+          }
+          await new Promise(r => setTimeout(r, 500));
         }
-        await new Promise(r => setTimeout(r, 400));
-        const retryId = await resolveDisplayCameraId(deviceId, deviceLabel);
-        stream = await openCameraStreamWithFallbacks(retryId);
       }
 
       if (mySeq !== cameraSetupSeq || !state.cameraEnabled || state.cameraMode === 'none') {
@@ -986,7 +986,6 @@
     const isYouTubePlaying = state.backgroundType === 'youtube' || (state.activeItem && state.activeItem.type === 'youtube');
 
     if (!showLyricsNow) {
-      // Do NOT darken flyers, videos, YouTube streams, or preacher camera when no lyrics are overlaid!
       if (scrim) {
         if (state.backgroundType === 'image' || state.backgroundType === 'video' || isYouTubePlaying || (state.cameraEnabled && state.cameraMode === 'preacher')) {
           scrim.style.opacity = '0';
@@ -995,8 +994,10 @@
         }
         scrim.style.pointerEvents = 'none';
       }
-      if (!hasSlideLyrics) {
+      if (!hasSlideLyrics || isYouTubePlaying) {
         textContainer.style.display = 'none';
+        if (badgeTitle) badgeTitle.style.display = 'none';
+        if (subtitleText) subtitleText.style.display = 'none';
       } else {
         textContainer.style.display = 'flex';
       }
@@ -1017,6 +1018,10 @@
 
     if (isTextHidden) {
       textContainer.classList.add('fade-out');
+      if (subtitleText) {
+        subtitleText.classList.remove('active');
+        subtitleText.style.display = 'none';
+      }
       lastSlideSignature = '';
     } else {
       const currentSignature = `${state.activeSlide.label || ''}__${state.activeSlide.body || ''}`;
@@ -1024,12 +1029,14 @@
       const applySlideContent = () => {
         // Update slide title / label badge (prevent duplicate text if title and label are identical)
         if (state.activeSlide.label || state.activeItem) {
-          const itemTitle = state.activeItem ? state.activeItem.title : '';
-          const slideLabel = state.activeSlide.label || '';
-          if (itemTitle && slideLabel) {
-            badgeTitle.textContent = (itemTitle.trim() === slideLabel.trim()) ? itemTitle : `${itemTitle} • ${slideLabel}`;
+          const itemTitle = state.activeItem ? (state.activeItem.title || '') : '';
+          const slideLabel = state.activeSlide ? (state.activeSlide.label || '') : '';
+          const iClean = itemTitle.trim();
+          const sClean = slideLabel.trim();
+          if (iClean && sClean) {
+            badgeTitle.textContent = (iClean.toLowerCase() === sClean.toLowerCase()) ? iClean : `${iClean} • ${sClean}`;
           } else {
-            badgeTitle.textContent = itemTitle || slideLabel;
+            badgeTitle.textContent = iClean || sClean;
           }
           if (isYouTubePlaying && !hasSlideLyrics) {
             badgeTitle.style.display = 'none';
@@ -1038,6 +1045,20 @@
           }
         } else {
           badgeTitle.style.display = 'none';
+        }
+
+        // Display announcement subtitle / event time
+        const sub = (state.activeSlide && state.activeSlide.subtitle) || (state.activeItem && state.activeItem.subtitle) || '';
+        if (subtitleText) {
+          if (sub && !isYouTubePlaying) {
+            subtitleText.textContent = sub;
+            subtitleText.classList.add('active');
+            subtitleText.style.display = 'inline-block';
+          } else {
+            subtitleText.textContent = '';
+            subtitleText.classList.remove('active');
+            subtitleText.style.display = 'none';
+          }
         }
 
         // Update slide body: support standard text & parallel dual-Bible comparison

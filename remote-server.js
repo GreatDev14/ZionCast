@@ -2280,8 +2280,8 @@ class RemoteServer {
 </head>
 <body>
   <iframe
-    src="https://www.youtube.com/embed/${safe}?autoplay=${autoPlayParam}&mute=${muteParam}&controls=1&rel=0&playsinline=1"
-    allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+    src="https://www.youtube-nocookie.com/embed/${safe}?autoplay=${autoPlayParam}&mute=${muteParam}&controls=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
     referrerpolicy="strict-origin-when-cross-origin"
     allowfullscreen></iframe>
 </body>

@@ -166,6 +166,7 @@ function launchDisplayWindow(targetDisplayId = null) {
     fullscreen: false,
     show: false,
     backgroundColor: '#000000',
+    focusable: false,
     title: 'ZionCast - Live Projector / TV Output',
     icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     webPreferences: {
@@ -721,8 +722,8 @@ function checkUpdatesViaRedirect(currentVersion) {
       hostname: 'github.com',
       path: '/GreatDev14/ZionCast/releases/latest',
       headers: {
-        'User-Agent': `ZionCast-Desktop/${currentVersion}`,
-        'Accept': 'text/html'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       },
       timeout: 8000
     }, (res) => {
@@ -753,6 +754,18 @@ function checkUpdatesViaRedirect(currentVersion) {
 
 ipcMain.handle('check-for-updates', async () => {
   const currentVersion = app.getVersion();
+
+  // 1. Fast zero-rate-limit GitHub redirect check first (bypasses unauthenticated api.github.com 60/hr limit)
+  try {
+    const redirectFallback = await checkUpdatesViaRedirect(currentVersion);
+    if (redirectFallback && redirectFallback.success) {
+      return redirectFallback;
+    }
+  } catch (e) {
+    console.warn('Redirect update check failed, trying API fallback:', e.message);
+  }
+
+  // 2. Fallback to GitHub Releases API
   const apiResult = await new Promise((resolve) => {
     const options = {
       hostname: 'api.github.com',
@@ -780,7 +793,6 @@ ipcMain.handle('check-for-updates', async () => {
                 downloadUrl = exeAsset.browser_download_url;
               }
             }
-
             resolve({
               success: true,
               hasUpdate: compareSemver(currentVersion, latestVer),
@@ -800,24 +812,9 @@ ipcMain.handle('check-for-updates', async () => {
       });
     });
 
-    req.on('error', (err) => {
-      resolve({ success: false, error: err.message, currentVersion });
-    });
-    req.on('timeout', () => {
-      req.destroy();
-      resolve({ success: false, error: 'Check request timed out', currentVersion });
-    });
+    req.on('error', (err) => resolve({ success: false, error: err.message, currentVersion }));
+    req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Check request timed out', currentVersion }); });
   });
-
-  if (apiResult && apiResult.success) {
-    return apiResult;
-  }
-
-  // Fallback when api.github.com returns HTTP 403 (IP rate limit on shared Wi-Fi / mobile carrier NAT)
-  const redirectFallback = await checkUpdatesViaRedirect(currentVersion);
-  if (redirectFallback && redirectFallback.success) {
-    return redirectFallback;
-  }
 
   return apiResult || { success: false, error: 'Could not reach GitHub Releases', currentVersion };
 });

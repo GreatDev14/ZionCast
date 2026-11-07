@@ -154,10 +154,10 @@
     {
       id: 'custom-1',
       title: 'WELCOME TO ZION CHURCH',
-      subtitle: 'Sunday Worship Service',
+      subtitle: 'Sunday 10:00 AM • Sanctuary & Online',
       theme: 'celestial-clouds',
       slides: [
-        { label: 'Welcome', body: 'WELCOME TO ZION SANCTUARY\n\nWe are rejoiced to worship together!\nConnect • Fellowship • Grow in Christ' },
+        { label: 'Welcome', subtitle: 'Sunday 10:00 AM • Sanctuary & Online', body: '• We are thrilled to worship with you today!\n• Connect • Fellowship • Grow in Christ' },
         { label: 'First Time Guests', body: 'FIRST TIME WITH US?\n\nPlease fill out a Connect Card in the foyer\nor visit www.zionchurch.org/connect\nWe have a special welcome gift for you!' }
       ]
     },
@@ -936,13 +936,13 @@
 
   // Global first-click focus recovery: clicking any input/textarea always restores OS window focus immediately
   document.addEventListener('mousedown', (e) => {
+    if (!document.hasFocus()) {
+      ensureRendererFocus();
+    }
     const target = e.target && e.target.closest
       ? e.target.closest('input, textarea, [contenteditable="true"], select')
       : null;
     if (target && !target.disabled && !target.readOnly) {
-      if (!document.hasFocus()) {
-        ensureRendererFocus();
-      }
       if (document.activeElement !== target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
         setTimeout(() => {
           if (document.activeElement !== target) {
@@ -1135,7 +1135,34 @@
         previewVideoStream.srcObject.getVideoTracks().some(t => t.readyState === 'live') &&
         activeControlCameraId === state.cameraDeviceId;
 
-      if (!isAlreadyActive) {
+      // If TV Display Output is actively open, release Control Desk camera tracks so Windows webcam drivers
+      // give 100% exclusive access to the Audience TV Output without NotReadableError!
+      if (state.displayOpen && (mode === 'preacher' || mode === 'background')) {
+        if (previewVideoStream.srcObject) {
+          previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
+          previewVideoStream.srcObject = null;
+        }
+        liveVideoStream.srcObject = null;
+        activeControlCameraId = null;
+      } else // If TV Display Output is actively open, release Control Desk camera tracks so Windows webcam drivers
+      // give 100% exclusive access to the Audience TV Output without NotReadableError!
+      if (state.displayOpen && (mode === 'preacher' || mode === 'background')) {
+        if (previewVideoStream.srcObject) {
+          previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
+          previewVideoStream.srcObject = null;
+        }
+        liveVideoStream.srcObject = null;
+        activeControlCameraId = null;
+      } else // If TV Display Output is actively open, release Control Desk camera tracks so Windows webcam drivers
+      // give 100% exclusive access to the Audience TV Output without NotReadableError!
+      if (state.displayOpen && (mode === 'preacher' || mode === 'background')) {
+        if (previewVideoStream.srcObject) {
+          previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
+          previewVideoStream.srcObject = null;
+        }
+        liveVideoStream.srcObject = null;
+        activeControlCameraId = null;
+      } else if (!isAlreadyActive) {
         if (previewVideoStream.srcObject) {
           previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
           previewVideoStream.srcObject = null;
@@ -1304,7 +1331,26 @@
     } else {
       liveTextTitle.style.opacity = '1';
       liveTextBody.style.opacity = '1';
-      liveTextTitle.textContent = payload.activeItem ? `${payload.activeItem.title} • ${payload.activeSlide.label}` : payload.activeSlide.label;
+      const pTitle = payload.activeItem ? (payload.activeItem.title || '').trim() : '';
+      const pLabel = payload.activeSlide ? (payload.activeSlide.label || '').trim() : '';
+      if (pTitle && pLabel) {
+        liveTextTitle.textContent = (pTitle.toLowerCase() === pLabel.toLowerCase()) ? pTitle : `${pTitle} • ${pLabel}`;
+      } else {
+        liveTextTitle.textContent = pTitle || pLabel;
+      }
+      const liveTextSub = document.getElementById('live-text-subtitle');
+      if (liveTextSub) {
+        const sub = (payload.activeSlide && payload.activeSlide.subtitle) || (payload.activeItem && payload.activeItem.subtitle) || '';
+        if (sub && !payload.clearText && !payload.themeOnly && !payload.blackout) {
+          liveTextSub.textContent = sub;
+          liveTextSub.classList.add('active');
+          liveTextSub.style.display = 'block';
+        } else {
+          liveTextSub.textContent = '';
+          liveTextSub.classList.remove('active');
+          liveTextSub.style.display = 'none';
+        }
+      }
       liveTextBody.textContent = payload.activeSlide.body;
       liveTextBody.style.fontFamily = payload.fontFamily;
       liveTextBody.style.color = payload.fontColor;
@@ -1668,7 +1714,22 @@
     state.previewSlideIndex = index;
     const slide = state.activeItem.slides[index];
 
-    previewTextTitle.textContent = `${state.activeItem.title} • ${slide.label}`;
+    const itemT = (state.activeItem.title || '').trim();
+    const slideL = (slide.label || '').trim();
+    previewTextTitle.textContent = (itemT.toLowerCase() === slideL.toLowerCase()) ? itemT : `${itemT} • ${slideL}`;
+    const previewTextSub = document.getElementById('preview-text-subtitle');
+    if (previewTextSub) {
+      const sub = slide.subtitle || state.activeItem.subtitle || '';
+      if (sub) {
+        previewTextSub.textContent = sub;
+        previewTextSub.classList.add('active');
+        previewTextSub.style.display = 'block';
+      } else {
+        previewTextSub.textContent = '';
+        previewTextSub.classList.remove('active');
+        previewTextSub.style.display = 'none';
+      }
+    }
     previewTextBody.textContent = slide.body;
 
     // Highlight preview tile
@@ -4986,9 +5047,12 @@
         }
 
         const chunks = content.split(/\n\s*\n/).filter(c => c.trim().length > 0);
+        const headerBlock = subtitle ? `${title}\n${subtitle}` : title;
         const slides = chunks.map((chunk, i) => ({
-          label: chunks.length > 1 ? `Slide ${i + 1}` : 'Notice',
-          body: `${title}\n\n${chunk}`
+          label: chunks.length > 1 ? `Slide ${i + 1}` : (subtitle || 'Notice'),
+          title: title,
+          subtitle: subtitle,
+          body: `${headerBlock}\n\n${chunk}`
         }));
 
         const newCustom = {
@@ -4996,7 +5060,12 @@
           title,
           subtitle,
           theme,
-          slides: slides.length > 0 ? slides : [{ label: 'Notice', body: title }]
+          slides: slides.length > 0 ? slides : [{
+            label: subtitle || 'Notice',
+            title: title,
+            subtitle: subtitle,
+            body: subtitle ? `${title}\n\n${subtitle}` : title
+          }]
         };
 
         customSlidesLibrary.unshift(newCustom);
@@ -5215,7 +5284,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.3.3';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.3.4';
         }
       } catch (err) {
         console.warn('Update check warning:', err);

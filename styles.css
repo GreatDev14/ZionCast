@@ -872,6 +872,21 @@ body {
   margin-bottom: 4px;
 }
 
+.monitor-slide-subtitle {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #fde68a;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  display: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.monitor-slide-subtitle.active {
+  display: block;
+}
+
 .monitor-slide-body {
   font-size: 0.85rem;
   font-weight: 600;
@@ -1631,6 +1646,27 @@ body {
   margin-bottom: 16px;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
   transition: opacity 0.2s ease;
+}
+
+.display-subtitle-text {
+  font-family: var(--font-sans);
+  font-size: clamp(20px, 2.2vw, 32px);
+  font-weight: 700;
+  color: #fde68a;
+  letter-spacing: 0.05em;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.95);
+  margin-bottom: 18px;
+  padding: 6px 24px;
+  border-radius: 9999px;
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: none;
+  transition: opacity 0.2s ease;
+}
+.display-subtitle-text.active {
+  display: inline-block;
 }
 
 .display-body-text {
@@ -2581,10 +2617,10 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(145deg, rgba(10, 14, 24, 0.76) 0%, rgba(15, 23, 42, 0.68) 100%);
+  background: linear-gradient(135deg, rgba(8, 12, 22, 0.58) 0%, rgba(15, 23, 42, 0.52) 100%);
   backdrop-filter: blur(22px) saturate(165%);
   -webkit-backdrop-filter: blur(22px) saturate(165%);
-  border: 1px solid rgba(251, 191, 36, 0.42);
+  border: 1px solid rgba(251, 191, 36, 0.35);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55),
               inset 0 1px 0 rgba(255, 255, 255, 0.14),
               0 0 24px rgba(245, 158, 11, 0.14);
@@ -2696,16 +2732,17 @@ body {
 
 /* Size 3: Large Hall Glass Card */
 .display-countdown-wrapper.size-large .display-countdown-card {
-  padding: 26px 46px 30px 46px;
-  border-radius: 26px;
-  min-width: 340px;
+  padding: 16px 32px 18px 32px;
+  border-radius: 20px;
+  min-width: 240px;
+  max-width: 480px;
 }
 .display-countdown-wrapper.size-large .display-countdown-title {
   font-size: clamp(14px, 1.5vw, 22px);
 }
 .display-countdown-wrapper.size-large .display-countdown-digits {
-  font-size: clamp(58px, 7.2vw, 108px);
-  margin: 8px 0 6px 0;
+  font-size: clamp(38px, 4.4vw, 68px);
+  margin: 4px 0 2px 0;
 }
 .display-countdown-wrapper.size-large .display-countdown-sub {
   font-size: clamp(13px, 1.25vw, 18px);
