@@ -138,7 +138,10 @@ function launchDisplayWindow(targetDisplayId = null) {
       displayWindow.setAlwaysOnTop(true, 'screen-saver');
     }
     displayWindow.show();
-    displayWindow.webContents.send('display-state-update', currentDisplayState);
+    displayWindow.webContents.send('display-state-update', {
+      ...currentDisplayState,
+      remotePort: remoteServer.port || 3000
+    });
     notifyControlDisplayStatus();
     return { success: true, isSecondary, bounds: targetDisplay.bounds };
   }
@@ -162,20 +165,38 @@ function launchDisplayWindow(targetDisplayId = null) {
       sandbox: false,
       webSecurity: false,
       backgroundThrottling: false,
+      paintWhenInitiallyHidden: true,
       autoplayPolicy: 'no-user-gesture-required'
     }
   });
 
   displayWindow.loadFile('display.html');
 
+  displayWindow.webContents.on('console-message', (event, level, message, line) => {
+    console.log(`[Display Console L${line}] ${message}`);
+  });
+
+  displayWindow.webContents.on('did-finish-load', () => {
+    if (displayWindow && !displayWindow.isDestroyed()) {
+      displayWindow.webContents.send('display-state-update', {
+        ...currentDisplayState,
+        remotePort: remoteServer.port || 3000
+      });
+    }
+  });
+
   displayWindow.once('ready-to-show', () => {
+    if (!displayWindow || displayWindow.isDestroyed()) return;
     displayWindow.setBounds(targetDisplay.bounds);
     if (isSecondary) {
       displayWindow.setFullScreen(true);
       displayWindow.setAlwaysOnTop(true, 'screen-saver');
     }
     displayWindow.show();
-    displayWindow.webContents.send('display-state-update', currentDisplayState);
+    displayWindow.webContents.send('display-state-update', {
+      ...currentDisplayState,
+      remotePort: remoteServer.port || 3000
+    });
     notifyControlDisplayStatus();
   });
 
@@ -308,12 +329,18 @@ function identifyScreens() {
 }
 
 // App lifecycle
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Auto-grant camera, microphone, and media permissions across Control Desk & TV Output
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    callback(true);
+  });
+  session.defaultSession.setPermissionCheckHandler(() => true);
+
   // Fix YouTube Embed Errors 152 & 153 and Video Playback Buffering:
   // 1. Desktop Chrome User-Agent prevents bot / Electron blocking
-  // 2. Supply valid Referer (https://www.youtube.com/) for YouTube iframe embeds
-  // 3. For *.googlevideo.com/* media fragments, pass Origin & Referer so video chunk streaming starts immediately
-  // 4. In onHeadersReceived, strip X-Frame-Options & enable CORS so iframes and media streams never stall
+  // 2. Supply valid Referer (https://www.youtube.com/) only when missing or file://
+  // 3. Preserve YouTube's own Origin header on /youtubei/v1/player and googlevideo.com requests
+  // 4. Never duplicate Access-Control-Allow-Origin on googlevideo.com (prevents multiple-ACAO CORS block)
   const ytFilter = {
     urls: [
       '*://*.youtube.com/*',
@@ -324,43 +351,46 @@ app.whenReady().then(() => {
   };
 
   session.defaultSession.webRequest.onBeforeSendHeaders(ytFilter, (details, callback) => {
-    // Desktop Chrome User-Agent
     details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-    if (details.url.includes('googlevideo.com')) {
-      // GoogleVideo CDN media stream chunks require valid YouTube origin & referer
-      details.requestHeaders['Origin'] = 'https://www.youtube.com';
+    const ref = details.requestHeaders['Referer'] || details.requestHeaders['referer'] || '';
+    if (!ref || ref.startsWith('file://')) {
       details.requestHeaders['Referer'] = 'https://www.youtube.com/';
-    } else {
-      // Supply valid Referer so YouTube doesn't reject file:// or empty referer (prevents Error 153)
-      if (!details.requestHeaders['Referer'] || details.requestHeaders['Referer'].startsWith('file://')) {
-        details.requestHeaders['Referer'] = 'https://www.youtube.com/';
+    }
+
+    const orig = details.requestHeaders['Origin'] || details.requestHeaders['origin'] || '';
+    if (orig.startsWith('file://') || orig === 'null') {
+      if (details.url.includes('googlevideo.com') || details.method === 'POST') {
+        details.requestHeaders['Origin'] = 'https://www.youtube.com';
+      } else {
+        delete details.requestHeaders['Origin'];
+        delete details.requestHeaders['origin'];
       }
-      // Never spoof cross-origin 'Origin' header on GET embeds (causes Error 152-4)
-      delete details.requestHeaders['Origin'];
     }
 
     callback({ cancel: false, requestHeaders: details.requestHeaders });
   });
 
   session.defaultSession.webRequest.onHeadersReceived(ytFilter, (details, callback) => {
-    const responseHeaders = { ...details.responseHeaders };
-    delete responseHeaders['x-frame-options'];
-    delete responseHeaders['X-Frame-Options'];
-    responseHeaders['Access-Control-Allow-Origin'] = ['*'];
-    responseHeaders['Access-Control-Allow-Credentials'] = ['true'];
-    responseHeaders['Access-Control-Allow-Methods'] = ['GET, HEAD, OPTIONS'];
-    callback({ cancel: false, responseHeaders });
+    if (details.resourceType === 'subFrame' && details.responseHeaders) {
+      const responseHeaders = { ...details.responseHeaders };
+      delete responseHeaders['x-frame-options'];
+      delete responseHeaders['X-Frame-Options'];
+      callback({ cancel: false, responseHeaders });
+      return;
+    }
+    callback({ cancel: false });
   });
 
-  createControlWindow();
-
-  // Initialize Mobile Remote Server
-  remoteServer.init((action, data) => {
+  // Initialize Mobile Remote & Local YouTube Embed Server BEFORE opening windows so port is ready
+  await remoteServer.init((action, data) => {
     if (controlWindow && !controlWindow.isDestroyed()) {
       controlWindow.webContents.send('remote-action', { action, data });
     }
   });
+  currentDisplayState.remotePort = remoteServer.port || 3000;
+
+  createControlWindow();
 
   // Monitor physical display plug/unplug events
   screen.on('display-added', (event, newDisplay) => {
@@ -476,7 +506,11 @@ ipcMain.handle('get-display-status', () => {
 
 // Real-time State Synchronization Handler (Auto-wakes display if not open)
 ipcMain.on('sync-to-display', (event, payload) => {
-  currentDisplayState = { ...currentDisplayState, ...payload };
+  currentDisplayState = {
+    ...currentDisplayState,
+    ...payload,
+    remotePort: remoteServer.port || 3000
+  };
 
   // If displayWindow is not open, automatically launch it on the projector!
   if (!displayWindow || displayWindow.isDestroyed()) {
@@ -485,6 +519,19 @@ ipcMain.on('sync-to-display', (event, payload) => {
   }
 
   displayWindow.webContents.send('display-state-update', currentDisplayState);
+});
+
+ipcMain.handle('get-display-state', () => {
+  return {
+    ...currentDisplayState,
+    remotePort: remoteServer.port || 3000
+  };
+});
+
+ipcMain.on('request-camera-release', () => {
+  if (controlWindow && !controlWindow.isDestroyed()) {
+    controlWindow.webContents.send('release-control-camera');
+  }
 });
 
 ipcMain.on('sync-to-control', (event, payload) => {

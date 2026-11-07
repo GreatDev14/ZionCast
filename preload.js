@@ -17,12 +17,17 @@ contextBridge.exposeInMainWorld('zionApi', {
 
   // State synchronization between Control Desk and Audience Display
   sendToDisplay: (payload) => ipcRenderer.send('sync-to-display', payload),
+  getDisplayState: () => ipcRenderer.invoke('get-display-state'),
   onDisplayStateUpdate: (callback) => {
     ipcRenderer.on('display-state-update', (event, data) => callback(data));
   },
   sendToControl: (payload) => ipcRenderer.send('sync-to-control', payload),
   onControlStateUpdate: (callback) => {
     ipcRenderer.on('control-state-update', (event, data) => callback(data));
+  },
+  requestCameraRelease: () => ipcRenderer.send('request-camera-release'),
+  onReleaseControlCamera: (callback) => {
+    ipcRenderer.on('release-control-camera', () => callback());
   },
 
   // Window utilities
@@ -45,7 +50,7 @@ contextBridge.exposeInMainWorld('zionApi', {
   // In-app Updates & External Links
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
-  getVersion: () => '1.2.0',
+  getVersion: () => '1.2.1',
 
   // Mobile Wi-Fi Remote Control APIs
   getRemoteInfo: () => ipcRenderer.invoke('get-remote-info'),

@@ -1228,8 +1228,8 @@ class RemoteServer {
 
   getEmbedHtml(vid, autoplay = '1', mute = '0') {
     const safe = String(vid).replace(/[^A-Za-z0-9_-]/g, '');
-    const autoPlayBool = autoplay !== '0';
-    const muteBool = mute === '1';
+    const autoPlayParam = autoplay === '0' ? 0 : 1;
+    const muteParam = mute === '1' ? 1 : 0;
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1238,68 +1238,15 @@ class RemoteServer {
   <title>YouTube Live Stream</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; overflow: hidden; }
-    html, body { width: 100%; height: 100%; background: #000; cursor: default; }
-    #yt-player, iframe { width: 100% !important; height: 100% !important; border: 0 !important; }
+    html, body, iframe { width: 100%; height: 100%; border: 0; background: #000; }
   </style>
 </head>
 <body>
-  <div id="yt-player"></div>
-  <script src="https://www.youtube.com/iframe_api"></script>
-  <script>
-    var player = null;
-    var autoPlayWanted = ${autoPlayBool};
-    var muteWanted = ${muteBool};
-
-    function startPlayback() {
-      if (player && typeof player.playVideo === 'function') {
-        try {
-          if (muteWanted) player.mute();
-          player.playVideo();
-        } catch(e) {}
-      }
-    }
-
-    function onYouTubeIframeAPIReady() {
-      player = new YT.Player('yt-player', {
-        videoId: '${safe}',
-        playerVars: {
-          autoplay: autoPlayWanted ? 1 : 0,
-          mute: muteWanted ? 1 : 0,
-          controls: 1,
-          rel: 0,
-          modestbranding: 1,
-          playsinline: 1,
-          enablejsapi: 1,
-          origin: window.location.origin
-        },
-        events: {
-          onReady: function(e) {
-            if (autoPlayWanted) {
-              try { e.target.playVideo(); } catch(err) {}
-            }
-          },
-          onStateChange: function(e) {
-            if (autoPlayWanted && (e.data === -1 || e.data === 2)) {
-              setTimeout(startPlayback, 400);
-            }
-          }
-        }
-      });
-    }
-
-    setTimeout(function() {
-      if (!player && !document.querySelector('iframe')) {
-        var ifr = document.createElement('iframe');
-        ifr.src = 'https://www.youtube.com/embed/${safe}?autoplay=' + (autoPlayWanted ? 1 : 0) + '&mute=' + (muteWanted ? 1 : 0) + '&controls=1&rel=0&playsinline=1';
-        ifr.allow = 'accelerometer; autoplay *; clipboard-write; encrypted-media *; gyroscope; picture-in-picture; web-share; fullscreen *';
-        ifr.allowFullscreen = true;
-        document.body.appendChild(ifr);
-      }
-    }, 2500);
-
-    window.addEventListener('click', startPlayback);
-    window.addEventListener('keydown', startPlayback);
-  </script>
+  <iframe
+    src="https://www.youtube.com/embed/${safe}?autoplay=${autoPlayParam}&mute=${muteParam}&controls=1&rel=0&playsinline=1"
+    allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen></iframe>
 </body>
 </html>`;
   }

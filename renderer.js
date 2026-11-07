@@ -34,6 +34,7 @@
     cameraEnabled: false,
     cameraMode: 'none',    // 'none', 'background', 'preacher'
     cameraDeviceId: '',
+    cameraDeviceLabel: '',
     cameraOpacity: 0.75,
     bannerText: '',
     bannerActive: false,
@@ -442,6 +443,26 @@
   let secondaryBibleVersion = 'rsv';
   let secondaryBibleDatabase = null;
 
+  function showToast(message) {
+    try {
+      let toast = document.getElementById('zioncast-toast-pill');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'zioncast-toast-pill';
+        toast.style.cssText = 'position:fixed;bottom:48px;right:20px;z-index:9999;background:rgba(15,23,42,0.96);color:#fbbf24;border:1px solid rgba(245,158,11,0.5);padding:10px 16px;border-radius:10px;font-size:0.8rem;font-weight:700;box-shadow:0 10px 28px rgba(0,0,0,0.65);transition:opacity 0.25s ease,transform 0.25s ease;pointer-events:none;opacity:0;transform:translateY(8px);';
+        document.body.appendChild(toast);
+      }
+      toast.textContent = message;
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateY(0)';
+      clearTimeout(toast.__hideTimer);
+      toast.__hideTimer = setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+      }, 3200);
+    } catch (e) {}
+  }
+
   function triggerAutoSave() {
     if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
     saveDebounceTimer = setTimeout(() => {
@@ -795,17 +816,48 @@
   // =========================================================================
   // 5. DIRECT HARDWARE VIDEO CAPTURE (Camo / DroidCam / OBS / HDMI Capture)
   // =========================================================================
+  let activeControlCameraId = null;
+
+  if (window.zionApi && window.zionApi.onReleaseControlCamera) {
+    window.zionApi.onReleaseControlCamera(() => {
+      // Release Control Desk local preview handle so single-client Windows drivers (e.g. DroidCam / HDMI Capture)
+      // can bind exclusively to the Audience TV Output window without NotReadableError!
+      if (previewVideoStream && previewVideoStream.srcObject) {
+        previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
+        previewVideoStream.srcObject = null;
+      }
+      if (liveVideoStream) liveVideoStream.srcObject = null;
+      activeControlCameraId = null;
+      if (state.cameraEnabled && labelCameraStatus) {
+        labelCameraStatus.textContent = `Camera: ${state.cameraMode.toUpperCase()} LIVE ON TV`;
+      }
+    });
+  }
+
   async function enumerateVideoDevices() {
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoInputs = devices.filter(d => d.kind === 'videoinput');
+      let devices = await navigator.mediaDevices.enumerateDevices();
+      let videoInputs = devices.filter(d => d.kind === 'videoinput');
+
+      // Prime permission once if Chromium hasn't unlocked deviceIds/labels yet
+      if (videoInputs.length > 0 && videoInputs.every(d => !d.deviceId && !d.label)) {
+        try {
+          const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          tempStream.getTracks().forEach(t => t.stop());
+          devices = await navigator.mediaDevices.enumerateDevices();
+          videoInputs = devices.filter(d => d.kind === 'videoinput');
+        } catch (permErr) {
+          console.warn('Camera permission prime skipped:', permErr);
+        }
+      }
+
       state.videoDevices = videoInputs;
 
       cameraDeviceSelect.innerHTML = '';
       if (videoInputs.length === 0) {
         cameraDeviceSelect.innerHTML = '<option value="">No camera devices found</option>';
         labelCameraStatus.textContent = 'Camera: No Hardware';
-        const badge = cameraStatusBadge || droidcamStatusBadge;
+        const badge = cameraStatusBadge;
         if (badge) {
           badge.textContent = '⚠️ No Camera Detected';
           badge.className = 'camera-status-pill offline';
@@ -828,6 +880,7 @@
       videoInputs.forEach((device, index) => {
         const option = document.createElement('option');
         option.value = device.deviceId;
+        option.dataset.rawLabel = device.label || '';
         let label = device.label || `Camera ${index + 1}`;
         const low = label.toLowerCase();
         if (low.includes('camo')) {
@@ -846,7 +899,7 @@
       });
 
       // Update badge with active camera platform info
-      const badge = cameraStatusBadge || droidcamStatusBadge;
+      const badge = cameraStatusBadge;
       if (badge) {
         badge.className = 'camera-status-pill';
         if (camoCam) {
@@ -867,17 +920,17 @@
         }
       }
 
-      // Priority selection: saved device -> Camo -> DroidCam -> OBS -> first device
-      if (!state.cameraDeviceId) {
-        if (camoCam) {
-          state.cameraDeviceId = camoCam.deviceId;
-        } else if (droidCam) {
-          state.cameraDeviceId = droidCam.deviceId;
-        } else if (obsCam) {
-          state.cameraDeviceId = obsCam.deviceId;
-        } else if (videoInputs.length > 0) {
-          state.cameraDeviceId = videoInputs[0].deviceId;
+      // Verify saved cameraDeviceId actually exists in current hardware list; otherwise pick priority device
+      const savedExists = state.cameraDeviceId && videoInputs.some(d => d.deviceId === state.cameraDeviceId);
+      if (!savedExists) {
+        const chosen = camoCam || droidCam || obsCam || hdmiCapture || videoInputs[0];
+        if (chosen) {
+          state.cameraDeviceId = chosen.deviceId;
+          state.cameraDeviceLabel = chosen.label || '';
         }
+      } else {
+        const matched = videoInputs.find(d => d.deviceId === state.cameraDeviceId);
+        if (matched) state.cameraDeviceLabel = matched.label || '';
       }
 
       if (state.cameraDeviceId && cameraDeviceSelect) {
@@ -899,16 +952,46 @@
       btn.classList.toggle('active', btn.dataset.mode === mode);
     });
 
-    if (state.cameraEnabled && state.cameraDeviceId) {
+    if (state.cameraEnabled) {
+      // Ensure YouTube layer (z-index 15) is turned off so it never covers the live camera on TV!
+      if (state.backgroundType === 'youtube' || state.youtubeActive) {
+        state.youtubeActive = false;
+        state.youtubeVideoId = '';
+        state.backgroundType = 'procedural';
+        const prevYtOverlay = document.getElementById('preview-youtube-overlay');
+        if (prevYtOverlay) prevYtOverlay.classList.remove('active');
+        const liveYtOverlay = document.getElementById('live-youtube-overlay');
+        if (liveYtOverlay) liveYtOverlay.classList.remove('active');
+        if (activeYoutubeBar) activeYoutubeBar.style.display = 'none';
+      }
+
+      state.blackout = false;
+      if (btnFastBlackout) btnFastBlackout.classList.remove('active-blackout');
+
+      const matchedDev = state.videoDevices.find(d => d.deviceId === state.cameraDeviceId) || state.videoDevices[0];
+      if (matchedDev) {
+        if (!state.cameraDeviceId) state.cameraDeviceId = matchedDev.deviceId;
+        state.cameraDeviceLabel = matchedDev.label || '';
+      }
+
       const isAlreadyActive = previewVideoStream.srcObject &&
-        previewVideoStream.srcObject.getVideoTracks().some(t => t.readyState === 'live');
+        previewVideoStream.srcObject.getVideoTracks().some(t => t.readyState === 'live') &&
+        activeControlCameraId === state.cameraDeviceId;
 
       if (!isAlreadyActive) {
+        if (previewVideoStream.srcObject) {
+          previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
+          previewVideoStream.srcObject = null;
+          liveVideoStream.srcObject = null;
+        }
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
-            video: { deviceId: { exact: state.cameraDeviceId } },
+            video: state.cameraDeviceId
+              ? { deviceId: { exact: state.cameraDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+              : { width: { ideal: 1280 }, height: { ideal: 720 } },
             audio: false
           });
+          activeControlCameraId = state.cameraDeviceId;
           previewVideoStream.srcObject = stream;
           liveVideoStream.srcObject = stream;
           previewVideoStream.play().catch(e => console.warn('Preview video play error:', e));
@@ -917,10 +1000,13 @@
           console.warn('Could not bind monitor camera streams with exact ID, trying fallback:', e);
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            activeControlCameraId = state.cameraDeviceId;
             previewVideoStream.srcObject = stream;
             liveVideoStream.srcObject = stream;
+            previewVideoStream.play().catch(() => {});
+            liveVideoStream.play().catch(() => {});
           } catch (err) {
-            console.error('All operator camera binding attempts failed:', err);
+            console.warn('Operator local preview unavailable (TV Output will still acquire camera directly):', err);
           }
         }
       }
@@ -931,6 +1017,7 @@
       if (previewVideoStream.srcObject) {
         previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
       }
+      activeControlCameraId = null;
       previewVideoStream.srcObject = null;
       liveVideoStream.srcObject = null;
       previewVideoStream.style.display = 'none';
@@ -952,6 +1039,9 @@
       activeSlide = {
         label: s.label || '',
         body: s.body || '',
+        isDualComparison: !!s.isDualComparison,
+        dualPrimary: s.dualPrimary || null,
+        dualSecondary: s.dualSecondary || null,
         index: state.activeSlideIndex + 1,
         total: state.activeItem.slides.length
       };
@@ -959,7 +1049,10 @@
 
     const payload = {
       activeSlide,
-      activeItem: state.activeItem ? { title: state.activeItem.title } : null,
+      activeItem: state.activeItem ? {
+        title: state.activeItem.title,
+        type: state.activeItem.type || state.activeItemSource || ''
+      } : null,
       blackout: state.blackout,
       clearText: state.clearText,
       themeOnly: state.themeOnly,
@@ -976,6 +1069,7 @@
       cameraEnabled: state.cameraEnabled,
       cameraMode: state.cameraMode,
       cameraDeviceId: state.cameraDeviceId,
+      cameraDeviceLabel: state.cameraDeviceLabel || '',
       cameraOpacity: state.cameraOpacity,
       bannerText: state.bannerText,
       bannerActive: state.bannerActive,
@@ -1389,11 +1483,44 @@
     state.activeSlideIndex = index;
     state.previewSlideIndex = index;
 
-    // Turn off blackout / clear states on new slide transition
+    const slide = state.activeItem.slides[index];
+    const hasBody = !!(slide && slide.body && slide.body.trim().length > 0);
+    const itemType = state.activeItem.type || state.activeItemSource || '';
+
     state.blackout = false;
-    state.clearText = false;
     btnFastBlackout.classList.remove('active-blackout');
-    btnFastClear.classList.remove('active-clear');
+
+    if (itemType === 'youtube') {
+      const vid = state.activeItem.videoId || extractYouTubeId(state.activeItem.url);
+      if (vid) {
+        state.backgroundType = 'youtube';
+        state.youtubeVideoId = vid;
+        state.youtubeActive = true;
+      }
+      state.clearText = true;
+      state.themeOnly = true;
+      btnFastClear.classList.add('active-clear');
+      btnFastTheme.classList.add('active-theme');
+    } else if (!hasBody) {
+      // Pure image/video media slide: keep text hidden so title badge doesn't cover media
+      state.clearText = true;
+      state.themeOnly = true;
+      btnFastClear.classList.add('active-clear');
+      btnFastTheme.classList.add('active-theme');
+    } else {
+      // Song, Scripture, or Custom Announcement with text: ensure text is visible on TV!
+      state.clearText = false;
+      state.themeOnly = false;
+      btnFastClear.classList.remove('active-clear');
+      btnFastTheme.classList.remove('active-theme');
+      // If unmuted Fullscreen YouTube Live was previously playing, switch back to worship background
+      if (state.backgroundType === 'youtube' && !state.youtubeMuted) {
+        state.youtubeActive = false;
+        state.youtubeVideoId = '';
+        state.backgroundType = 'procedural';
+        if (activeYoutubeBar) activeYoutubeBar.style.display = 'none';
+      }
+    }
 
     // Update active glowing border on slide cards
     const cards = slideTilesGrid.querySelectorAll('.slide-tile-card');
@@ -2201,6 +2328,20 @@
       return;
     }
 
+    if (state.cameraEnabled || state.cameraMode !== 'none') {
+      state.cameraMode = 'none';
+      state.cameraEnabled = false;
+      if (previewVideoStream && previewVideoStream.srcObject) {
+        previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
+        previewVideoStream.srcObject = null;
+      }
+      if (liveVideoStream) liveVideoStream.srcObject = null;
+      if (previewVideoStream) previewVideoStream.style.display = 'none';
+      if (liveVideoStream) liveVideoStream.style.display = 'none';
+      activeControlCameraId = null;
+      if (labelCameraStatus) labelCameraStatus.textContent = 'Camera: Standby';
+    }
+
     state.backgroundType = 'youtube';
     state.youtubeVideoId = videoId;
     state.youtubeUrl = item.url || `https://www.youtube.com/watch?v=${videoId}`;
@@ -2553,6 +2694,9 @@
   function initDroidCamStudio() {
     if (btnProjectPreacher) {
       btnProjectPreacher.addEventListener('click', async () => {
+        if (!state.videoDevices || state.videoDevices.length === 0) {
+          await enumerateVideoDevices();
+        }
         const targetDevice = getActiveCameraDevice();
 
         if (!targetDevice) {
@@ -2561,7 +2705,11 @@
         }
 
         state.cameraDeviceId = targetDevice.deviceId;
+        state.cameraDeviceLabel = targetDevice.label || '';
         if (cameraDeviceSelect) cameraDeviceSelect.value = targetDevice.deviceId;
+
+        state.clearText = true;
+        btnFastClear.classList.add('active-clear');
 
         if (window.zionApi && !state.displayOpen) {
           const targetScreenId = selectTargetScreen ? selectTargetScreen.value : null;
@@ -2570,14 +2718,14 @@
         }
 
         await updateCameraMode('preacher');
-        state.clearText = true;
-        btnFastClear.classList.add('active-clear');
-        broadcastDisplayState();
       });
     }
 
     if (btnProjectWorshipBg) {
       btnProjectWorshipBg.addEventListener('click', async () => {
+        if (!state.videoDevices || state.videoDevices.length === 0) {
+          await enumerateVideoDevices();
+        }
         const targetDevice = getActiveCameraDevice();
 
         if (!targetDevice) {
@@ -2586,7 +2734,13 @@
         }
 
         state.cameraDeviceId = targetDevice.deviceId;
+        state.cameraDeviceLabel = targetDevice.label || '';
         if (cameraDeviceSelect) cameraDeviceSelect.value = targetDevice.deviceId;
+
+        state.clearText = false;
+        state.themeOnly = false;
+        btnFastClear.classList.remove('active-clear');
+        btnFastTheme.classList.remove('active-theme');
 
         if (window.zionApi && !state.displayOpen) {
           const targetScreenId = selectTargetScreen ? selectTargetScreen.value : null;
@@ -2595,9 +2749,6 @@
         }
 
         await updateCameraMode('background');
-        state.clearText = false;
-        btnFastClear.classList.remove('active-clear');
-        broadcastDisplayState();
       });
     }
 
@@ -2931,11 +3082,9 @@
     };
 
     // Add to Order of Service list
-    const existingIdx = serviceSchedule.findIndex(s => s.title === itemTitle);
+    const existingIdx = serviceOrder.findIndex(s => s.title === itemTitle);
     if (existingIdx === -1) {
-      serviceSchedule.push(scriptureItem);
-      renderOrderOfService();
-      saveStoredLibrary();
+      addToServiceOrder('scripture', itemTitle, scriptureItem);
     }
 
     if (pushLive) {
@@ -4096,6 +4245,8 @@
     if (cameraDeviceSelect) {
       cameraDeviceSelect.addEventListener('change', (e) => {
         state.cameraDeviceId = e.target.value;
+        const found = state.videoDevices.find(d => d.deviceId === state.cameraDeviceId);
+        state.cameraDeviceLabel = found ? (found.label || '') : '';
         if (state.cameraEnabled) updateCameraMode(state.cameraMode);
         triggerAutoSave();
       });
@@ -4474,7 +4625,7 @@
             if (updateModalSubtitle) updateModalSubtitle.textContent = res?.error || 'Check internet connection and try again.';
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.0.0';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.2.1';
         }
       } catch (err) {
         console.warn('Update check warning:', err);

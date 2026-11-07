@@ -50,7 +50,9 @@
     cameraEnabled: false,
     cameraMode: 'none',
     cameraDeviceId: '',
+    cameraDeviceLabel: '',
     cameraOpacity: 0.75,
+    remotePort: 3000,
     bannerText: '',
     bannerActive: false,
     bannerStyle: 'urgent-red',
@@ -66,6 +68,8 @@
 
   let activeCameraStream = null;
   let activeCameraDeviceId = null;
+  let cameraOpeningKey = null;
+  let cameraSetupSeq = 0;
   let activeBannerTimer = null;
   let lastSlideSignature = '';
 
@@ -459,66 +463,142 @@
   // =========================================================================
   // HARDWARE VIDEO LAYER (DroidCam, OBS, HDMI Capture, USB)
   // =========================================================================
-  async function setupCameraFeed(deviceId, mode) {
-    if (mode === 'none' || !deviceId) {
+  async function resolveDisplayCameraId(requestedId, requestedLabel) {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d => d.kind === 'videoinput');
+      if (cams.length === 0) return requestedId || '';
+
+      if (requestedId) {
+        const exact = cams.find(c => c.deviceId === requestedId);
+        if (exact) return exact.deviceId;
+      }
+
+      if (requestedLabel) {
+        const cleanReq = String(requestedLabel).toLowerCase().trim();
+        const byLabel = cams.find(c => {
+          const lbl = (c.label || '').toLowerCase().trim();
+          return lbl && (lbl === cleanReq || lbl.includes(cleanReq) || cleanReq.includes(lbl));
+        });
+        if (byLabel && byLabel.deviceId) return byLabel.deviceId;
+      }
+
+      // Priority virtual/broadcast cameras if exact ID wasn't scoped to this window
+      const preferred = cams.find(c => /camo|droidcam|droid|obs|capture|elgato|hdmi|atem/i.test(c.label || ''));
+      if (preferred && preferred.deviceId) return preferred.deviceId;
+
+      return cams[0].deviceId || requestedId || '';
+    } catch (e) {
+      return requestedId || '';
+    }
+  }
+
+  async function openCameraStreamWithFallbacks(resolvedId) {
+    const attempts = [];
+    if (resolvedId) {
+      attempts.push({
+        video: { deviceId: { exact: resolvedId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      attempts.push({
+        video: { deviceId: resolvedId },
+        audio: false
+      });
+    }
+    attempts.push({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    attempts.push({ video: true, audio: false });
+
+    let lastErr = null;
+    for (const c of attempts) {
+      try {
+        return await navigator.mediaDevices.getUserMedia(c);
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    throw lastErr || new Error('Could not start camera video source');
+  }
+
+  async function setupCameraFeed(deviceId, mode, deviceLabel = '') {
+    if (!state.cameraEnabled || mode === 'none' || !mode) {
+      cameraSetupSeq++;
+      cameraOpeningKey = null;
       if (activeCameraStream) {
         activeCameraStream.getTracks().forEach(track => track.stop());
         activeCameraStream = null;
       }
       cameraVideo.srcObject = null;
+      cameraVideo.classList.remove('camera-active');
+      cameraVideo.style.opacity = '0';
       cameraVideo.style.display = 'none';
       activeCameraDeviceId = null;
       return;
     }
 
-    // If device hasn't changed and stream is still alive, keep playing without re-negotiating
+    const requestKey = (deviceId || '') + '::' + (deviceLabel || '');
     const isStreamAlive = activeCameraStream && activeCameraStream.getVideoTracks().some(t => t.readyState === 'live');
-    if (isStreamAlive && activeCameraDeviceId === deviceId) {
+
+    if (isStreamAlive && activeCameraDeviceId === requestKey) {
       cameraVideo.style.display = 'block';
+      cameraVideo.classList.add('camera-active');
+      cameraVideo.style.opacity = '1';
       if (cameraVideo.paused) {
         cameraVideo.play().catch(e => console.warn('Camera video play error:', e));
       }
       return;
     }
 
-    // Stop previous stream if device changed or dead
-    if (activeCameraStream) {
-      activeCameraStream.getTracks().forEach(track => track.stop());
-      activeCameraStream = null;
+    if (cameraOpeningKey === requestKey) {
+      return;
     }
 
-    try {
-      const constraints = {
-        video: {
-          deviceId: { exact: deviceId },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        },
-        audio: false
-      };
+    cameraOpeningKey = requestKey;
+    const mySeq = ++cameraSetupSeq;
 
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    try {
+      // Stop previous stream before acquiring new device
+      if (activeCameraStream) {
+        activeCameraStream.getTracks().forEach(track => track.stop());
+        activeCameraStream = null;
+      }
+
+      const resolvedId = await resolveDisplayCameraId(deviceId, deviceLabel);
+      let stream = null;
+
+      try {
+        stream = await openCameraStreamWithFallbacks(resolvedId);
+      } catch (firstErr) {
+        console.warn('[Display Camera] Initial acquire failed, requesting Control Desk camera release:', firstErr);
+        // Exclusive single-client Windows driver (e.g. DroidCam / USB HDMI capture): release Control Desk handle & retry!
+        if (window.zionApi && window.zionApi.requestCameraRelease) {
+          window.zionApi.requestCameraRelease();
+        }
+        await new Promise(r => setTimeout(r, 400));
+        const retryId = await resolveDisplayCameraId(deviceId, deviceLabel);
+        stream = await openCameraStreamWithFallbacks(retryId);
+      }
+
+      if (mySeq !== cameraSetupSeq || !state.cameraEnabled || state.cameraMode === 'none') {
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        return;
+      }
+
+      activeCameraStream = stream;
+      activeCameraDeviceId = requestKey;
       cameraVideo.srcObject = stream;
       cameraVideo.muted = true;
       cameraVideo.style.display = 'block';
-      activeCameraStream = stream;
-      activeCameraDeviceId = deviceId;
-      cameraVideo.play().catch(e => console.warn('Camera play error:', e));
+      cameraVideo.classList.add('camera-active');
+      cameraVideo.style.opacity = '1';
+      await cameraVideo.play().catch(e => console.warn('Camera play error:', e));
     } catch (err) {
-      console.warn('Failed to access camera device with exact constraints, falling back:', err);
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: deviceId },
-          audio: false
-        });
-        cameraVideo.srcObject = stream;
-        cameraVideo.muted = true;
-        cameraVideo.style.display = 'block';
-        activeCameraStream = stream;
-        activeCameraDeviceId = deviceId;
-        cameraVideo.play().catch(e => console.warn('Fallback camera play error:', e));
-      } catch (e) {
-        console.error('All camera initialization attempts failed:', e);
+      console.error('[Display Camera] All camera initialization attempts failed:', err);
+    } finally {
+      if (cameraOpeningKey === requestKey) {
+        cameraOpeningKey = null;
       }
     }
   }
@@ -527,7 +607,21 @@
   // STATE APPLICATION ENGINE
   // =========================================================================
   if (window.zionApi && window.zionApi.getRemoteInfo) {
-    window.zionApi.getRemoteInfo().then(i => { if (i && i.port) { window.__zcPort = i.port; applyDisplayState({}); } }).catch(() => {});
+    window.zionApi.getRemoteInfo().then(i => {
+      if (i && i.port) {
+        window.__zcPort = i.port;
+        state.remotePort = i.port;
+      }
+    }).catch(() => {});
+  }
+
+  if (window.zionApi && window.zionApi.getDisplayState) {
+    window.zionApi.getDisplayState().then(initialState => {
+      if (initialState) {
+        if (initialState.remotePort) window.__zcPort = initialState.remotePort;
+        applyDisplayState(initialState);
+      }
+    }).catch(() => {});
   }
 
   function applyDisplayState(newState) {
@@ -573,22 +667,31 @@
       }
     }
 
-    // 2. Hardware Video Camera
-    setupCameraFeed(state.cameraDeviceId, state.cameraMode);
+    if (newState && newState.remotePort) {
+      window.__zcPort = newState.remotePort;
+    }
 
-    // 3. Contrast Scrim Layer
-    if (state.cameraMode === 'preacher') {
-      // In full preacher mode, remove or minimize scrim so congregation sees pastor clearly
-      scrim.style.background = 'rgba(0, 0, 0, 0.1)';
-      cameraVideo.style.zIndex = '5';
-    } else if (state.cameraMode === 'background') {
-      // Worship background mode: dimmer protects lyric legibility
+    const hasSlideLyrics = !!(state.activeSlide && state.activeSlide.body && state.activeSlide.body.trim().length > 0);
+    const showLyricsNow = hasSlideLyrics && !state.clearText && !state.themeOnly && !state.blackout;
+
+    // 2. Hardware Video Camera
+    setupCameraFeed(state.cameraDeviceId, state.cameraMode, state.cameraDeviceLabel);
+
+    // 3. Contrast Scrim Layer & Camera Layer Z-Index
+    if (state.cameraEnabled && state.cameraMode === 'preacher') {
+      // Full preacher camera mode: place camera above scrim (z-index 6) so pastor feed is 100% bright & crisp,
+      // while still below textContainer (z-index 10) if scripture/lyrics are projected over the preacher!
+      scrim.style.background = 'rgba(0, 0, 0, 0.05)';
+      cameraVideo.style.zIndex = '6';
+    } else if (state.cameraEnabled && state.cameraMode === 'background') {
+      // Worship background camera mode: dimmer scrim (z-index 4) protects lyric legibility over camera (z-index 3)
       const opacity = state.cameraOpacity !== undefined ? state.cameraOpacity : 0.75;
       scrim.style.background = `rgba(0, 0, 0, ${opacity})`;
       cameraVideo.style.zIndex = '3';
     } else {
-      // Normal procedural background: gentle ambient scrim
+      // Normal procedural / media background: gentle ambient scrim
       scrim.style.background = 'rgba(0, 0, 0, 0.4)';
+      cameraVideo.style.zIndex = '3';
     }
 
     function formatMediaUrl(url) {
@@ -613,11 +716,16 @@
       if (youtubeLayer && youtubeIframe) {
         youtubeLayer.style.display = 'block';
         youtubeLayer.classList.add('youtube-active');
-        youtubeLayer.style.zIndex = '15';
-        youtubeLayer.style.pointerEvents = 'auto';
+        youtubeLayer.style.opacity = '1';
+        // When lyrics are actively shown over a YouTube Worship Background, keep YouTube at z-index 3 beneath scrim & lyrics;
+        // when playing Fullscreen YouTube Live TV (no lyrics / text cleared), raise to z-index 15!
+        youtubeLayer.style.zIndex = showLyricsNow ? '3' : '15';
+        youtubeLayer.style.pointerEvents = showLyricsNow ? 'none' : 'auto';
         const muteParam = state.youtubeMuted ? 1 : 0;
-        const targetUrl = `http://127.0.0.1:${window.__zcPort || 3000}/embed?v=${encodeURIComponent(state.youtubeVideoId)}&autoplay=1&mute=${muteParam}`;
-        if (youtubeIframe.src !== targetUrl) {
+        const embedPort = state.remotePort || window.__zcPort || 3000;
+        const targetUrl = `http://127.0.0.1:${embedPort}/embed?v=${encodeURIComponent(state.youtubeVideoId)}&autoplay=1&mute=${muteParam}`;
+        if (youtubeIframe.dataset.loadedUrl !== targetUrl) {
+          youtubeIframe.dataset.loadedUrl = targetUrl;
           youtubeIframe.src = targetUrl;
         }
       }
@@ -629,12 +737,21 @@
         setTimeout(() => {
           if (state.backgroundType !== 'youtube') {
             youtubeLayer.style.display = 'none';
+            youtubeIframe.dataset.loadedUrl = '';
             youtubeIframe.src = 'about:blank';
           }
         }, 350);
       }
 
-      if (state.backgroundType === 'video' && state.customBgUrl) {
+      if (state.cameraEnabled && state.cameraMode !== 'none') {
+        // Hide custom static/video media so hardware camera layer is completely unobstructed
+        mediaImg.classList.remove('media-active');
+        mediaVideo.classList.remove('media-active');
+        mediaImg.style.display = 'none';
+        mediaVideo.style.display = 'none';
+        canvas.style.display = 'block';
+        canvas.style.opacity = '1';
+      } else if (state.backgroundType === 'video' && state.customBgUrl) {
         canvas.style.opacity = '0';
         mediaImg.classList.remove('media-active');
         mediaImg.style.display = 'none';
@@ -669,29 +786,33 @@
 
     // 5. Text Styling, Visibility & Smooth Slide Crossfade
     const isYouTubePlaying = state.backgroundType === 'youtube' || (state.activeItem && state.activeItem.type === 'youtube');
-    const hasSlideLyrics = state.activeSlide && state.activeSlide.body && state.activeSlide.body.trim().length > 0;
 
-    // If pure YouTube stream without lyrics, hide scrim and hide textContainer so video is 100% clean
-    if (isYouTubePlaying && !hasSlideLyrics) {
-      if (scrim) {
-        scrim.style.opacity = '0';
-        scrim.style.pointerEvents = 'none';
+    if (!showLyricsNow) {
+      if (isYouTubePlaying || (state.cameraEnabled && state.cameraMode === 'preacher')) {
+        if (scrim) {
+          scrim.style.opacity = '0';
+          scrim.style.pointerEvents = 'none';
+        }
       }
-      textContainer.style.display = 'none';
+      if (!hasSlideLyrics) {
+        textContainer.style.display = 'none';
+      } else {
+        textContainer.style.display = 'flex';
+      }
     } else {
       textContainer.style.display = 'flex';
       if (scrim) {
         if (state.backgroundType === 'youtube') {
-          scrim.style.opacity = '0.35';
+          scrim.style.opacity = '0.4';
           scrim.style.pointerEvents = 'none';
-        } else {
+        } else if (bVal <= 100) {
           scrim.style.opacity = '1';
           scrim.style.pointerEvents = 'none';
         }
       }
     }
 
-    const isTextHidden = state.clearText || state.themeOnly || state.blackout || !state.activeSlide || (isYouTubePlaying && !hasSlideLyrics);
+    const isTextHidden = state.clearText || state.themeOnly || state.blackout || !state.activeSlide || !hasSlideLyrics;
 
     if (isTextHidden) {
       textContainer.classList.add('fade-out');
