@@ -3,6 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('zionApi', {
   // Dual-screen & window management
   getDisplays: () => ipcRenderer.invoke('get-displays'),
+  extendDisplays: () => ipcRenderer.invoke('extend-displays'),
+  fixWindowsFirewall: () => ipcRenderer.invoke('fix-windows-firewall'),
   launchDisplay: (displayId) => ipcRenderer.invoke('launch-display', displayId),
   closeDisplay: () => ipcRenderer.invoke('close-display'),
   getDisplayStatus: () => ipcRenderer.invoke('get-display-status'),
@@ -51,7 +53,7 @@ contextBridge.exposeInMainWorld('zionApi', {
   // In-app Updates & External Links
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
-  getVersion: () => '1.3.4',
+  getVersion: () => '1.3.5',
 
   // Mobile Wi-Fi Remote Control APIs
   getRemoteInfo: () => ipcRenderer.invoke('get-remote-info'),

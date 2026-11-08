@@ -5,14 +5,14 @@ const https = require('https');
 const remoteServer = require('./remote-server.js');
 
 // Ensure high-performance GPU acceleration & zero background throttling
-app.commandLine.appendSwitch('disable-renderer-backgrounding');
-app.commandLine.appendSwitch('disable-background-timer-throttling');
-app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
-app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
-app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
+if (app && app.commandLine) app.commandLine.appendSwitch('disable-renderer-backgrounding');
+if (app && app.commandLine) app.commandLine.appendSwitch('disable-background-timer-throttling');
+if (app && app.commandLine) app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+if (app && app.commandLine) app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+if (app && app.commandLine) app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+if (app && app.commandLine) app.commandLine.appendSwitch('enable-gpu-rasterization');
+if (app && app.commandLine) app.commandLine.appendSwitch('enable-zero-copy');
+if (app && app.commandLine) app.commandLine.appendSwitch('ignore-gpu-blocklist');
 
 let controlWindow = null;
 let displayWindow = null;
@@ -143,6 +143,8 @@ function launchDisplayWindow(targetDisplayId = null) {
     if (isSecondary) {
       displayWindow.setFullScreen(true);
       displayWindow.setAlwaysOnTop(true, 'screen-saver');
+      displayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+      displayWindow.setSkipTaskbar(true);
     }
     displayWindow.showInactive();
     if (isSecondary) {
@@ -202,6 +204,8 @@ function launchDisplayWindow(targetDisplayId = null) {
     if (isSecondary) {
       displayWindow.setFullScreen(true);
       displayWindow.setAlwaysOnTop(true, 'screen-saver');
+      displayWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+      displayWindow.setSkipTaskbar(true);
     }
     displayWindow.showInactive();
     restoreControlFocus();
@@ -210,6 +214,13 @@ function launchDisplayWindow(targetDisplayId = null) {
       remotePort: remoteServer.port || 3000
     });
     notifyControlDisplayStatus();
+  });
+
+  displayWindow.on('minimize', (e) => {
+    if (isSecondary) {
+      e.preventDefault();
+      displayWindow.restore();
+    }
   });
 
   displayWindow.on('closed', () => {
@@ -495,6 +506,31 @@ ipcMain.handle('get-displays', () => {
 
 ipcMain.handle('launch-display', (event, displayId) => {
   return launchDisplayWindow(displayId);
+});
+
+ipcMain.handle('extend-displays', async () => {
+  try {
+    const { exec } = require('child_process');
+    exec('displayswitch.exe /extend', (err) => {
+      if (err) console.warn('displayswitch /extend error:', err);
+    });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('fix-windows-firewall', async () => {
+  try {
+    const { exec } = require('child_process');
+    const psCmd = 'powershell -Command "Start-Process cmd -ArgumentList \'/c netsh advfirewall firewall add rule name=\\\"ZionCast Remote\\\" dir=in action=allow protocol=TCP localport=3000-3020\' -Verb RunAs -WindowStyle Hidden"';
+    exec(psCmd, (err) => {
+      if (err) console.warn('Firewall rule elevation error:', err);
+    });
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 ipcMain.handle('close-display', () => {

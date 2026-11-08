@@ -58,15 +58,34 @@ class RemoteServer {
 
   getLocalIps() {
     const interfaces = os.networkInterfaces();
-    const ips = [];
+    const wifiIps = [];
+    const lanIps = [];
+    const otherIps = [];
+
     for (const name of Object.keys(interfaces)) {
+      const lower = name.toLowerCase();
+      // Skip virtual / container / hypervisor adapters
+      const isVirtual = lower.includes('vethernet') || lower.includes('virtualbox') ||
+        lower.includes('vmnet') || lower.includes('hyper-v') || lower.includes('docker') ||
+        lower.includes('bluetooth') || lower.includes('tailscale');
+
       for (const net of interfaces[name]) {
         if (net.family === 'IPv4' && !net.internal) {
-          ips.push(net.address);
+          if (!isVirtual && (lower.includes('wi-fi') || lower.includes('wireless') || lower.includes('wlan'))) {
+            wifiIps.push(net.address);
+          } else if (!isVirtual && (lower.includes('ethernet') || lower.includes('lan'))) {
+            lanIps.push(net.address);
+          } else if (!isVirtual) {
+            otherIps.push(net.address);
+          } else {
+            otherIps.push(net.address);
+          }
         }
       }
     }
-    return ips.length > 0 ? ips : ['127.0.0.1'];
+
+    const sorted = [...wifiIps, ...lanIps, ...otherIps];
+    return sorted.length > 0 ? sorted : ['127.0.0.1'];
   }
 
   async init(onAction) {
@@ -2103,6 +2122,24 @@ class RemoteServer {
       }
 
       function connectSSE() {
+        var es = null;
+        function pollStatus() {
+          fetch('/api/status')
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+              if (res && res.status) {
+                connBadge.classList.remove('disconnected');
+                connText.textContent = 'Connected';
+                renderUI(res.status);
+              }
+            })
+            .catch(function() {
+              connBadge.classList.add('disconnected');
+              connText.textContent = 'Reconnecting...';
+            });
+        }
+        setInterval(pollStatus, 2500);
+
         var es = new EventSource('/api/events');
         es.onopen = function() {
           connBadge.classList.remove('disconnected');
@@ -2263,10 +2300,11 @@ class RemoteServer {
     };
   }
 
-  getEmbedHtml(vid, autoplay = '1', mute = '0') {
+  getEmbedHtml(vid, autoplay = '1', mute = '0', quality = 'hd720') {
     const safe = String(vid).replace(/[^A-Za-z0-9_-]/g, '');
     const autoPlayParam = autoplay === '0' ? 0 : 1;
     const muteParam = mute === '1' ? 1 : 0;
+    const vqParam = quality || 'hd720';
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2280,10 +2318,26 @@ class RemoteServer {
 </head>
 <body>
   <iframe
-    src="https://www.youtube-nocookie.com/embed/${safe}?autoplay=${autoPlayParam}&mute=${muteParam}&controls=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1"
+    id="yt-embed-player"
+    src="https://www.youtube-nocookie.com/embed/${safe}?autoplay=${autoPlayParam}&mute=${muteParam}&controls=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1&vq=${vqParam}"
     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
     referrerpolicy="strict-origin-when-cross-origin"
     allowfullscreen></iframe>
+  <script>
+    // Smooth church stream watchdog: auto-resume if network pauses video unexpectedly
+    const iframe = document.getElementById('yt-embed-player');
+    window.addEventListener('message', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.event === 'onStateChange' && data.info === 2 && ${autoPlayParam}) {
+          // Video was paused, auto-resume after 2s buffer recovery
+          setTimeout(() => {
+            iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+          }, 2000);
+        }
+      } catch (_) {}
+    });
+  </script>
 </body>
 </html>`;
   }

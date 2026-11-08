@@ -1197,6 +1197,8 @@
       previewVideoStream.style.display = 'block';
       liveVideoStream.style.display = 'block';
       labelCameraStatus.textContent = `Camera: ${mode.toUpperCase()} Live`;
+      const statusCamInfo = document.getElementById('status-camera-info');
+      if (statusCamInfo) statusCamInfo.style.display = 'inline-flex';
     } else {
       if (previewVideoStream.srcObject) {
         previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
@@ -1207,6 +1209,8 @@
       previewVideoStream.style.display = 'none';
       liveVideoStream.style.display = 'none';
       labelCameraStatus.textContent = 'Camera: Standby';
+      const statusCamInfo = document.getElementById('status-camera-info');
+      if (statusCamInfo) statusCamInfo.style.display = 'none';
     }
 
     broadcastDisplayState();
@@ -2720,6 +2724,8 @@
       if (liveVideoStream) liveVideoStream.style.display = 'none';
       activeControlCameraId = null;
       if (labelCameraStatus) labelCameraStatus.textContent = 'Camera: Standby';
+      const statusCamInfo = document.getElementById('status-camera-info');
+      if (statusCamInfo) statusCamInfo.style.display = 'none';
     }
 
     state.backgroundType = 'youtube';
@@ -4030,10 +4036,11 @@
       this.activeKey = null;
       this.activeGain = null;
       this.activeOscillators = [];
-      this.tone = 'warm-sanctuary';
+      this.activeLFO = null;
+      this.tone = 'naija-worship';
       this.octave = 'normal';
       this.volume = 0.75;
-      this.fadeDuration = 2.2;
+      this.fadeDuration = 2.4;
 
       this.frequencies = {
         'C': 130.81, 'C#': 138.59, 'D': 146.83, 'D#': 155.56,
@@ -4061,6 +4068,7 @@
       if (this.activeGain) {
         const oldGain = this.activeGain;
         const oldOscs = this.activeOscillators;
+        const oldLfo = this.activeLFO;
         const now = this.ctx.currentTime;
         oldGain.gain.setValueAtTime(oldGain.gain.value, now);
         oldGain.gain.exponentialRampToValueAtTime(0.0001, now + this.fadeDuration);
@@ -4068,47 +4076,104 @@
           oldOscs.forEach(o => {
             try { o.stop(); o.disconnect(); } catch (e) {}
           });
+          if (oldLfo) {
+            try { oldLfo.stop(); oldLfo.disconnect(); } catch (e) {}
+          }
         }, this.fadeDuration * 1000 + 100);
       }
 
       this.activeKey = key;
       this.activeOscillators = [];
+      this.activeLFO = null;
 
-      // Create primary gain node
+      // Master Pad Gain node with smooth swell
       const newGain = this.ctx.createGain();
-      const targetGain = Math.max(0.0001, this.volume * 0.35);
+      const targetGain = Math.max(0.0001, this.volume * 0.38);
       newGain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
-      newGain.gain.exponentialRampToValueAtTime(targetGain, this.ctx.currentTime + 1.8);
+      newGain.gain.exponentialRampToValueAtTime(targetGain, this.ctx.currentTime + 2.0);
       newGain.connect(this.ctx.destination);
       this.activeGain = newGain;
 
-      // Filter
+      // Primary Warm Lowpass Filter
       const filter = this.ctx.createBiquadFilter();
       filter.type = 'lowpass';
-      let cutoff = 440;
-      if (this.tone === 'celestial-shimmer') cutoff = 720;
-      if (this.tone === 'cathedral-organ') cutoff = 360;
-      if (this.tone === 'deep-atmosphere') cutoff = 320;
+      let cutoff = 520;
+      if (this.tone === 'pentecostal-anointing') cutoff = 360;
+      if (this.tone === 'shekinah-choir') cutoff = 680;
+      if (this.tone === 'celestial-shimmer') cutoff = 780;
+      if (this.tone === 'cathedral-organ') cutoff = 400;
+      if (this.tone === 'deep-atmosphere') cutoff = 310;
       filter.frequency.setValueAtTime(cutoff, this.ctx.currentTime);
-      filter.Q.setValueAtTime(1.8, this.ctx.currentTime);
+      filter.Q.setValueAtTime(2.2, this.ctx.currentTime);
       filter.connect(newGain);
+
+      // Slow Breathing LFO (Low-Frequency Oscillator) for Living Congregation Swell
+      // Modulates filter frequency gently at ~0.085Hz (11.7s breathing cycle)
+      try {
+        const lfo = this.ctx.createOscillator();
+        const lfoGain = this.ctx.createGain();
+        lfo.frequency.setValueAtTime(0.085, this.ctx.currentTime);
+        lfoGain.gain.setValueAtTime(55, this.ctx.currentTime);
+        lfo.connect(lfoGain);
+        lfoGain.connect(filter.frequency);
+        lfo.start();
+        this.activeLFO = lfo;
+      } catch (_) {}
 
       let octMult = 1.0;
       if (this.octave === 'sub') octMult = 0.5;
       if (this.octave === 'high') octMult = 2.0;
 
       const root = baseFreq * octMult;
+      const sub = root * 0.5;
       const fifth = root * 1.498307;
       const octave = root * 2.0;
+      const ninth = root * 2.244924; // Major 9th / Sus2 (Soul of Nigerian Worship)
+      const tenth = root * 2.519842; // Major 3rd upper octave
+      const highShimmer = root * 4.0;
 
-      const voices = [
-        { freq: root, detune: -4, type: 'sawtooth', gain: 0.28 },
-        { freq: root, detune: 4, type: 'sawtooth', gain: 0.28 },
-        { freq: root, detune: 0, type: 'sine', gain: 0.45 },
-        { freq: fifth, detune: -3, type: 'sawtooth', gain: 0.22 },
-        { freq: fifth, detune: 3, type: 'sine', gain: 0.3 },
-        { freq: octave, detune: 0, type: 'sine', gain: 0.2 }
-      ];
+      // Authentic Nigerian Church Worship Voices (Warm Chord Suspension, Zero Percussion)
+      let voices = [];
+
+      if (this.tone === 'naija-worship') {
+        voices = [
+          { freq: sub, detune: 0, type: 'sine', gain: 0.38 },
+          { freq: root, detune: -4, type: 'sawtooth', gain: 0.20 },
+          { freq: root, detune: 4, type: 'triangle', gain: 0.32 },
+          { freq: fifth, detune: -2, type: 'sawtooth', gain: 0.18 },
+          { freq: fifth, detune: 3, type: 'sine', gain: 0.25 },
+          { freq: ninth, detune: 0, type: 'triangle', gain: 0.22 },
+          { freq: tenth, detune: -3, type: 'sine', gain: 0.16 },
+          { freq: octave, detune: 2, type: 'sine', gain: 0.20 },
+          { freq: highShimmer, detune: 0, type: 'sine', gain: 0.10 }
+        ];
+      } else if (this.tone === 'pentecostal-anointing') {
+        voices = [
+          { freq: sub, detune: -2, type: 'sine', gain: 0.45 },
+          { freq: root, detune: 0, type: 'sine', gain: 0.40 },
+          { freq: fifth, detune: -3, type: 'triangle', gain: 0.25 },
+          { freq: octave, detune: 3, type: 'sine', gain: 0.22 }
+        ];
+      } else if (this.tone === 'shekinah-choir') {
+        voices = [
+          { freq: sub, detune: 0, type: 'sine', gain: 0.30 },
+          { freq: root, detune: -5, type: 'sawtooth', gain: 0.22 },
+          { freq: root, detune: 5, type: 'sawtooth', gain: 0.22 },
+          { freq: fifth, detune: -2, type: 'triangle', gain: 0.25 },
+          { freq: ninth, detune: 2, type: 'sine', gain: 0.20 },
+          { freq: octave, detune: 0, type: 'sine', gain: 0.25 },
+          { freq: highShimmer, detune: 0, type: 'sine', gain: 0.14 }
+        ];
+      } else {
+        voices = [
+          { freq: root, detune: -4, type: 'sawtooth', gain: 0.28 },
+          { freq: root, detune: 4, type: 'sawtooth', gain: 0.28 },
+          { freq: root, detune: 0, type: 'sine', gain: 0.45 },
+          { freq: fifth, detune: -3, type: 'sawtooth', gain: 0.22 },
+          { freq: fifth, detune: 3, type: 'sine', gain: 0.30 },
+          { freq: octave, detune: 0, type: 'sine', gain: 0.20 }
+        ];
+      }
 
       voices.forEach(v => {
         const osc = this.ctx.createOscillator();
@@ -5092,6 +5157,10 @@
     if (window.zionApi && window.zionApi.onDisplayStatusUpdate) {
       window.zionApi.onDisplayStatusUpdate((info) => {
         updateTvStatusUI(info.isOpen);
+      const btnExt = document.getElementById('btn-extend-displays');
+      if (btnExt) {
+        btnExt.style.display = (state.displays.length <= 1) ? 'inline-flex' : 'none';
+      }
       });
     }
 
@@ -5284,7 +5353,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.3.4';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.3.5';
         }
       } catch (err) {
         console.warn('Update check warning:', err);

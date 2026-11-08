@@ -733,6 +733,7 @@
       cameraVideo.classList.remove('camera-active');
       cameraVideo.style.opacity = '0';
       cameraVideo.style.display = 'none';
+      cameraVideo.style.pointerEvents = 'none';
       activeCameraDeviceId = null;
       return;
     }
