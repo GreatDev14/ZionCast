@@ -675,15 +675,31 @@
 
       if (requestedLabel) {
         const cleanReq = String(requestedLabel).toLowerCase().trim();
+        // 1. Exact match first
+        const exactLabel = cams.find(c => (c.label || '').toLowerCase().trim() === cleanReq);
+        if (exactLabel && exactLabel.deviceId) return exactLabel.deviceId;
+
+        // 2. Numbered match (e.g. #2, #3, #4 or Cam 2, Cam 3, Cam 4) - critical for Iriun Cam 1, 2, 3, 4!
+        const numMatch = cleanReq.match(/#\s*(\d+)|cam(?:era)?\s*(\d+)|\((\d+)\)/i);
+        if (numMatch) {
+          const num = numMatch[1] || numMatch[2] || numMatch[3];
+          const byNum = cams.find(c => {
+            const lbl = (c.label || '').toLowerCase();
+            return lbl.includes('#' + num) || lbl.includes('camera ' + num) || lbl.includes('cam ' + num) || lbl.includes('(' + num + ')');
+          });
+          if (byNum && byNum.deviceId) return byNum.deviceId;
+        }
+
+        // 3. Substring match
         const byLabel = cams.find(c => {
           const lbl = (c.label || '').toLowerCase().trim();
-          return lbl && (lbl === cleanReq || lbl.includes(cleanReq) || cleanReq.includes(lbl));
+          return lbl && lbl.includes(cleanReq);
         });
         if (byLabel && byLabel.deviceId) return byLabel.deviceId;
       }
 
       // Priority virtual/broadcast cameras if exact ID wasn't scoped to this window
-      const preferred = cams.find(c => /camo|droidcam|droid|obs|capture|elgato|hdmi|atem/i.test(c.label || ''));
+      const preferred = cams.find(c => /iriun|irium|camo|droidcam|droid|obs|capture|elgato|hdmi|atem/i.test(c.label || ''));
       if (preferred && preferred.deviceId) return preferred.deviceId;
 
       return cams[0].deviceId || requestedId || '';

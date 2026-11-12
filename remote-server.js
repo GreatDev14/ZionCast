@@ -1466,6 +1466,25 @@ class RemoteServer {
       btnClock.addEventListener('click', function() { sendAction('toggle-clock'); });
 
       document.getElementById('btn-prev').addEventListener('click', function() { sendAction('prev'); });
+      var btnRemoteCamPreacher = document.getElementById('btn-remote-cam-preacher');
+      if (btnRemoteCamPreacher) {
+        btnRemoteCamPreacher.addEventListener('click', function() {
+          sendAction('switch-camera', { mode: 'preacher' });
+        });
+      }
+      var btnRemoteCamWorship = document.getElementById('btn-remote-cam-worship');
+      if (btnRemoteCamWorship) {
+        btnRemoteCamWorship.addEventListener('click', function() {
+          sendAction('switch-camera', { mode: 'background' });
+        });
+      }
+      var btnRemoteCamOff = document.getElementById('btn-remote-cam-off');
+      if (btnRemoteCamOff) {
+        btnRemoteCamOff.addEventListener('click', function() {
+          sendAction('switch-camera', { mode: 'none' });
+        });
+      }
+
       document.getElementById('btn-next').addEventListener('click', function() { sendAction('next'); });
 
       // =====================================================================
@@ -2033,6 +2052,148 @@ class RemoteServer {
         return String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0');
       }
 
+      
+      // Render Cameras Pane
+      function renderCamerasUI(state) {
+        var statusEl = document.getElementById('remote-cam-status-text');
+        var counterEl = document.getElementById('remote-cam-counter');
+        var quickRow = document.getElementById('remote-cam-quick-row');
+        var listContainer = document.getElementById('remote-cam-list-container');
+        var cams = Array.isArray(state.availableCameras) ? state.availableCameras : [];
+
+        if (counterEl) {
+          counterEl.textContent = cams.length + (cams.length === 1 ? ' Cam' : ' Cams');
+        }
+
+        if (statusEl) {
+          if (state.cameraActive) {
+            var activeLbl = state.cameraDeviceLabel || 'Live Camera';
+            var modeLbl = state.cameraMode === 'preacher' ? 'Preacher Mode' : 'Worship BG';
+            statusEl.textContent = '🔴 ON AIR: ' + activeLbl + ' (' + modeLbl + ')';
+            statusEl.style.color = state.cameraMode === 'preacher' ? '#f87171' : '#22d3ee';
+          } else {
+            statusEl.textContent = 'Camera: Standby (Off)';
+            statusEl.style.color = '#94a3b8';
+          }
+        }
+
+        // Quick row buttons
+        if (quickRow) {
+          quickRow.innerHTML = '';
+          cams.forEach(function(cam) {
+            var btn = document.createElement('button');
+            btn.className = 'btn-quick';
+            btn.style.flex = '1';
+            btn.style.padding = '8px 10px';
+            btn.style.fontSize = '0.78rem';
+            btn.style.fontWeight = '700';
+
+            var isLive = state.cameraActive && (cam.isLive || cam.id === state.cameraDeviceId);
+            if (isLive) {
+              btn.style.background = state.cameraMode === 'preacher' ? '#ef4444' : '#06b6d4';
+              btn.style.color = '#ffffff';
+              btn.style.borderColor = '#ffffff';
+            }
+
+            var icon = cam.type && cam.type.includes('Iriun') ? '📱 ' : '📹 ';
+            btn.textContent = icon + 'Cam ' + (cam.camNumber || 1);
+            btn.addEventListener('click', function() {
+              var targetMode = state.cameraActive && state.cameraMode !== 'none' ? state.cameraMode : 'preacher';
+              sendAction('switch-camera', { deviceId: cam.id, label: cam.name, mode: targetMode });
+            });
+            quickRow.appendChild(btn);
+          });
+        }
+
+        // Detailed camera list
+        if (listContainer) {
+          listContainer.innerHTML = '';
+          if (cams.length === 0) {
+            listContainer.innerHTML = '<div style="text-align:center; padding:18px; color:#94a3b8; font-size:0.8rem;">No cameras detected on ZionCast.<br>Open Iriun Webcam or connect webcam to laptop.</div>';
+            return;
+          }
+
+          cams.forEach(function(cam) {
+            var card = document.createElement('div');
+            card.style.background = 'rgba(30, 41, 59, 0.7)';
+            card.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+            card.style.borderRadius = '8px';
+            card.style.padding = '10px 12px';
+            card.style.display = 'flex';
+            card.style.flexDirection = 'column';
+            card.style.gap = '8px';
+
+            var isLive = state.cameraActive && (cam.isLive || cam.id === state.cameraDeviceId);
+            if (isLive) {
+              card.style.borderColor = state.cameraMode === 'preacher' ? '#ef4444' : '#06b6d4';
+            }
+
+            var topRow = document.createElement('div');
+            topRow.style.display = 'flex';
+            topRow.style.alignItems = 'center';
+            topRow.style.justifyContent = 'space-between';
+
+            var titleDiv = document.createElement('div');
+            titleDiv.style.fontWeight = '700';
+            titleDiv.style.fontSize = '0.82rem';
+            titleDiv.style.color = '#f8fafc';
+            titleDiv.textContent = cam.name || cam.rawLabel || 'Camera';
+
+            var badge = document.createElement('span');
+            badge.style.fontSize = '0.68rem';
+            badge.style.fontWeight = '800';
+            badge.style.padding = '2px 6px';
+            badge.style.borderRadius = '4px';
+
+            if (isLive) {
+              badge.style.background = state.cameraMode === 'preacher' ? '#ef4444' : '#06b6d4';
+              badge.style.color = '#fff';
+              badge.textContent = state.cameraMode === 'preacher' ? '🔴 ON AIR' : '🎵 WORSHIP BG';
+            } else {
+              badge.style.background = 'rgba(16, 185, 129, 0.15)';
+              badge.style.color = '#34d399';
+              badge.textContent = 'READY';
+            }
+
+            topRow.appendChild(titleDiv);
+            topRow.appendChild(badge);
+            card.appendChild(topRow);
+
+            var btnsRow = document.createElement('div');
+            btnsRow.style.display = 'flex';
+            btnsRow.style.gap = '6px';
+
+            var btnPreacher = document.createElement('button');
+            btnPreacher.className = 'btn-quick';
+            btnPreacher.style.flex = '1';
+            btnPreacher.style.padding = '6px';
+            btnPreacher.style.fontSize = '0.72rem';
+            btnPreacher.style.fontWeight = '700';
+            btnPreacher.textContent = '🔴 Preacher';
+            btnPreacher.addEventListener('click', function() {
+              sendAction('switch-camera', { deviceId: cam.id, label: cam.name, mode: 'preacher' });
+            });
+
+            var btnWorship = document.createElement('button');
+            btnWorship.className = 'btn-quick';
+            btnWorship.style.flex = '1';
+            btnWorship.style.padding = '6px';
+            btnWorship.style.fontSize = '0.72rem';
+            btnWorship.style.fontWeight = '700';
+            btnWorship.textContent = '🎵 Worship BG';
+            btnWorship.addEventListener('click', function() {
+              sendAction('switch-camera', { deviceId: cam.id, label: cam.name, mode: 'background' });
+            });
+
+            btnsRow.appendChild(btnPreacher);
+            btnsRow.appendChild(btnWorship);
+            card.appendChild(btnsRow);
+
+            listContainer.appendChild(card);
+          });
+        }
+      }
+
       function renderUI(state) {
         currentAppState = state || {};
 
@@ -2078,6 +2239,7 @@ class RemoteServer {
           fetchLibraryCatalog();
         }
 
+renderCamerasUI(state);
         // Countdown Sync
         var cdDigits = document.getElementById('remote-cd-digits');
         var cdStatus = document.getElementById('remote-cd-status');

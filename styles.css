@@ -3015,3 +3015,369 @@ body {
   border-color: #f59e0b !important;
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.32) !important;
 }
+
+/* =========================================================================
+   CAMERA DISPLAY SECTION & MULTI-CAM VIDEO SWITCHER
+   ========================================================================= */
+.camera-display-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: var(--bg-deep);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  padding: 10px;
+  min-height: 0;
+  gap: 10px;
+}
+
+.camera-display-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.7);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.camera-display-info-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.camera-display-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 800;
+  font-size: 0.88rem;
+  color: #f43f5e;
+  letter-spacing: 0.02em;
+}
+
+.camera-display-meta {
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.camera-quick-switcher-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-cam-quick-chip {
+  padding: 4px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-cam-quick-chip:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.btn-cam-quick-chip.live-active {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #f87171 !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.55);
+}
+
+.btn-cam-quick-chip.worship-active {
+  background: #06b6d4 !important;
+  color: #ffffff !important;
+  border-color: #22d3ee !important;
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.55);
+}
+
+.camera-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn-cam-preacher-live {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  font-weight: 700 !important;
+}
+
+.btn-cam-preacher-live:hover {
+  background: #ef4444 !important;
+  color: #fff !important;
+}
+
+.btn-cam-worship-live {
+  background: rgba(6, 182, 212, 0.15) !important;
+  color: #22d3ee !important;
+  border-color: rgba(6, 182, 212, 0.4) !important;
+  font-weight: 700 !important;
+}
+
+.btn-cam-worship-live:hover {
+  background: #06b6d4 !important;
+  color: #fff !important;
+}
+
+.camera-active-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fca5a5;
+  animation: zcPulseFade 2s infinite ease-in-out;
+}
+
+.camera-status-hint {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-weight: normal;
+}
+
+.camera-multiview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+/* 4-Camera Layout / Quad View: if 3 or 4 cameras, make clean 2x2 grid */
+.camera-multiview-grid.quad-view {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.camera-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease;
+  position: relative;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.camera-card:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+}
+
+.camera-card.live-on-tv {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.35) !important;
+}
+
+.camera-card.live-worship-bg {
+  border-color: #06b6d4 !important;
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.35) !important;
+}
+
+.camera-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.35);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.camera-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-bright);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.camera-card-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.camera-card-badge.status-ready {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.camera-card-badge.status-live {
+  background: #ef4444;
+  color: #ffffff;
+  border: 1px solid #f87171;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.camera-card-badge.status-worship {
+  background: #06b6d4;
+  color: #ffffff;
+  border: 1px solid #22d3ee;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+}
+
+.camera-card-video-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000000;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-card-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.camera-card-live-indicator {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(239, 68, 68, 0.9);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  letter-spacing: 0.05em;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.camera-card-fallback-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.92);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.74rem;
+}
+
+.camera-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.btn-card-take-live {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  border-radius: 5px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-card-take-live:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+.btn-card-worship-bg {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  border-radius: 5px;
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  background: rgba(6, 182, 212, 0.15);
+  color: #22d3ee;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-card-worship-bg:hover {
+  background: #06b6d4;
+  color: #fff;
+}
+
+.btn-card-preview {
+  padding: 6px 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-card-preview:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.camera-empty-state-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 30px 20px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  color: var(--text-dim);
+  gap: 12px;
+  margin: auto 0;
+}

@@ -135,6 +135,10 @@
       <button id="btn-open-stage-modal" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); background: rgba(56, 189, 248, 0.08);" title="Preacher & Choir Stage Display / Confidence Monitor & OBS Lower-Thirds">
         <span>🖥️ Stage</span>
       </button>
+      <button id="btn-open-camera-studio" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: #f43f5e; border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.1);" title="Camera Display Section & Multi-Cam Video Switcher (Iriun, DroidCam, OBS)">
+        <span class="live-pulse-dot" style="background: #f43f5e;"></span>
+        <span>🎥 Cameras</span>
+      </button>
 
       <button id="btn-open-countdown-modal" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.08);" title="Pre-Service Countdown Timers (5m, 10m, Custom)">
         <span>⏱️ Timer</span>
@@ -146,7 +150,7 @@
 
 <button id="btn-check-updates" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: var(--accent-gold); border-color: rgba(245, 158, 11, 0.35);" title="Check GitHub for latest ZionCast updates">
         <span id="update-badge-icon">🔄</span>
-        <span id="update-badge-text">v1.3.5</span>
+        <span id="update-badge-text">v1.3.6</span>
       </button>
     </div>
   </header>
@@ -439,6 +443,53 @@
           </button>
         </div>
       </div>
+      <!-- DEDICATED CAMERA DISPLAY SECTION & MULTI-CAM SWITCHER -->
+      <div id="camera-display-section" class="camera-display-section" style="display: none;">
+        <div class="camera-display-toolbar">
+          <div class="camera-display-info-heading">
+            <span class="camera-display-title">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+              Camera Studio & Multi-Cam Switcher
+            </span>
+            <span id="camera-display-meta" class="camera-display-meta">Detecting cameras...</span>
+          </div>
+
+          <!-- Quick Cam Switcher Buttons (Cam 1, Cam 2, Cam 3, Cam 4) -->
+          <div id="camera-quick-switcher-row" class="camera-quick-switcher-row"></div>
+
+          <!-- Actions & Controls -->
+          <div class="camera-toolbar-actions">
+            <button id="btn-cam-view-refresh" class="btn-fast" title="Rescan Camera Devices">
+              🔄 Rescan
+            </button>
+            <button id="btn-cam-view-preacher" class="btn-fast btn-cam-preacher-live" title="Take Selected Camera Fullscreen on TV">
+              🔴 Project Preacher
+            </button>
+            <button id="btn-cam-view-worship" class="btn-fast btn-cam-worship-live" title="Project Beneath Worship Lyrics">
+              🎵 Worship BG
+            </button>
+            <button id="btn-cam-view-off" class="btn-fast" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" title="Turn Camera Off">
+              ⏹️ Cam Off
+            </button>
+            <button id="btn-cam-view-close" class="btn-fast" title="Close Camera Section & Return to Slides">
+              ✕ Back to Slides
+            </button>
+          </div>
+        </div>
+
+        <!-- Active Camera Notification Banner -->
+        <div id="camera-active-status-bar" class="camera-active-status-bar" style="display: none;">
+          <span class="live-pulse-dot"></span>
+          <span id="camera-active-status-text">🔴 LIVE ON TV: Iriun Webcam #2 (Full Screen Preacher)</span>
+          <span class="camera-status-hint">Click any camera tile or Cam button to switch live feed</span>
+        </div>
+
+        <!-- Video Wall Grid of Available Cameras -->
+        <div id="camera-multiview-grid" class="camera-multiview-grid">
+          <!-- Dynamically populated camera preview cards -->
+        </div>
+      </div>
+
 
       <!-- BOTTOM: Interactive Grid of Slide Tiles -->
       <div class="center-tiles-section">
