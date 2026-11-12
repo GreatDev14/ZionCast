@@ -3381,3 +3381,197 @@ body {
   gap: 12px;
   margin: auto 0;
 }
+
+/* =========================================================================
+   LARGE CAMERA VIEWFINDER & RE-ENGINEERED CAMERA STUDIO
+   ========================================================================= */
+.camera-main-viewfinder-box {
+  background: #000000;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  flex-shrink: 0;
+}
+
+.camera-viewfinder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.viewfinder-camera-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 0.84rem;
+  color: #f8fafc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewfinder-res-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.viewfinder-status-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.viewfinder-status-badge.live {
+  background: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #f87171 !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.viewfinder-status-badge.worship {
+  background: #06b6d4 !important;
+  color: #ffffff !important;
+  border-color: #22d3ee !important;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+}
+
+.camera-viewfinder-screen {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  min-height: 200px;
+  background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+#camera-studio-main-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000000;
+}
+
+.camera-viewfinder-placeholder {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 15, 26, 0.95);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--text-dim);
+  padding: 20px;
+}
+
+.camera-viewfinder-live-banner {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(220, 38, 38, 0.92);
+  color: #ffffff;
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  letter-spacing: 0.04em;
+}
+
+.camera-viewfinder-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.9);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Redesigned Camera Gallery Cards - Guaranteed Non-Collapsing! */
+.camera-multiview-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)) !important;
+  gap: 10px !important;
+  flex: 1 !important;
+  overflow-y: auto !important;
+  padding: 4px !important;
+  min-height: 140px !important;
+}
+
+.camera-card {
+  background: var(--bg-surface) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  min-height: 110px !important;
+}
+
+.camera-card:hover {
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5) !important;
+}
+
+.camera-card.selected-source {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.45) !important;
+  background: rgba(56, 189, 248, 0.06) !important;
+}
+
+.camera-card.live-on-tv {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.5) !important;
+}
+
+.camera-card.live-worship-bg {
+  border-color: #06b6d4 !important;
+  box-shadow: 0 0 16px rgba(6, 182, 212, 0.5) !important;
+}
+
+.camera-card-body-preview {
+  position: relative;
+  width: 100%;
+  height: 90px;
+  background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.camera-card-video-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+}
