@@ -150,7 +150,7 @@
 
 <button id="btn-check-updates" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: var(--accent-gold); border-color: rgba(245, 158, 11, 0.35);" title="Check GitHub for latest ZionCast updates">
         <span id="update-badge-icon">🔄</span>
-        <span id="update-badge-text">v1.3.7</span>
+        <span id="update-badge-text">v1.3.8</span>
       </button>
     </div>
   </header>
@@ -445,57 +445,49 @@
       </div>
       <!-- DEDICATED CAMERA DISPLAY SECTION & MULTI-CAM SWITCHER -->
       <div id="camera-display-section" class="camera-display-section" style="display: none;">
+        <!-- Clean Studio Header -->
         <div class="camera-display-toolbar">
           <div class="camera-display-info-heading">
             <span class="camera-display-title">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-              Camera Studio & Live Viewfinder
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+              Camera Studio
             </span>
-            <span id="camera-display-meta" class="camera-display-meta">Detecting cameras...</span>
+            <span id="camera-display-meta" class="camera-display-meta">Scanning cameras...</span>
           </div>
 
-          <!-- Quick Cam Switcher Chips (Cam 1, Cam 2, Cam 3, Cam 4) -->
-          <div id="camera-quick-switcher-row" class="camera-quick-switcher-row"></div>
-
-          <!-- Actions & Controls -->
           <div class="camera-toolbar-actions">
-            <button id="btn-cam-view-refresh" class="btn-fast" title="Rescan Camera Devices">
+            <!-- Filter Toggle: Connected devices only vs All drivers -->
+            <button id="btn-toggle-cam-filter" class="btn-fast" style="padding: 4px 10px; font-size: 0.74rem; color: #34d399; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.1); font-weight: 700;" title="Show only cameras with active phone/video connections">
+              🟢 Active Connected Only
+            </button>
+            <button id="btn-cam-view-refresh" class="btn-fast" style="padding: 4px 10px; font-size: 0.74rem;" title="Rescan Cameras">
               🔄 Rescan
             </button>
-            <button id="btn-cam-view-preacher" class="btn-fast btn-cam-preacher-live" title="Take Selected Camera Fullscreen on TV">
-              🔴 Project Preacher
-            </button>
-            <button id="btn-cam-view-worship" class="btn-fast btn-cam-worship-live" title="Project Beneath Worship Lyrics">
-              🎵 Worship BG
-            </button>
-            <button id="btn-cam-view-off" class="btn-fast" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" title="Turn Camera Off">
-              ⏹️ Cam Off
-            </button>
-            <button id="btn-cam-view-close" class="btn-fast" title="Close Camera Section & Return to Slides">
+            <button id="btn-cam-view-close" class="btn-fast" style="padding: 4px 10px; font-size: 0.74rem;" title="Close Camera Studio & Return to Slides">
               ✕ Back to Slides
             </button>
           </div>
         </div>
 
-        <!-- LARGE LIVE CAMERA VIEWFINDER (Shows actual live video of selected camera!) -->
+        <!-- OPERATOR LIVE VIEWFINDER MONITOR -->
         <div class="camera-main-viewfinder-box">
           <div class="camera-viewfinder-header">
             <div class="viewfinder-camera-title">
               <span id="viewfinder-cam-icon">📱</span>
-              <span id="viewfinder-cam-name">Iriun Webcam (Select a camera below to view live feed)</span>
+              <span id="viewfinder-cam-name">Select Camera</span>
               <span id="viewfinder-cam-resolution" class="viewfinder-res-badge">Ready</span>
             </div>
             <div id="viewfinder-cam-status-badge" class="viewfinder-status-badge">
-              VIEWFINDER READY
+              LOCAL PREVIEW ONLY
             </div>
           </div>
 
           <div class="camera-viewfinder-screen">
             <video id="camera-studio-main-video" autoplay playsinline muted></video>
             <div id="camera-viewfinder-placeholder" class="camera-viewfinder-placeholder">
-              <div style="font-size: 2.2rem;">📹</div>
-              <div style="font-size: 1rem; font-weight: 800; color: #fff;">Click Any Camera Below to See What It Is Showing</div>
-              <div style="font-size: 0.76rem; color: #94a3b8;">ZionCast will immediately stream live video into this viewfinder monitor</div>
+              <div style="font-size: 2rem;">📹</div>
+              <div style="font-size: 0.95rem; font-weight: 800; color: #fff;">Select an active camera below to view live feed</div>
+              <div style="font-size: 0.74rem; color: #94a3b8;">Clicking a camera only previews it here on your laptop. It will not display on TV until you click Add to TV.</div>
             </div>
             <div id="camera-viewfinder-live-banner" class="camera-viewfinder-live-banner" style="display: none;">
               <span class="live-pulse-dot"></span>
@@ -503,27 +495,32 @@
             </div>
           </div>
 
+          <!-- THE ONLY TV CONTROLS: Camera NEVER goes to TV unless explicitly clicked here! -->
           <div class="camera-viewfinder-actions-bar">
-            <button id="btn-vf-take-live" class="btn-fast btn-cam-preacher-live" style="flex: 1; padding: 7px 12px; font-size: 0.8rem;" title="Project this camera full-screen on congregation TV">
-              🔴 Project to TV (Take Live)
+            <button id="btn-vf-add-preacher" class="btn-fast btn-cam-preacher-live" style="flex: 1.2; padding: 9px 12px; font-size: 0.8rem; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 6px;" title="Project this camera full-screen onto the congregation TV">
+              <span>📺 Add to TV (Preacher Mode)</span>
             </button>
-            <button id="btn-vf-worship-bg" class="btn-fast btn-cam-worship-live" style="flex: 1; padding: 7px 12px; font-size: 0.8rem;" title="Project this camera beneath worship lyrics">
-              🎵 Worship Background
+            <button id="btn-vf-add-worship" class="btn-fast btn-cam-worship-live" style="flex: 1.2; padding: 9px 12px; font-size: 0.8rem; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 6px;" title="Project this camera beneath worship lyrics on the TV">
+              <span>🎵 Add to TV (Worship BG)</span>
             </button>
-            <button id="btn-vf-cam-off" class="btn-fast" style="padding: 7px 12px; font-size: 0.8rem; color: #ef4444; border-color: rgba(239, 68, 68, 0.4);" title="Turn camera feed off">
-              ⏹️ Camera Off
+            <button id="btn-vf-remove-tv" class="btn-fast" style="padding: 9px 14px; font-size: 0.8rem; color: #ef4444; border-color: rgba(239, 68, 68, 0.4); font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px;" title="Take camera off the TV immediately">
+              <span>⏹️ Remove from TV</span>
             </button>
           </div>
         </div>
 
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px; margin-top: 4px;">
-          <span style="font-size: 0.74rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">
-            Available Cameras (Click to switch viewfinder & test signal)
+        <!-- CAMERA SELECTION SECTION -->
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 2px 4px;">
+          <span style="font-size: 0.74rem; font-weight: 800; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
+            <span>Connected Cameras In Use</span>
+            <span id="camera-gallery-count" class="badge-tag" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.68rem;">1 Active</span>
           </span>
-          <span id="camera-gallery-count" style="font-size: 0.72rem; color: var(--text-dim);">10 Cameras</span>
+          <span style="font-size: 0.7rem; color: var(--text-dim);">
+            Click camera to preview on laptop • Click "Add to TV" to project
+          </span>
         </div>
 
-        <!-- Video Wall Grid of Available Cameras -->
+        <!-- Camera Cards Grid: Only Active / Connected Devices Shown! -->
         <div id="camera-multiview-grid" class="camera-multiview-grid">
           <!-- Dynamically populated camera preview cards -->
         </div>
