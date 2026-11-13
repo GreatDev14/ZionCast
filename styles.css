@@ -2687,6 +2687,24 @@ body {
   transition: width 0.95s linear;
 }
 
+/* Size 0: Mini Corner Timer (Ultra-Subtle) */
+.display-countdown-wrapper.size-mini .display-countdown-card {
+  padding: 6px 14px 8px 14px;
+  border-radius: 14px;
+  min-width: 118px;
+}
+.display-countdown-wrapper.size-mini .display-countdown-title {
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+}
+.display-countdown-wrapper.size-mini .display-countdown-digits {
+  font-size: 22px;
+  margin-top: 1px;
+}
+.display-countdown-wrapper.size-mini .display-countdown-sub {
+  display: none;
+}
+
 /* Size 1: Compact Pill (Default - Clean & Non-Intrusive Over Flyers) */
 .display-countdown-wrapper.size-compact .display-countdown-card {
   padding: 11px 22px 14px 22px;

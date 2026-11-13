@@ -934,22 +934,10 @@
     });
   }
 
-  // Global first-click focus recovery: clicking any input/textarea always restores OS window focus immediately
+  // Global OS focus guard: restore window focus when user clicks into the app without disrupting native DOM input caret/typing
   document.addEventListener('mousedown', (e) => {
     if (!document.hasFocus()) {
       ensureRendererFocus();
-    }
-    const target = e.target && e.target.closest
-      ? e.target.closest('input, textarea, [contenteditable="true"], select')
-      : null;
-    if (target && !target.disabled && !target.readOnly) {
-      if (document.activeElement !== target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-        setTimeout(() => {
-          if (document.activeElement !== target) {
-            target.focus();
-          }
-        }, 0);
-      }
     }
   }, true);
 
@@ -5750,14 +5738,11 @@
         return;
       }
 
-      // Don't trigger presentation hotkeys while focused inside inputs, textareas, selects, or editable areas
-      const activeEl = document.activeElement;
-      if (activeEl && (
-        activeEl.tagName === 'INPUT' ||
-        activeEl.tagName === 'TEXTAREA' ||
-        activeEl.tagName === 'SELECT' ||
-        activeEl.isContentEditable
-      )) {
+      // Don't trigger presentation hotkeys while typing in inputs, textareas, selects, or editable areas
+      const targetEl = e.target;
+      const isInput = (targetEl && (targetEl.tagName === 'INPUT' || targetEl.tagName === 'TEXTAREA' || targetEl.tagName === 'SELECT' || targetEl.isContentEditable)) ||
+                      (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'SELECT' || document.activeElement.isContentEditable));
+      if (isInput) {
         return;
       }
 

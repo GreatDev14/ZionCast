@@ -1187,10 +1187,10 @@
     const countdownProgressBar = document.getElementById('display-countdown-progress-bar');
 
     if (countdownLayer && countdownDigits) {
-      const pos = ['top-right', 'top-left', 'bottom-left', 'bottom-center', 'center'].includes(state.countdownPosition)
+      const pos = ['top-right', 'top-left', 'bottom-right', 'bottom-left', 'bottom-center', 'center'].includes(state.countdownPosition)
         ? state.countdownPosition
         : 'top-right';
-      const sz = ['compact', 'medium', 'large'].includes(state.countdownSize)
+      const sz = ['mini', 'compact', 'medium', 'large'].includes(state.countdownSize)
         ? state.countdownSize
         : 'compact';
 

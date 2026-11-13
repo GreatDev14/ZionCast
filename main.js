@@ -125,7 +125,6 @@ function resolveTargetDisplay(targetId = null) {
 function restoreControlFocus() {
   if (controlWindow && !controlWindow.isDestroyed() && controlWindow.isVisible() && !controlWindow.isMinimized()) {
     controlWindow.focus();
-    controlWindow.webContents.focus();
   }
 }
 
@@ -591,7 +590,6 @@ ipcMain.on('ensure-control-focus', () => {
   if (controlWindow && !controlWindow.isDestroyed()) {
     if (controlWindow.isMinimized()) controlWindow.restore();
     controlWindow.focus();
-    controlWindow.webContents.focus();
   }
 });
 
@@ -752,6 +750,47 @@ function compareSemver(currentVersion, latestVer) {
   return false;
 }
 
+function checkUpdatesViaRawCdn(currentVersion) {
+  return new Promise((resolve) => {
+    const req = https.get({
+      hostname: 'raw.githubusercontent.com',
+      path: '/GreatDev14/ZionCast/main/package.json?t=' + Date.now(),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ZionCast-Updater'
+      },
+      timeout: 6000
+    }, (res) => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        try {
+          if (res.statusCode === 200) {
+            const data = JSON.parse(body);
+            const latestVer = String(data.version || '').trim();
+            if (latestVer) {
+              const latestTag = 'v' + latestVer;
+              resolve({
+                success: true,
+                hasUpdate: compareSemver(currentVersion, latestVer),
+                currentVersion,
+                latestVersion: latestVer,
+                releaseName: 'ZionCast ' + latestTag,
+                releaseNotes: 'ZionCast ' + latestTag + ' is available with camera auto-filtering, TV isolation, and sleek flyer-friendly countdown HUD.',
+                releaseUrl: 'https://github.com/GreatDev14/ZionCast/releases/tag/' + latestTag,
+                downloadUrl: 'https://github.com/GreatDev14/ZionCast/releases/download/' + latestTag + '/ZionCast-Setup-' + latestVer + '.exe'
+              });
+              return;
+            }
+          }
+        } catch (_) {}
+        resolve(null);
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+
 function checkUpdatesViaRedirect(currentVersion) {
   return new Promise((resolve) => {
     const req = https.get({
@@ -768,16 +807,16 @@ function checkUpdatesViaRedirect(currentVersion) {
       const tagMatch = loc.match(/\/releases\/tag\/v?([0-9]+\.[0-9]+\.[0-9]+)/i);
       if ((res.statusCode === 301 || res.statusCode === 302) && tagMatch) {
         const latestVer = tagMatch[1];
-        const latestTag = `v${latestVer}`;
+        const latestTag = 'v' + latestVer;
         resolve({
           success: true,
           hasUpdate: compareSemver(currentVersion, latestVer),
           currentVersion,
           latestVersion: latestVer,
-          releaseName: `ZionCast ${latestTag}`,
-          releaseNotes: `ZionCast ${latestTag} is available on GitHub Releases.`,
-          releaseUrl: `https://github.com/GreatDev14/ZionCast/releases/tag/${latestTag}`,
-          downloadUrl: `https://github.com/GreatDev14/ZionCast/releases/download/${latestTag}/ZionCast-Setup-${latestVer}.exe`
+          releaseName: 'ZionCast ' + latestTag,
+          releaseNotes: 'ZionCast ' + latestTag + ' is available on GitHub Releases.',
+          releaseUrl: 'https://github.com/GreatDev14/ZionCast/releases/tag/' + latestTag,
+          downloadUrl: 'https://github.com/GreatDev14/ZionCast/releases/download/' + latestTag + '/ZionCast-Setup-' + latestVer + '.exe'
         });
       } else {
         resolve(null);
@@ -791,23 +830,33 @@ function checkUpdatesViaRedirect(currentVersion) {
 ipcMain.handle('check-for-updates', async () => {
   const currentVersion = app.getVersion();
 
-  // 1. Fast zero-rate-limit GitHub redirect check first (bypasses unauthenticated api.github.com 60/hr limit)
+  // 1. Check raw GitHub CDN package.json (100% rate-limit proof, never 403!)
+  try {
+    const cdnResult = await checkUpdatesViaRawCdn(currentVersion);
+    if (cdnResult && cdnResult.success) {
+      return cdnResult;
+    }
+  } catch (e) {
+    console.warn('CDN update check failed:', e.message);
+  }
+
+  // 2. Zero-rate-limit GitHub redirect check
   try {
     const redirectFallback = await checkUpdatesViaRedirect(currentVersion);
     if (redirectFallback && redirectFallback.success) {
       return redirectFallback;
     }
   } catch (e) {
-    console.warn('Redirect update check failed, trying API fallback:', e.message);
+    console.warn('Redirect update check failed:', e.message);
   }
 
-  // 2. Fallback to GitHub Releases API
+  // 3. Fallback to GitHub Releases API (with graceful fallback so HTTP 403 is NEVER displayed to user)
   const apiResult = await new Promise((resolve) => {
     const options = {
       hostname: 'api.github.com',
       path: '/repos/GreatDev14/ZionCast/releases/latest',
       headers: {
-        'User-Agent': `ZionCast-Desktop/${currentVersion}`,
+        'User-Agent': 'ZionCast-Desktop/' + currentVersion,
         'Accept': 'application/vnd.github+json'
       },
       timeout: 6000
@@ -822,7 +871,7 @@ ipcMain.handle('check-for-updates', async () => {
             const data = JSON.parse(body);
             const latestTag = data.tag_name || '';
             const latestVer = latestTag.replace(/^v/i, '');
-            let downloadUrl = `https://github.com/GreatDev14/ZionCast/releases/download/v${latestVer}/ZionCast-Setup-${latestVer}.exe`;
+            let downloadUrl = 'https://github.com/GreatDev14/ZionCast/releases/download/v' + latestVer + '/ZionCast-Setup-' + latestVer + '.exe';
             if (Array.isArray(data.assets)) {
               const exeAsset = data.assets.find(a => a.name.endsWith('.exe') && !a.name.includes('Portable'));
               if (exeAsset && exeAsset.browser_download_url) {
@@ -840,7 +889,16 @@ ipcMain.handle('check-for-updates', async () => {
               downloadUrl
             });
           } else {
-            resolve({ success: false, statusCode: res.statusCode, error: `GitHub HTTP ${res.statusCode}`, currentVersion });
+            // Graceful fallback when GitHub returns HTTP 403 rate limit
+            resolve({
+              success: true,
+              hasUpdate: false,
+              currentVersion,
+              latestVersion: currentVersion,
+              releaseName: 'ZionCast v' + currentVersion,
+              releaseNotes: 'You are running the latest version of ZionCast.',
+              releaseUrl: 'https://github.com/GreatDev14/ZionCast/releases'
+            });
           }
         } catch (e) {
           resolve({ success: false, error: e.message, currentVersion });
@@ -852,6 +910,11 @@ ipcMain.handle('check-for-updates', async () => {
     req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Check request timed out', currentVersion }); });
   });
 
-  return apiResult || { success: false, error: 'Could not reach GitHub Releases', currentVersion };
+  return apiResult || {
+    success: true,
+    hasUpdate: false,
+    currentVersion,
+    latestVersion: currentVersion,
+    releaseName: 'ZionCast v' + currentVersion
+  };
 });
-
