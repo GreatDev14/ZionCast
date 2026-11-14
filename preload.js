@@ -55,7 +55,7 @@ contextBridge.exposeInMainWorld('zionApi', {
   // In-app Updates & External Links
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
-  getVersion: () => '1.4.3',
+  getVersion: () => '1.4.4',
 
   // Mobile Wi-Fi Remote Control APIs
   getRemoteInfo: (preferredIp = null) => ipcRenderer.invoke('get-remote-info', preferredIp),

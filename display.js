@@ -20,15 +20,17 @@
   const dimmerCurtain = document.getElementById('display-dimmer');
   const blackoutCurtain = document.getElementById('display-blackout');
 
-  // BroadcastChannel Fallback for cross-window sync
+  // BroadcastChannel Fallback for cross-window sync (only used when Electron IPC is unavailable)
   let syncChannel = null;
-  try {
-    syncChannel = new BroadcastChannel('zioncast-sync');
-    syncChannel.onmessage = (event) => {
-      if (event.data) applyDisplayState(event.data);
-    };
-  } catch (err) {
-    console.warn('BroadcastChannel not supported, relying strictly on Electron IPC:', err);
+  if (!window.zionApi || !window.zionApi.onDisplayStateUpdate) {
+    try {
+      syncChannel = new BroadcastChannel('zioncast-sync');
+      syncChannel.onmessage = (event) => {
+        if (event.data) applyDisplayState(event.data);
+      };
+    } catch (err) {
+      console.warn('BroadcastChannel not supported, relying strictly on Electron IPC:', err);
+    }
   }
 
   // Active State Cache
@@ -48,6 +50,11 @@
     backgroundType: 'procedural',
     backgroundId: 'celestial-clouds',
     customBgUrl: '',
+    videoMuted: false,
+    videoPaused: false,
+    videoLoop: true,
+    videoVolume: 1.0,
+    videoRestartSeq: 0,
     cameraEnabled: false,
     cameraMode: 'none',
     cameraDeviceId: '',
@@ -109,6 +116,19 @@
   }
 
   function renderProceduralLoop() {
+    // Pause procedural 2D canvas drawing completely when video, image, youtube, blackout, or fullscreen preacher camera is active
+    // This frees 100% of GPU & CPU for zero-lag hardware video decoding and playback!
+    if (
+      state.blackout ||
+      state.backgroundType === 'video' ||
+      state.backgroundType === 'image' ||
+      state.backgroundType === 'youtube' ||
+      (state.cameraEnabled && state.cameraMode === 'preacher')
+    ) {
+      animationFrameId = requestAnimationFrame(renderProceduralLoop);
+      return;
+    }
+
     animTime += 0.015;
     const w = canvas.width;
     const h = canvas.height;
@@ -872,8 +892,9 @@
       // Exponential luminous amplification with contrast tuning to keep colors punchy
       const boostFilter = `brightness(${boostFactor}) contrast(${1 + (boostFactor - 1) * 0.15}) saturate(${1 + (boostFactor - 1) * 0.1})`;
       if (mediaImg) mediaImg.style.filter = boostFilter;
-      if (mediaVideo) mediaVideo.style.filter = boostFilter;
-      if (cameraVideo) cameraVideo.style.filter = boostFilter;
+      // Keep zero-copy hardware video overlay active unless user significantly boosts brightness (>115%)
+      if (mediaVideo) mediaVideo.style.filter = bVal > 115 ? `brightness(${boostFactor})` : 'none';
+      if (cameraVideo) cameraVideo.style.filter = bVal > 115 ? `brightness(${boostFactor})` : 'none';
       if (canvas) canvas.style.filter = boostFilter;
 
       // Allow the boosted brightened image to shine through the scrim
@@ -912,10 +933,15 @@
 
     function formatMediaUrl(url) {
       if (!url) return '';
-      if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://') || url.startsWith('data:')) {
+      if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://') || url.startsWith('data:') || url.startsWith('blob:')) {
         return url;
       }
-      return 'file:///' + url.replace(/\\/g, '/');
+      const normalized = url.replace(/\\/g, '/');
+      const encoded = normalized
+        .split('/')
+        .map((seg, idx) => (idx === 0 && /^[a-zA-Z]:$/.test(seg)) ? seg : encodeURIComponent(seg))
+        .join('/');
+      return encoded.startsWith('/') ? 'file://' + encoded : 'file:///' + encoded;
     }
 
     // 4. Custom Local Media & YouTube Live Backgrounds with Smooth Crossfade
@@ -924,10 +950,15 @@
 
     if (state.backgroundType === 'youtube' && state.youtubeVideoId) {
       canvas.style.opacity = '0';
+      canvas.style.display = 'none';
       mediaImg.classList.remove('media-active');
       mediaVideo.classList.remove('media-active');
       mediaImg.style.display = 'none';
       mediaVideo.style.display = 'none';
+      if (!mediaVideo.paused) {
+        try { mediaVideo.pause(); } catch (_) {}
+      }
+      mediaVideo.muted = true;
 
       if (youtubeLayer && youtubeIframe) {
         youtubeLayer.style.display = 'block';
@@ -965,30 +996,78 @@
         mediaVideo.classList.remove('media-active');
         mediaImg.style.display = 'none';
         mediaVideo.style.display = 'none';
+        if (!mediaVideo.paused) {
+          try { mediaVideo.pause(); } catch (_) {}
+        }
+        mediaVideo.muted = true;
         canvas.style.display = 'block';
         canvas.style.opacity = '1';
       } else if (state.backgroundType === 'video' && state.customBgUrl) {
         canvas.style.opacity = '0';
+        canvas.style.display = 'none';
         mediaImg.classList.remove('media-active');
         mediaImg.style.display = 'none';
         mediaVideo.style.display = 'block';
-        const formatted = formatMediaUrl(state.customBgUrl);
-        if (mediaVideo.src !== formatted) {
+
+        const rawKey = String(state.customBgUrl);
+        const formatted = formatMediaUrl(rawKey);
+        const isNewVideo = mediaVideo.dataset.loadedRawUrl !== rawKey;
+
+        mediaVideo.loop = state.videoLoop !== false;
+        const targetVol = typeof state.videoVolume === 'number' ? Math.max(0, Math.min(1, state.videoVolume)) : 1.0;
+        const shouldMute = !!(state.blackout || state.videoMuted);
+        mediaVideo.volume = targetVol;
+        mediaVideo.muted = shouldMute;
+
+        if (isNewVideo) {
+          mediaVideo.dataset.loadedRawUrl = rawKey;
           mediaVideo.src = formatted;
-          mediaVideo.play().catch(e => console.warn('Video bg autoplay prevented:', e));
+          try { mediaVideo.currentTime = 0; } catch (_) {}
+        } else if (state.videoRestartSeq && mediaVideo.dataset.lastRestartSeq !== String(state.videoRestartSeq)) {
+          mediaVideo.dataset.lastRestartSeq = String(state.videoRestartSeq);
+          try { mediaVideo.currentTime = 0; } catch (_) {}
+        }
+
+        if (state.videoRestartSeq) {
+          mediaVideo.dataset.lastRestartSeq = String(state.videoRestartSeq);
+        }
+
+        if (state.videoPaused || state.blackout) {
+          if (!mediaVideo.paused) {
+            try { mediaVideo.pause(); } catch (_) {}
+          }
+        } else {
+          if (mediaVideo.paused) {
+            mediaVideo.play().catch(e => {
+              console.warn('Video bg play error:', e);
+            });
+          }
         }
         mediaVideo.classList.add('media-active');
       } else if (state.backgroundType === 'image' && state.customBgUrl) {
         canvas.style.opacity = '0';
+        canvas.style.display = 'none';
         mediaVideo.classList.remove('media-active');
         mediaVideo.style.display = 'none';
+        if (!mediaVideo.paused) {
+          try { mediaVideo.pause(); } catch (_) {}
+        }
+        mediaVideo.muted = true;
         mediaImg.style.display = 'block';
-        mediaImg.src = formatMediaUrl(state.customBgUrl);
+        const rawImgKey = String(state.customBgUrl);
+        if (mediaImg.dataset.loadedRawUrl !== rawImgKey) {
+          mediaImg.dataset.loadedRawUrl = rawImgKey;
+          mediaImg.src = formatMediaUrl(rawImgKey);
+        }
         mediaImg.classList.add('media-active');
       } else {
         // Procedural canvas mode
         mediaVideo.classList.remove('media-active');
         mediaImg.classList.remove('media-active');
+        if (!mediaVideo.paused) {
+          try { mediaVideo.pause(); } catch (_) {}
+        }
+        mediaVideo.muted = true;
         setTimeout(() => {
           if (state.backgroundType === 'procedural') {
             mediaVideo.style.display = 'none';

@@ -1568,9 +1568,9 @@ body {
   display: none;
   opacity: 0;
   transform: translateZ(0);
-  will-change: opacity, transform;
+  will-change: opacity;
   backface-visibility: hidden;
-  transition: opacity 0.35s ease-in-out, filter 0.05s linear;
+  transition: opacity 0.25s ease-in-out;
 }
 
 .display-media-bg.media-active {

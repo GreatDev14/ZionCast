@@ -13,6 +13,7 @@ if (app && app.commandLine) app.commandLine.appendSwitch('autoplay-policy', 'no-
 if (app && app.commandLine) app.commandLine.appendSwitch('enable-gpu-rasterization');
 if (app && app.commandLine) app.commandLine.appendSwitch('enable-zero-copy');
 if (app && app.commandLine) app.commandLine.appendSwitch('ignore-gpu-blocklist');
+if (app && app.commandLine) app.commandLine.appendSwitch('enable-accelerated-video-decode');
 
 let controlWindow = null;
 let displayWindow = null;
@@ -43,6 +44,11 @@ let currentDisplayState = {
   backgroundType: 'procedural',
   backgroundId: 'celestial-clouds',
   customBgUrl: '',
+  videoMuted: false,
+  videoPaused: false,
+  videoLoop: true,
+  videoVolume: 1.0,
+  videoRestartSeq: 0,
   cameraEnabled: false,
   cameraMode: 'none',
   cameraDeviceId: '',
@@ -190,6 +196,7 @@ function launchDisplayWindow(targetDisplayId = null) {
 
   displayWindow.webContents.on('did-finish-load', () => {
     if (displayWindow && !displayWindow.isDestroyed()) {
+      try { displayWindow.webContents.setAudioMuted(false); } catch (_) {}
       displayWindow.webContents.send('display-state-update', {
         ...currentDisplayState,
         remotePort: remoteServer.port || 3000
