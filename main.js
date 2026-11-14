@@ -606,6 +606,31 @@ ipcMain.on('request-camera-release', () => {
   }
 });
 
+// Fast OS-level check (25ms) for active phone TCP connections so watchdog can auto-rescan when phone connects
+ipcMain.handle('get-camera-app-status', async () => {
+  if (process.platform !== 'win32') {
+    return { iriunRunning: true, iriunPhoneConnected: false };
+  }
+  const { exec } = require('child_process');
+  const netOut = await new Promise((resolve) => {
+    exec('netstat -ano -p tcp', { windowsHide: true, timeout: 1000 }, (err, stdout) => resolve(stdout || ''));
+  });
+
+  let iriunRunning = false;
+  let iriunPhoneConnected = false;
+  for (const line of netOut.split(/\r?\n/)) {
+    if (!line.includes('ESTABLISHED')) continue;
+    if (line.includes('127.0.0.1:5354')) {
+      iriunRunning = true;
+    }
+    if (/:4699\b|:4700\b|:4701\b|:4702\b/.test(line)) {
+      iriunRunning = true;
+      iriunPhoneConnected = true;
+    }
+  }
+  return { iriunRunning, iriunPhoneConnected };
+});
+
 ipcMain.on('sync-to-control', (event, payload) => {
   if (controlWindow && !controlWindow.isDestroyed()) {
     controlWindow.webContents.send('control-state-update', payload);

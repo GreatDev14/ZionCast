@@ -965,12 +965,8 @@
 
   if (window.zionApi && window.zionApi.onReleaseControlCamera) {
     window.zionApi.onReleaseControlCamera(() => {
-      // Release Control Desk local preview handle so single-client Windows drivers (e.g. DroidCam / HDMI Capture)
-      // can bind exclusively to the Audience TV Output window without NotReadableError!
-      if (previewVideoStream && previewVideoStream.srcObject) {
-        previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
-        previewVideoStream.srcObject = null;
-      }
+      stopAllCameraCardStreams(false);
+      if (previewVideoStream) previewVideoStream.srcObject = null;
       if (liveVideoStream) liveVideoStream.srcObject = null;
       activeControlCameraId = null;
       if (state.cameraEnabled && labelCameraStatus) {
@@ -1027,192 +1023,355 @@
     };
   }
 
-  let cameraCardStreams = new Map();
+  let cameraCardStreams = new Map(); // deviceId -> MediaStream (shared across card, preview, and live monitors)
+  let cameraFrameStats = new Map();  // deviceId -> { isDarkPhone: boolean, res: string }
+  let cameraWatchdogTimer = null;
 
-  function stopAllCameraCardStreams() {
-    cameraCardStreams.forEach((stream) => {
+  function stopAllCameraCardStreams(keepActiveTvStream = true) {
+    cameraCardStreams.forEach((stream, devId) => {
+      if (keepActiveTvStream && state.cameraEnabled && devId === state.cameraDeviceId) {
+        return;
+      }
       if (stream && stream.getTracks) {
         stream.getTracks().forEach(t => t.stop());
       }
+      cameraCardStreams.delete(devId);
     });
-    cameraCardStreams.clear();
   }
 
-  
-  // Probe active live signal for a camera device (detects real physical video vs idle virtual driver logo)
-  const cameraSignalCache = new Map(); // deviceId -> { isLive: boolean, time: number }
+  async function acquireSharedCameraStream(deviceId) {
+    if (!deviceId) return null;
+    const existing = cameraCardStreams.get(deviceId);
+    if (existing && existing.getVideoTracks().some(t => t.readyState === 'live')) {
+      return existing;
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    cameraCardStreams.set(deviceId, stream);
+    return stream;
+  }
 
-  async function probeCameraSignal(deviceId, forceRefresh = false) {
+  // Analyze a 64x48 frame from a video element to distinguish real connected cameras from idle splash screens
+  function analyzeVideoFrame(ctx, v, f1, f2, label = '', appStatus = null) {
+    const totalPixels = 64 * 48;
+    let blackPixels = 0;
+    let outerBlackPixels = 0;
+    let outerTotal = 0;
+    let centerTotal = 0;
+    let totalBrightness = 0;
+    let outerBrightness = 0;
+    let centerBrightness = 0;
+    let orangeCatPixels = 0;
+    let diffPixels2 = 0;
+    const colorBuckets = new Set();
+    const outerColorBuckets = new Set();
+
+    for (let y = 0; y < 48; y++) {
+      for (let x = 0; x < 64; x++) {
+        const i = (y * 64 + x) * 4;
+        const r = f2[i], g = f2[i + 1], b = f2[i + 2];
+        const isOuter = (x < 16 || x >= 48 || y < 12 || y >= 36);
+        const isBlack = (r < 16 && g < 16 && b < 16);
+        const br = (r + g + b) / 3;
+        const bucket = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+
+        colorBuckets.add(bucket);
+        if (isBlack) blackPixels++;
+        totalBrightness += br;
+
+        if (isOuter) {
+          outerTotal++;
+          if (isBlack) outerBlackPixels++;
+          outerBrightness += br;
+          outerColorBuckets.add(bucket);
+        } else {
+          centerTotal++;
+          centerBrightness += br;
+          // Iriun orange cat signature in center: orange fur pixels (R > 120, G > 45, B < 60, R - B > 70)
+          if (r > 120 && g > 45 && b < 60 && (r - b) > 70) {
+            orangeCatPixels++;
+          }
+        }
+
+        if (f1) {
+          const d = Math.abs(f1[i] - r) + Math.abs(f1[i + 1] - g) + Math.abs(f1[i + 2] - b);
+          if (d > 2) diffPixels2++;
+        }
+      }
+    }
+
+    const blackRatio = blackPixels / totalPixels;
+    const avgBr = totalBrightness / totalPixels;
+    const outerBr = outerBrightness / outerTotal;
+    const centerBr = centerBrightness / centerTotal;
+    const uniqueColors = colorBuckets.size;
+    const outerUniqueColors = outerColorBuckets.size;
+    const fluct2 = f1 ? (diffPixels2 / totalPixels) : 0;
+    const lowLabel = (label || '').toLowerCase();
+
+    // 1. Iriun Disconnected Splash ("Looking for the phone..." with orange cat on black backdrop):
+    const isIriunDevice = lowLabel.includes('iriun') || lowLabel.includes('irium');
+    const hasIriunCatSplash = (outerBr < 3.0 && outerUniqueColors <= 2) && (orangeCatPixels >= 1 || centerBr >= 1.5);
+    if (isIriunDevice && hasIriunCatSplash) {
+      return { isLive: false, isDarkPhone: false };
+    }
+
+    // 2. Centered placeholder icon/text on flat 1-color background (HP closed shutter icon, Camo grey spinner, DroidCam start screen):
+    const hasCenteredPlaceholderLogo = (outerUniqueColors <= 2) && (Math.abs(centerBr - outerBr) >= 3.0 || (uniqueColors <= 4 && avgBr > 40));
+    if (hasCenteredPlaceholderLogo) {
+      return { isLive: false, isDarkPhone: false };
+    }
+
+    // 3. Virtual splitter static wallpaper (SplitCam, ManyCam, XSplit, OBS static):
+    if (/splitcam|manycam|xsplit|vcam|obs/i.test(lowLabel) && fluct2 < 0.005) {
+      return { isLive: false, isDarkPhone: false };
+    }
+
+    // 4. Completely uniform pure-black frame (blackRatio > 0.96, uniqueColors <= 2):
+    if (blackRatio > 0.96 && uniqueColors <= 2) {
+      // On Iriun, disconnected slots ALWAYS display the Orange Cat (caught in step 1).
+      // The ONLY time an Iriun slot has zero orange cat pixels and pure black is when a phone IS connected to that slot and resting on a dark surface!
+      if (isIriunDevice && !hasIriunCatSplash && (!appStatus || appStatus.iriunRunning)) {
+        return { isLive: true, isDarkPhone: true };
+      }
+      return { isLive: false, isDarkPhone: false };
+    }
+
+    return { isLive: true, isDarkPhone: avgBr < 4.0 };
+  }
+
+  const cameraSignalCache = new Map(); // deviceId -> { isLive: boolean, time: number }
+  let isEnumeratingCameras = false;
+  let currentEnumPromise = null;
+  let pendingForceRescan = false;
+
+  async function probeCameraSignal(deviceId, label = '', forceRefresh = false, appStatus = null) {
     if (!forceRefresh) {
       const cached = cameraSignalCache.get(deviceId);
-      if (cached && (Date.now() - cached.time < 10000)) {
+      if (cached && (Date.now() - cached.time < 8000)) {
         return cached.isLive;
       }
     }
 
     let stream = null;
+    let wasExistingStream = false;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: deviceId }, width: { ideal: 64 }, height: { ideal: 48 } },
-        audio: false
-      });
+      const existing = cameraCardStreams.get(deviceId);
+      if (existing && existing.getVideoTracks().some(t => t.readyState === 'live')) {
+        stream = existing;
+        wasExistingStream = true;
+      } else {
+        // Always open at unified 1280x720 so Chromium VideoCaptureService shares one session across all monitors!
+        stream = await Promise.race([
+          navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Camera open timeout')), 3500))
+        ]);
+      }
+
       const v = document.createElement('video');
       v.muted = true;
       v.playsInline = true;
       v.srcObject = stream;
-      await v.play();
-      await new Promise(r => setTimeout(r, 120));
+      await Promise.race([
+        v.play(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Video play timeout')), 2000))
+      ]);
 
       const c = document.createElement('canvas');
-      c.width = 32;
-      c.height = 24;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(v, 0, 0, 32, 24);
-      const f1 = ctx.getImageData(0, 0, 32, 24).data;
+      c.width = 64;
+      c.height = 48;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
 
-      await new Promise(r => setTimeout(r, 120));
-      ctx.drawImage(v, 0, 0, 32, 24);
-      const f2 = ctx.getImageData(0, 0, 32, 24).data;
-
-      const totalPixels = 32 * 24; // 768 pixels
-      let diffPixels = 0;
-      let blackPixels = 0;
-      let totalBrightness = 0;
-
-      for (let i = 0; i < f1.length; i += 4) {
-        const r = f2[i];
-        const g = f2[i + 1];
-        const b = f2[i + 2];
-        totalBrightness += (r + g + b) / 3;
-        if (r < 18 && g < 18 && b < 18) blackPixels++;
-
-        const d = Math.abs(f1[i] - f2[i]) + Math.abs(f1[i + 1] - f2[i + 1]) + Math.abs(f1[i + 2] - f2[i + 2]);
-        if (d > 6) diffPixels++;
+      // Wait up to 450ms for the camera hardware / DirectShow graph to deliver its first decoded frame
+      let f1 = null;
+      const maxAttempts = wasExistingStream ? 1 : 5;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise(r => setTimeout(r, wasExistingStream ? 40 : 90));
+        ctx.drawImage(v, 0, 0, 64, 48);
+        f1 = ctx.getImageData(0, 0, 64, 48).data;
+        let nonZero = 0;
+        for (let i = 0; i < f1.length; i += 4) {
+          if (f1[i] > 10 || f1[i + 1] > 10 || f1[i + 2] > 10) nonZero++;
+        }
+        if (nonZero > 4) break;
       }
 
-      const fluctuationRatio = diffPixels / totalPixels;
-      const blackRatio = blackPixels / totalPixels;
-      const avgBrightness = totalBrightness / totalPixels;
+      await new Promise(r => setTimeout(r, 120));
+      ctx.drawImage(v, 0, 0, 64, 48);
+      const f2 = ctx.getImageData(0, 0, 64, 48).data;
 
-      stream.getTracks().forEach(t => t.stop());
+      const analysis = analyzeVideoFrame(ctx, v, f1, f2, label, appStatus);
+      const isLive = analysis.isLive;
+      const resStr = (v.videoWidth || 1280) + '×' + (v.videoHeight || 720) + ' HD';
 
-      // Physical CMOS camera sensors have micro-noise and real motion across >= 8% of pixels.
-      // Virtual drivers without a connected phone (Iriun cat, Camo logo, DroidCam idle, SplitCam)
-      // are either 100% static (diff = 0) or are a pitch-black screen (blackRatio > 0.75, avgBrightness < 16)
-      // with only a tiny blinking text dot (diff < 1%).
-      const isSplashBlackScreen = (blackRatio > 0.75 && avgBrightness < 16);
-      const hasSensoryMotion = fluctuationRatio >= 0.08;
-      const isLive = hasSensoryMotion && !isSplashBlackScreen;
+      v.srcObject = null;
+
+      if (isLive) {
+        // KEEP stream open in cameraCardStreams so cards and monitors bind in 0ms without reopening DirectShow!
+        cameraCardStreams.set(deviceId, stream);
+        cameraFrameStats.set(deviceId, { isDarkPhone: analysis.isDarkPhone, res: resStr });
+      } else {
+        if (!(state.cameraEnabled && state.cameraDeviceId === deviceId)) {
+          stream.getTracks().forEach(t => t.stop());
+          cameraCardStreams.delete(deviceId);
+        }
+        cameraFrameStats.delete(deviceId);
+      }
 
       cameraSignalCache.set(deviceId, { isLive, time: Date.now() });
       return isLive;
     } catch (e) {
-      if (stream) {
-        try { stream.getTracks().forEach(t => t.stop()); } catch(_) {}
+      if (stream && !wasExistingStream) {
+        try { stream.getTracks().forEach(t => t.stop()); } catch (_) {}
       }
       cameraSignalCache.set(deviceId, { isLive: false, time: Date.now() });
       return false;
     }
   }
 
+  let lastAppStatusJson = '';
+
+  function updateCameraStatusBadges(count) {
+    if (cameraStatusBadge) {
+      cameraStatusBadge.className = 'camera-status-pill';
+      if (count > 0) {
+        cameraStatusBadge.textContent = count + (count === 1 ? ' Connected' : ' Connected');
+        cameraStatusBadge.style.color = '#34d399';
+        cameraStatusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+      } else {
+        cameraStatusBadge.textContent = 'None Connected';
+        cameraStatusBadge.classList.add('offline');
+      }
+    }
+
+    if (labelCameraStatus) {
+      if (state.cameraEnabled) {
+        labelCameraStatus.textContent = `Camera: ${state.cameraMode.toUpperCase()} LIVE ON TV`;
+      } else {
+        labelCameraStatus.textContent = count > 0 ? ('Cameras: ' + count + ' Connected') : 'Cameras: None';
+      }
+    }
+  }
+
   async function enumerateVideoDevices(forceRefresh = false) {
+    if (isEnumeratingCameras && currentEnumPromise) {
+      if (forceRefresh) pendingForceRescan = true;
+      return currentEnumPromise;
+    }
+    isEnumeratingCameras = true;
+
     if (forceRefresh) {
       cameraSignalCache.clear();
     }
-    try {
-      let devices = await navigator.mediaDevices.enumerateDevices();
-      let videoInputs = devices.filter(d => d.kind === 'videoinput');
 
-      // Prime permission once if Chromium hasn't unlocked deviceIds/labels yet
-      if (videoInputs.length > 0 && videoInputs.every(d => !d.deviceId && !d.label)) {
-        try {
-          const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-          tempStream.getTracks().forEach(t => t.stop());
-          devices = await navigator.mediaDevices.enumerateDevices();
-          videoInputs = devices.filter(d => d.kind === 'videoinput');
-        } catch (permErr) {
-          console.warn('Camera permission prime skipped:', permErr);
+    currentEnumPromise = (async () => {
+      try {
+        const appStatus = (window.zionApi && window.zionApi.getCameraAppStatus)
+          ? await window.zionApi.getCameraAppStatus()
+          : null;
+        if (appStatus) {
+          lastAppStatusJson = JSON.stringify(appStatus);
         }
-      }
 
-      // Fast parallel probe: test which devices are actively available with video
-      const probePromises = videoInputs.map(async (d) => {
-        d.isLiveDevice = await probeCameraSignal(d.deviceId, forceRefresh);
-        return d;
-      });
-      await Promise.all(probePromises);
+        let devices = await navigator.mediaDevices.enumerateDevices();
+        let videoInputs = devices.filter(d => d.kind === 'videoinput');
 
-      // CRITICAL: SHOW ONLY CAMERAS THAT ARE AVAILABLE!
-      const availableOnly = videoInputs.filter(d => d.isLiveDevice);
-      state.videoDevices = availableOnly;
-      state.allRawDevices = videoInputs;
-
-      // STRICT SAFETY: If active camera was set to an offline/disconnected device, shut it down immediately!
-      const activeIsStillAvailable = state.cameraDeviceId && availableOnly.some(d => d.deviceId === state.cameraDeviceId);
-      if (!activeIsStillAvailable) {
-        if (state.cameraEnabled) {
-          state.cameraEnabled = false;
-          state.cameraMode = 'none';
-          if (previewVideoStream && previewVideoStream.srcObject) {
-            previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
-            previewVideoStream.srcObject = null;
+        // Prime permission once if Chromium hasn't unlocked deviceIds/labels yet
+        if (videoInputs.length > 0 && videoInputs.every(d => !d.deviceId && !d.label)) {
+          try {
+            const tempStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            tempStream.getTracks().forEach(t => t.stop());
+            devices = await navigator.mediaDevices.enumerateDevices();
+            videoInputs = devices.filter(d => d.kind === 'videoinput');
+          } catch (permErr) {
+            console.warn('Camera permission prime skipped:', permErr);
           }
-          if (liveVideoStream) liveVideoStream.srcObject = null;
-          broadcastDisplayState();
         }
-        state.cameraDeviceId = availableOnly.length > 0 ? availableOnly[0].deviceId : null;
-        state.cameraDeviceLabel = availableOnly.length > 0 ? (availableOnly[0].label || '') : '';
-      }
 
-      // Update hidden fallback select for backward compatibility
-      if (cameraDeviceSelect) {
-        cameraDeviceSelect.innerHTML = '';
-        availableOnly.forEach(d => {
-          const opt = document.createElement('option');
-          opt.value = d.deviceId;
-          opt.textContent = d.label || d.deviceId;
-          cameraDeviceSelect.appendChild(opt);
-        });
-        if (state.cameraDeviceId) {
-          cameraDeviceSelect.value = state.cameraDeviceId;
+        // Probe all video inputs in parallel AND progressively render live cameras as soon as they respond!
+        const discoveredLive = [];
+        await Promise.all(videoInputs.map(async (d) => {
+          const isLive = await probeCameraSignal(d.deviceId, d.label || '', forceRefresh, appStatus);
+          d.isLiveDevice = isLive;
+          if (isLive) {
+            discoveredLive.push(d);
+            state.videoDevices = videoInputs.filter(v => v.isLiveDevice);
+            if (!state.cameraDeviceId) {
+              state.cameraDeviceId = d.deviceId;
+              state.cameraDeviceLabel = d.label || '';
+            }
+            updateCameraStatusBadges(state.videoDevices.length);
+            renderSidebarCameraList();
+            if (state.cameraDisplaySectionOpen) {
+              renderCameraDisplaySection();
+            }
+          }
+        }));
+
+        // CRITICAL: SHOW ONLY CAMERAS THAT ARE ACTUALLY CONNECTED & AVAILABLE!
+        const availableOnly = videoInputs.filter(d => d.isLiveDevice);
+        state.videoDevices = availableOnly;
+        state.allRawDevices = videoInputs;
+
+        // STRICT SAFETY: If active camera was set to an offline/disconnected device, shut it down immediately!
+        const activeIsStillAvailable = state.cameraDeviceId && availableOnly.some(d => d.deviceId === state.cameraDeviceId);
+        if (!activeIsStillAvailable) {
+          if (state.cameraEnabled) {
+            state.cameraEnabled = false;
+            state.cameraMode = 'none';
+            if (liveVideoStream) {
+              liveVideoStream.srcObject = null;
+              liveVideoStream.style.display = 'none';
+            }
+            if (previewVideoStream) {
+              previewVideoStream.srcObject = null;
+              previewVideoStream.style.display = 'none';
+            }
+            broadcastDisplayState();
+          }
+          state.cameraDeviceId = availableOnly.length > 0 ? availableOnly[0].deviceId : null;
+          state.cameraDeviceLabel = availableOnly.length > 0 ? (availableOnly[0].label || '') : '';
+        }
+
+        // Update hidden fallback select for backward compatibility
+        if (cameraDeviceSelect) {
+          cameraDeviceSelect.innerHTML = '';
+          availableOnly.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.deviceId;
+            opt.textContent = d.label || d.deviceId;
+            cameraDeviceSelect.appendChild(opt);
+          });
+          if (state.cameraDeviceId) {
+            cameraDeviceSelect.value = state.cameraDeviceId;
+          }
+        }
+
+        renderSidebarCameraList();
+
+        if (state.cameraDisplaySectionOpen) {
+          renderCameraDisplaySection();
+        }
+
+        updateCameraStatusBadges(availableOnly.length);
+      } catch (err) {
+        console.warn('Could not enumerate video hardware:', err);
+      } finally {
+        isEnumeratingCameras = false;
+        currentEnumPromise = null;
+        if (pendingForceRescan) {
+          pendingForceRescan = false;
+          enumerateVideoDevices(true);
         }
       }
+    })();
 
-      // Render sleek sidebar camera cards
-      renderSidebarCameraList();
-
-      // Render center camera studio if open
-      if (state.cameraDisplaySectionOpen) {
-        renderCameraDisplaySection();
-      }
-
-      // Update top/sidebar badges with available count
-      const count = availableOnly.length;
-      if (cameraStatusBadge) {
-        cameraStatusBadge.className = 'camera-status-pill';
-        if (count > 0) {
-          cameraStatusBadge.textContent = count + (count === 1 ? ' Camera Ready' : ' Cameras Ready');
-          cameraStatusBadge.style.color = '#34d399';
-          cameraStatusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
-        } else {
-          cameraStatusBadge.textContent = 'No Cameras Connected';
-          cameraStatusBadge.classList.add('offline');
-        }
-      }
-
-      if (labelCameraStatus) {
-        labelCameraStatus.textContent = count > 0 ? ('Cameras: ' + count + ' Available') : 'Cameras: None';
-      }
-
-      // Ensure active camera ID is valid
-      const savedExists = state.cameraDeviceId && availableOnly.some(d => d.deviceId === state.cameraDeviceId);
-      if (!savedExists && availableOnly.length > 0) {
-        state.cameraDeviceId = availableOnly[0].deviceId;
-        state.cameraDeviceLabel = availableOnly[0].label || '';
-      }
-    } catch (err) {
-      console.warn('Could not enumerate video hardware:', err);
-    }
+    return currentEnumPromise;
   }
 
   function renderSidebarCameraList() {
@@ -1225,12 +1384,12 @@
     if (available.length === 0) {
       list.innerHTML = `
         <div class="sidebar-cam-empty">
-          <div style="font-size: 1.8rem; margin-bottom: 6px;">📱</div>
-          <div style="font-size: 0.82rem; font-weight: 800; color: #fff;">No Cameras Connected</div>
-          <div style="font-size: 0.72rem; color: #94a3b8; line-height: 1.4; margin: 4px 0 10px 0;">
-            Connect your phone via <strong>Iriun Webcam</strong> or <strong>Camo Studio</strong> to project live video.
+          <div style="font-size: 1.6rem; margin-bottom: 6px;">📱</div>
+          <div style="font-size: 0.82rem; font-weight: 800; color: #fff;">No Camera Connected</div>
+          <div style="font-size: 0.72rem; color: #94a3b8; line-height: 1.45; margin: 4px 0 12px 0;">
+            Connect your phone with <strong>Iriun Webcam</strong> or <strong>Camo Studio</strong>, or plug in a USB webcam.
           </div>
-          <button id="btn-sidebar-rescan" class="btn-fast" style="padding: 5px 12px; font-size: 0.75rem; background: #f43f5e; color: #fff; border-color: #f43f5e; font-weight: 700;">
+          <button id="btn-sidebar-rescan" class="btn-fast" style="padding: 6px 14px; font-size: 0.75rem; background: #10b981; color: #fff; border-color: #059669; font-weight: 800;">
             🔄 Scan for Cameras
           </button>
         </div>
@@ -1243,12 +1402,13 @@
     available.forEach((dev, index) => {
       const info = parseCameraDeviceInfo(dev, index);
       const isLiveOnTv = state.cameraEnabled && (state.cameraDeviceId === dev.deviceId || state.cameraDeviceLabel === dev.label);
+      const isPreviewing = selectedViewfinderDeviceId === dev.deviceId;
       const icon = info.isIriun ? '📱' : (info.typeBadge.includes('Camo') ? '✨' : '📹');
 
       const card = document.createElement('div');
       card.className = 'sidebar-cam-card';
       if (isLiveOnTv) card.classList.add('live-on-tv');
-      if (selectedViewfinderDeviceId === dev.deviceId) card.classList.add('selected-source');
+      if (isPreviewing) card.classList.add('selected-source');
 
       card.innerHTML = `
         <div class="sidebar-cam-info">
@@ -1257,18 +1417,17 @@
             <span>${escapeHtml(info.cleanName)}</span>
           </div>
           <span class="sidebar-cam-badge ${isLiveOnTv ? 'live' : 'ready'}">
-            ${isLiveOnTv ? (state.cameraMode === 'preacher' ? '🔴 ON AIR' : '🎵 WORSHIP') : '🟢 READY'}
+            ${isLiveOnTv ? (state.cameraMode === 'preacher' ? '🔴 ON TV' : '🎵 WORSHIP') : '🟢 READY'}
           </span>
         </div>
         <div class="sidebar-cam-actions">
           <button class="btn-sidebar-cam-preview">👁️ Preview</button>
           <button class="btn-sidebar-cam-live">
-            ${isLiveOnTv ? '⏹️ Take Off TV' : '📺 Project Live'}
+            ${isLiveOnTv ? '⏹️ Remove from TV' : '📺 Add to TV'}
           </button>
         </div>
       `;
 
-      // Preview button: sets Viewfinder on laptop
       const btnPreview = card.querySelector('.btn-sidebar-cam-preview');
       if (btnPreview) {
         btnPreview.addEventListener('click', (e) => {
@@ -1278,7 +1437,6 @@
         });
       }
 
-      // Live button: toggles projection on TV
       const btnLive = card.querySelector('.btn-sidebar-cam-live');
       if (btnLive) {
         btnLive.addEventListener('click', (e) => {
@@ -1293,7 +1451,6 @@
         });
       }
 
-      // Clicking card selects for preview
       card.addEventListener('click', () => {
         openCameraDisplaySection();
         setViewfinderCamera(dev.deviceId, dev.label);
@@ -1302,6 +1459,7 @@
       list.appendChild(card);
     });
   }
+
   async function updateCameraMode(mode) {
     state.cameraMode = mode;
     state.cameraEnabled = mode !== 'none';
@@ -1310,8 +1468,12 @@
       btn.classList.toggle('active', btn.dataset.mode === mode);
     });
 
+    const btnRemoveTvToolbar = document.getElementById('btn-vf-remove-tv');
+    if (btnRemoveTvToolbar) {
+      btnRemoveTvToolbar.style.display = state.cameraEnabled ? 'inline-flex' : 'none';
+    }
+
     if (state.cameraEnabled) {
-      // Ensure YouTube layer (z-index 15) is turned off so it never covers the live camera on TV!
       if (state.backgroundType === 'youtube' || state.youtubeActive) {
         state.youtubeActive = false;
         state.youtubeVideoId = '';
@@ -1332,62 +1494,55 @@
         state.cameraDeviceLabel = matchedDev.label || '';
       }
 
-      const isAlreadyActive = previewVideoStream.srcObject &&
-        previewVideoStream.srcObject.getVideoTracks().some(t => t.readyState === 'live') &&
-        activeControlCameraId === state.cameraDeviceId;
-
-      // Bind live video stream to operator monitors so the operator ALWAYS sees what the camera is showing!
-      if (!isAlreadyActive) {
-        if (previewVideoStream.srcObject) {
-          previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
-          previewVideoStream.srcObject = null;
-          liveVideoStream.srcObject = null;
-        }
+      if (state.cameraDeviceId) {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: state.cameraDeviceId
-              ? { deviceId: { exact: state.cameraDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
-              : { width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: false
-          });
+          const stream = await acquireSharedCameraStream(state.cameraDeviceId);
           activeControlCameraId = state.cameraDeviceId;
-          previewVideoStream.srcObject = stream;
-          liveVideoStream.srcObject = stream;
-          previewVideoStream.play().catch(e => console.warn('Preview video play error:', e));
-          liveVideoStream.play().catch(e => console.warn('Live video play error:', e));
-        } catch (e) {
-          console.warn('Could not bind monitor camera streams with exact ID, trying fallback:', e);
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-            activeControlCameraId = state.cameraDeviceId;
+          if (previewVideoStream) {
             previewVideoStream.srcObject = stream;
-            liveVideoStream.srcObject = stream;
+            previewVideoStream.style.display = 'block';
             previewVideoStream.play().catch(() => {});
-            liveVideoStream.play().catch(() => {});
-          } catch (err) {
-            console.warn('Operator local preview unavailable (TV Output will still acquire camera directly):', err);
           }
+          if (liveVideoStream) {
+            liveVideoStream.srcObject = stream;
+            liveVideoStream.style.display = 'block';
+            liveVideoStream.play().catch(() => {});
+          }
+        } catch (e) {
+          console.warn('Could not bind monitor camera stream:', e);
         }
       }
-      previewVideoStream.style.display = 'block';
-      liveVideoStream.style.display = 'block';
-      labelCameraStatus.textContent = `Camera: ${mode.toUpperCase()} Live`;
+
+      if (labelCameraStatus) labelCameraStatus.textContent = `Camera: ${mode.toUpperCase()} LIVE ON TV`;
       const statusCamInfo = document.getElementById('status-camera-info');
       if (statusCamInfo) statusCamInfo.style.display = 'inline-flex';
     } else {
-      if (previewVideoStream.srcObject) {
-        previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
-      }
       activeControlCameraId = null;
-      previewVideoStream.srcObject = null;
-      liveVideoStream.srcObject = null;
-      previewVideoStream.style.display = 'none';
-      liveVideoStream.style.display = 'none';
-      labelCameraStatus.textContent = 'Camera: Standby';
+      if (liveVideoStream) {
+        liveVideoStream.srcObject = null;
+        liveVideoStream.style.display = 'none';
+      }
+      if (!state.cameraDisplaySectionOpen || !selectedViewfinderDeviceId) {
+        if (previewVideoStream) {
+          previewVideoStream.srcObject = null;
+          previewVideoStream.style.display = 'none';
+        }
+      }
+      if (labelCameraStatus) {
+        const count = (state.videoDevices || []).length;
+        labelCameraStatus.textContent = count > 0 ? ('Cameras: ' + count + ' Connected') : 'Cameras: None';
+      }
       const statusCamInfo = document.getElementById('status-camera-info');
       if (statusCamInfo) statusCamInfo.style.display = 'none';
     }
 
+    renderSidebarCameraList();
+    if (state.cameraDisplaySectionOpen) {
+      renderCameraDisplaySection();
+    }
+    if (typeof syncOperatorPreviewCameraOverlay === 'function') {
+      syncOperatorPreviewCameraOverlay();
+    }
     broadcastDisplayState();
     triggerAutoSave();
   }
@@ -3473,6 +3628,51 @@
   // =========================================================================
   state.cameraDisplaySectionOpen = false;
 
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+    navigator.mediaDevices.addEventListener('devicechange', () => {
+      enumerateVideoDevices(true);
+    });
+  }
+
+  function startCameraWatchdog() {
+    if (cameraWatchdogTimer) clearInterval(cameraWatchdogTimer);
+    cameraWatchdogTimer = setInterval(async () => {
+      if (!state.cameraDisplaySectionOpen || isEnumeratingCameras) return;
+
+      // 1. Check if any currently active stream stopped or disconnected
+      let streamEnded = false;
+      cameraCardStreams.forEach((stream) => {
+        if (!stream || !stream.getVideoTracks().some(t => t.readyState === 'live')) {
+          streamEnded = true;
+        }
+      });
+
+      // 2. Check lightweight OS companion app / phone connection status (50ms, never locks DirectShow!)
+      let appStatusChanged = false;
+      if (window.zionApi && window.zionApi.getCameraAppStatus) {
+        try {
+          const st = await window.zionApi.getCameraAppStatus();
+          const stJson = JSON.stringify(st);
+          if (stJson !== lastAppStatusJson) {
+            lastAppStatusJson = stJson;
+            appStatusChanged = true;
+          }
+        } catch (_) {}
+      }
+
+      if (streamEnded || appStatusChanged) {
+        enumerateVideoDevices(true);
+      }
+    }, 3000);
+  }
+
+  function stopCameraWatchdog() {
+    if (cameraWatchdogTimer) {
+      clearInterval(cameraWatchdogTimer);
+      cameraWatchdogTimer = null;
+    }
+  }
+
   function openCameraDisplaySection() {
     state.cameraDisplaySectionOpen = true;
     const camSection = document.getElementById('camera-display-section');
@@ -3480,16 +3680,15 @@
     const dualMonitors = document.querySelector('.dual-monitors-row');
     if (camSection) camSection.style.display = 'flex';
     if (tilesSection) tilesSection.style.display = 'none';
-    if (dualMonitors) dualMonitors.style.display = 'none';
+    // Keep Dual Monitors (Operator Preview & Church TV Output) visible at the top!
+    if (dualMonitors) dualMonitors.style.display = 'grid';
 
-    // Highlight top-bar button
     const btnTopCam = document.getElementById('btn-open-camera-studio');
     if (btnTopCam) {
       btnTopCam.style.background = '#f43f5e';
       btnTopCam.style.color = '#fff';
     }
 
-    // Activate tab-camera in left panel if not active
     const tabCamBtn = document.querySelector('.lib-tab-btn[data-tab="tab-camera"]');
     if (tabCamBtn && !tabCamBtn.classList.contains('active')) {
       const allTabBtns = document.querySelectorAll('.lib-tab-btn');
@@ -3502,10 +3701,32 @@
     }
 
     renderCameraDisplaySection();
+    startCameraWatchdog();
+  }
+
+  function syncOperatorPreviewCameraOverlay() {
+    const previewScrim = document.querySelector('#preview-screen-box .monitor-dark-scrim');
+    const previewTextWrap = document.querySelector('#preview-screen-box .monitor-slide-text-wrap');
+    const btnPushLive = document.getElementById('btn-push-live');
+    const isShowingCleanCamInPreview = (
+      (state.cameraDisplaySectionOpen && (state.videoDevices || []).length > 0 && state.cameraMode !== 'background') ||
+      (state.cameraEnabled && state.cameraMode === 'preacher')
+    );
+    if (previewScrim) {
+      previewScrim.style.display = isShowingCleanCamInPreview ? 'none' : '';
+    }
+    if (previewTextWrap) {
+      previewTextWrap.style.display = isShowingCleanCamInPreview ? 'none' : '';
+    }
+    if (btnPushLive) {
+      btnPushLive.style.display = isShowingCleanCamInPreview ? 'none' : '';
+    }
   }
 
   function closeCameraDisplaySection() {
     state.cameraDisplaySectionOpen = false;
+    stopCameraWatchdog();
+
     const camSection = document.getElementById('camera-display-section');
     const tilesSection = document.querySelector('.center-tiles-section');
     const dualMonitors = document.querySelector('.dual-monitors-row');
@@ -3513,303 +3734,268 @@
     if (tilesSection) tilesSection.style.display = 'flex';
     if (dualMonitors) dualMonitors.style.display = 'grid';
 
-    // Reset top-bar button
     const btnTopCam = document.getElementById('btn-open-camera-studio');
     if (btnTopCam) {
       btnTopCam.style.background = 'rgba(244, 63, 94, 0.1)';
       btnTopCam.style.color = '#f43f5e';
     }
 
-    // Stop card preview streams to release hardware
-    if (viewfinderStream) {
-      viewfinderStream.getTracks().forEach(t => t.stop());
-      viewfinderStream = null;
+    // If camera is not live on TV, clear laptop Operator Preview video stream so slides are visible
+    if (!state.cameraEnabled && previewVideoStream) {
+      previewVideoStream.srcObject = null;
+      previewVideoStream.style.display = 'none';
     }
-    stopAllCameraCardStreams();
+    syncOperatorPreviewCameraOverlay();
+    stopAllCameraCardStreams(true);
   }
 
-  function switchCameraSource(deviceId, deviceLabel, mode = 'preacher') {
+  async function switchCameraSource(deviceId, deviceLabel, mode = 'preacher') {
     state.cameraDeviceId = deviceId;
     state.cameraDeviceLabel = deviceLabel || '';
+    selectedViewfinderDeviceId = deviceId;
     if (cameraDeviceSelect) cameraDeviceSelect.value = deviceId;
-    updateCameraMode(mode);
-    if (state.cameraDisplaySectionOpen) {
-      renderCameraDisplaySection();
-    }
-    showToast('📹 Switched to ' + (deviceLabel || 'Camera') + ' (' + mode.toUpperCase() + ')');
-  }
 
+    if (mode === 'preacher') {
+      state.clearText = true;
+      if (btnFastClear) btnFastClear.classList.add('active-clear');
+    } else if (mode === 'background') {
+      state.clearText = false;
+      state.themeOnly = false;
+      if (btnFastClear) btnFastClear.classList.remove('active-clear');
+      if (btnFastTheme) btnFastTheme.classList.remove('active-theme');
+    }
+
+    if (window.zionApi && !state.displayOpen && mode !== 'none') {
+      const targetScreenId = selectTargetScreen ? selectTargetScreen.value : null;
+      await window.zionApi.launchDisplay(targetScreenId);
+      updateTvStatusUI(true);
+    }
+
+    await updateCameraMode(mode);
+    const info = parseCameraDeviceInfo({ label: deviceLabel, deviceId }, 0);
+    showToast('📺 Projecting ' + info.cleanName + ' on TV (' + (mode === 'preacher' ? 'Full Screen' : 'Worship BG') + ')');
+  }
 
   let viewfinderStream = null;
   let selectedViewfinderDeviceId = null;
 
+  // Previews the selected camera ONLY inside the top-left Operator Preview monitor on the laptop (never on TV!)
   async function setViewfinderCamera(deviceId, deviceLabel = '') {
     selectedViewfinderDeviceId = deviceId;
-    const vfVideo = document.getElementById('camera-studio-main-video');
-    const placeholder = document.getElementById('camera-viewfinder-placeholder');
-    const nameLabel = document.getElementById('viewfinder-cam-name');
-    const iconSpan = document.getElementById('viewfinder-cam-icon');
-    const resBadge = document.getElementById('viewfinder-cam-resolution');
-    const statusBadge = document.getElementById('viewfinder-cam-status-badge');
-    const liveBanner = document.getElementById('camera-viewfinder-live-banner');
-    const liveBannerText = document.getElementById('viewfinder-live-banner-text');
-
     const devices = state.videoDevices || [];
     const matchedDev = devices.find(d => d.deviceId === deviceId) || devices[0];
     if (!matchedDev) return;
 
-    const info = parseCameraDeviceInfo(matchedDev, devices.indexOf(matchedDev));
-    if (nameLabel) nameLabel.textContent = info.cleanName + ' (' + (matchedDev.label || 'Camera') + ')';
-    if (iconSpan) iconSpan.textContent = info.isIriun ? '📱' : (info.typeBadge.includes('Camo') ? '✨' : '📹');
-
-    const isLive = state.cameraEnabled && (state.cameraDeviceId === matchedDev.deviceId || state.cameraDeviceLabel === matchedDev.label);
-    if (statusBadge) {
-      if (isLive) {
-        if (state.cameraMode === 'preacher') {
-          statusBadge.className = 'viewfinder-status-badge live';
-          statusBadge.textContent = '🔴 ON AIR ON TV (PREACHER)';
-        } else {
-          statusBadge.className = 'viewfinder-status-badge worship';
-          statusBadge.textContent = '🎵 WORSHIP BACKGROUND';
-        }
-      } else {
-        statusBadge.className = 'viewfinder-status-badge';
-        statusBadge.textContent = 'VIEWFINDER PREVIEW';
+    try {
+      const stream = await acquireSharedCameraStream(matchedDev.deviceId);
+      if (previewVideoStream && stream) {
+        previewVideoStream.srcObject = stream;
+        previewVideoStream.style.display = 'block';
+        previewVideoStream.play().catch(() => {});
       }
+    } catch (err) {
+      console.warn('Operator preview stream error:', err);
     }
 
-    if (liveBanner && liveBannerText) {
-      if (isLive) {
-        liveBanner.style.display = 'flex';
-        liveBannerText.textContent = state.cameraMode === 'preacher' ? '🔴 LIVE ON CHURCH TV (PREACHER MODE)' : '🎵 LIVE ON CHURCH TV (WORSHIP BG)';
-      } else {
-        liveBanner.style.display = 'none';
-      }
-    }
+    syncOperatorPreviewCameraOverlay();
 
-    // Stop previous viewfinder stream
-    if (viewfinderStream) {
-      viewfinderStream.getTracks().forEach(t => t.stop());
-      viewfinderStream = null;
-    }
-
-    if (vfVideo) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: matchedDev.deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false
-        });
-        viewfinderStream = stream;
-        vfVideo.srcObject = stream;
-        await vfVideo.play();
-        if (placeholder) placeholder.style.display = 'none';
-
-        if (resBadge) {
-          setTimeout(() => {
-            const w = vfVideo.videoWidth || 1280;
-            const h = vfVideo.videoHeight || 720;
-            resBadge.textContent = w + 'x' + h + (w >= 1920 ? ' Full HD' : ' HD');
-          }, 300);
-        }
-      } catch (err) {
-        console.warn('Viewfinder stream acquire failed:', err);
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-          viewfinderStream = stream;
-          vfVideo.srcObject = stream;
-          await vfVideo.play();
-          if (placeholder) placeholder.style.display = 'none';
-        } catch (e2) {
-          if (placeholder) {
-            placeholder.style.display = 'flex';
-            placeholder.innerHTML = '<div>⚠️ Camera In Use by Another App or Offline</div><div style="font-size:0.75rem; color:#fca5a5;">' + (err.message || 'Could not start video stream') + '</div>';
-          }
-        }
-      }
-    }
-
-    // Update gallery selection highlights
     document.querySelectorAll('.camera-card').forEach(card => {
       card.classList.toggle('selected-source', card.dataset.deviceId === matchedDev.deviceId);
     });
+    renderSidebarCameraList();
   }
 
-async function renderCameraDisplaySection() {
+  async function renderCameraDisplaySection() {
     const camSection = document.getElementById('camera-display-section');
     if (!camSection || camSection.style.display === 'none') return;
 
     const metaLabel = document.getElementById('camera-display-meta');
-    const galleryCount = document.getElementById('camera-gallery-count');
+    const btnRemoveTvToolbar = document.getElementById('btn-vf-remove-tv');
     const grid = document.getElementById('camera-multiview-grid');
 
     const devices = state.videoDevices || [];
 
     if (metaLabel) {
-      metaLabel.textContent = devices.length + (devices.length === 1 ? ' Camera Available & Ready' : ' Cameras Available & Ready');
+      metaLabel.textContent = devices.length + (devices.length === 1 ? ' Camera Connected' : ' Cameras Connected');
+      metaLabel.style.background = devices.length > 0 ? 'rgba(16, 185, 129, 0.18)' : 'rgba(255, 255, 255, 0.08)';
+      metaLabel.style.color = devices.length > 0 ? '#34d399' : '#94a3b8';
     }
-    if (galleryCount) {
-      galleryCount.textContent = devices.length + (devices.length === 1 ? ' Camera Available' : ' Cameras Available');
-    }
-
-    // Default select active connected camera in Viewfinder (ONLY previews on laptop, does NOT send to TV!)
-    const preferredId = (state.cameraEnabled && state.cameraDeviceId) ? state.cameraDeviceId : (devices[0] ? devices[0].deviceId : null);
-    if (preferredId && (!selectedViewfinderDeviceId || selectedViewfinderDeviceId !== preferredId)) {
-      setViewfinderCamera(preferredId);
+    if (btnRemoveTvToolbar) {
+      btnRemoveTvToolbar.style.display = state.cameraEnabled ? 'inline-flex' : 'none';
     }
 
-    // Render Camera Cards Grid
-    if (grid) {
-      grid.innerHTML = '';
+    // Default-preview the first connected camera on the laptop Operator Preview monitor (does NOT send to TV!)
+    if (devices.length > 0) {
+      const preferredId = (state.cameraEnabled && state.cameraDeviceId)
+        ? state.cameraDeviceId
+        : (devices.some(d => d.deviceId === selectedViewfinderDeviceId) ? selectedViewfinderDeviceId : devices[0].deviceId);
+      if (preferredId) {
+        selectedViewfinderDeviceId = preferredId;
+        acquireSharedCameraStream(preferredId).then(stream => {
+          if (previewVideoStream && stream && state.cameraDisplaySectionOpen) {
+            previewVideoStream.srcObject = stream;
+            previewVideoStream.style.display = 'block';
+            previewVideoStream.play().catch(() => {});
+            syncOperatorPreviewCameraOverlay();
+          }
+        }).catch(() => {});
+      }
+    } else if (!state.cameraEnabled && previewVideoStream) {
+      previewVideoStream.srcObject = null;
+      previewVideoStream.style.display = 'none';
+    }
+    syncOperatorPreviewCameraOverlay();
 
-      if (devices.length === 0) {
-        grid.innerHTML = `
-          <div style="grid-column: 1/-1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 36px 20px; background: rgba(0, 0, 0, 0.35); border-radius: 12px; border: 1px dashed rgba(255, 255, 255, 0.15); text-align: center; gap: 10px;">
-            <div style="font-size: 2.2rem;">📱</div>
-            <div style="font-size: 1rem; font-weight: 800; color: #fff;">No Camera Currently Available</div>
-            <p style="font-size: 0.78rem; color: #94a3b8; max-width: 440px; margin: 0 auto; line-height: 1.5;">
-              Connect your phone via <strong>Iriun Webcam</strong> or <strong>Camo Studio</strong>, or plug in a USB camera.
-            </p>
-            <button id="btn-empty-scan" class="btn-fast" style="padding: 7px 18px; background: #f43f5e; color: #fff; font-weight: 700; border-color: #f43f5e; margin-top: 4px;">
-              🔄 Rescan for Connected Cameras
-            </button>
-          </div>
-        `;
-        const btnEmptyScan = document.getElementById('btn-empty-scan');
-        if (btnEmptyScan) btnEmptyScan.addEventListener('click', () => enumerateVideoDevices(true));
-        return;
+    if (!grid) return;
+    grid.innerHTML = '';
+
+    if (devices.length === 0) {
+      grid.innerHTML = `
+        <div class="camera-empty-state-card">
+          <div style="font-size: 2.2rem; line-height: 1;">📱</div>
+          <div style="font-size: 1rem; font-weight: 800; color: #f8fafc;">No Connected Cameras Detected</div>
+          <p style="font-size: 0.8rem; color: #94a3b8; max-width: 460px; margin: 0 auto; line-height: 1.5;">
+            Open <strong>Iriun Webcam</strong> or <strong>Camo Studio</strong> on your phone and computer, or plug in a USB camera. As soon as your phone connects, its live video feed will appear here automatically.
+          </p>
+          <button id="btn-empty-scan" class="btn-fast" style="padding: 8px 20px; background: #10b981; color: #fff; font-weight: 800; border-color: #059669; margin-top: 4px; font-size: 0.8rem;">
+            🔄 Scan for Connected Cameras
+          </button>
+        </div>
+      `;
+      const btnEmptyScan = document.getElementById('btn-empty-scan');
+      if (btnEmptyScan) btnEmptyScan.addEventListener('click', () => enumerateVideoDevices(true));
+      return;
+    }
+
+    devices.forEach((dev, index) => {
+      const info = parseCameraDeviceInfo(dev, index);
+      const isLiveOnTv = state.cameraEnabled && (state.cameraDeviceId === dev.deviceId || state.cameraDeviceLabel === dev.label);
+      const isPreacherMode = isLiveOnTv && state.cameraMode === 'preacher';
+      const isWorshipMode = isLiveOnTv && state.cameraMode === 'background';
+      const isSelectedInVf = selectedViewfinderDeviceId === dev.deviceId;
+      const frameStat = cameraFrameStats.get(dev.deviceId) || { isDarkPhone: false, res: '1280×720 HD' };
+
+      const card = document.createElement('div');
+      card.className = 'camera-card';
+      card.dataset.deviceId = dev.deviceId;
+      if (isSelectedInVf) card.classList.add('selected-source');
+      if (isLiveOnTv) card.classList.add(isPreacherMode ? 'live-on-tv' : 'live-worship-bg');
+
+      // 1. Card Header
+      const topRow = document.createElement('div');
+      topRow.className = 'camera-card-top-bar';
+
+      const nameWrap = document.createElement('div');
+      nameWrap.className = 'camera-card-title-group';
+      const icon = info.isIriun ? '📱' : (info.typeBadge.includes('Camo') ? '✨' : '📹');
+      nameWrap.innerHTML = `
+        <span class="camera-card-icon">${icon}</span>
+        <span class="camera-card-name">${escapeHtml(info.cleanName)}</span>
+        <span class="camera-card-res-pill">${escapeHtml(frameStat.res)}</span>
+      `;
+
+      const badge = document.createElement('span');
+      badge.className = 'camera-card-status-pill';
+      if (isPreacherMode) {
+        badge.classList.add('live');
+        badge.textContent = '🔴 LIVE ON TV';
+      } else if (isWorshipMode) {
+        badge.classList.add('worship');
+        badge.textContent = '🎵 WORSHIP BG';
+      } else if (isSelectedInVf) {
+        badge.classList.add('previewing');
+        badge.textContent = '👁️ PREVIEWING';
+      } else {
+        badge.classList.add('ready');
+        badge.textContent = '🟢 CONNECTED';
       }
 
-      devices.forEach((dev, index) => {
-        const info = parseCameraDeviceInfo(dev, index);
-        const isLiveOnTv = state.cameraEnabled && (state.cameraDeviceId === dev.deviceId || state.cameraDeviceLabel === dev.label);
-        const isSelectedInVf = selectedViewfinderDeviceId === dev.deviceId;
+      topRow.appendChild(nameWrap);
+      topRow.appendChild(badge);
+      card.appendChild(topRow);
 
-        const card = document.createElement('div');
-        card.className = 'camera-card';
-        card.dataset.deviceId = dev.deviceId;
-        if (isSelectedInVf) card.classList.add('selected-source');
-        if (isLiveOnTv) card.classList.add(state.cameraMode === 'preacher' ? 'live-on-tv' : 'live-worship-bg');
+      // 2. Live 16:9 Video Feed Window
+      const videoWrap = document.createElement('div');
+      videoWrap.className = 'camera-card-body-preview';
 
-        // Top Row
-        const topRow = document.createElement('div');
-        topRow.style.display = 'flex';
-        topRow.style.alignItems = 'center';
-        topRow.style.justifyContent = 'space-between';
-        topRow.style.padding = '8px 10px';
-        topRow.style.background = 'rgba(0,0,0,0.45)';
-        topRow.style.borderBottom = '1px solid rgba(255,255,255,0.06)';
+      const cardVideo = document.createElement('video');
+      cardVideo.autoplay = true;
+      cardVideo.playsInline = true;
+      cardVideo.muted = true;
+      cardVideo.className = 'camera-card-video-thumb';
+      videoWrap.appendChild(cardVideo);
 
-        const nameSpan = document.createElement('div');
-        nameSpan.style.fontWeight = '700';
-        nameSpan.style.fontSize = '0.8rem';
-        nameSpan.style.color = '#f8fafc';
-        nameSpan.style.overflow = 'hidden';
-        nameSpan.style.textOverflow = 'ellipsis';
-        nameSpan.style.whiteSpace = 'nowrap';
-        const icon = info.isIriun ? '📱' : (info.typeBadge.includes('Camo') ? '✨' : '📹');
-        nameSpan.innerHTML = '<span>' + icon + '</span> ' + escapeHtml(info.cleanName);
+      if (frameStat.isDarkPhone) {
+        const darkHint = document.createElement('div');
+        darkHint.className = 'camera-card-dark-hint';
+        darkHint.innerHTML = '📱 <strong>Phone Connected</strong> • Unlock phone or lift camera from desk to see live picture';
+        videoWrap.appendChild(darkHint);
+      }
 
-        const badge = document.createElement('span');
-        badge.style.fontSize = '0.66rem';
-        badge.style.fontWeight = '800';
-        badge.style.padding = '2px 7px';
-        badge.style.borderRadius = '4px';
+      // 3. Action Buttons Footer
+      const footer = document.createElement('div');
+      footer.className = 'camera-card-actions-row';
 
-        if (isLiveOnTv) {
-          badge.style.background = state.cameraMode === 'preacher' ? '#ef4444' : '#06b6d4';
-          badge.style.color = '#ffffff';
-          badge.textContent = state.cameraMode === 'preacher' ? '🔴 ON TV' : '🎵 WORSHIP';
+      const btnPreview = document.createElement('button');
+      btnPreview.className = 'btn-cam-card-action preview' + (isSelectedInVf && !isLiveOnTv ? ' active' : '');
+      btnPreview.innerHTML = '👁️ Preview';
+      btnPreview.title = 'Preview this camera in the top-left Operator Preview monitor (does not show on TV)';
+      btnPreview.onclick = (e) => {
+        e.stopPropagation();
+        setViewfinderCamera(dev.deviceId, dev.label);
+        renderCameraDisplaySection();
+      };
+
+      const btnAddTv = document.createElement('button');
+      btnAddTv.className = 'btn-cam-card-action preacher' + (isPreacherMode ? ' active' : '');
+      btnAddTv.innerHTML = isPreacherMode ? '⏹️ Remove from TV' : '📺 Add to TV';
+      btnAddTv.title = isPreacherMode ? 'Take this camera off the TV' : 'Project this camera full-screen onto the Church TV';
+      btnAddTv.onclick = (e) => {
+        e.stopPropagation();
+        if (isPreacherMode) {
+          updateCameraMode('none');
         } else {
-          badge.style.background = 'rgba(16, 185, 129, 0.2)';
-          badge.style.color = '#34d399';
-          badge.style.border = '1px solid rgba(16, 185, 129, 0.4)';
-          badge.textContent = '🟢 READY';
+          switchCameraSource(dev.deviceId, dev.label, 'preacher');
         }
+      };
 
-        topRow.appendChild(nameSpan);
-        topRow.appendChild(badge);
-        card.appendChild(topRow);
-
-        // Video Thumbnail
-        const videoWrap = document.createElement('div');
-        videoWrap.className = 'camera-card-body-preview';
-        videoWrap.style.minHeight = '110px';
-
-        const cardVideo = document.createElement('video');
-        cardVideo.autoplay = true;
-        cardVideo.playsInline = true;
-        cardVideo.muted = true;
-        cardVideo.className = 'camera-card-video-thumb';
-        videoWrap.appendChild(cardVideo);
-
-        // Action Footer
-        const footer = document.createElement('div');
-        footer.style.display = 'flex';
-        footer.style.gap = '6px';
-        footer.style.padding = '6px 8px';
-        footer.style.background = 'rgba(0,0,0,0.55)';
-        footer.style.borderTop = '1px solid rgba(255,255,255,0.06)';
-
-        const btnPreview = document.createElement('button');
-        btnPreview.className = 'btn-fast';
-        btnPreview.style.flex = '1';
-        btnPreview.style.padding = '4px 6px';
-        btnPreview.style.fontSize = '0.7rem';
-        btnPreview.textContent = '👁️ Preview';
-        btnPreview.onclick = (e) => {
-          e.stopPropagation();
-          setViewfinderCamera(dev.deviceId, dev.label);
-        };
-
-        const btnAddTv = document.createElement('button');
-        btnAddTv.className = 'btn-fast';
-        btnAddTv.style.flex = '1.2';
-        btnAddTv.style.padding = '4px 6px';
-        btnAddTv.style.fontSize = '0.7rem';
-        btnAddTv.style.fontWeight = '700';
-        if (isLiveOnTv) {
-          btnAddTv.style.background = '#ef4444';
-          btnAddTv.style.color = '#fff';
-          btnAddTv.textContent = '⏹️ Take Off';
-          btnAddTv.onclick = (e) => {
-            e.stopPropagation();
-            updateCameraMode('none');
-          };
+      const btnWorshipBg = document.createElement('button');
+      btnWorshipBg.className = 'btn-cam-card-action worship' + (isWorshipMode ? ' active' : '');
+      btnWorshipBg.innerHTML = isWorshipMode ? '⏹️ Stop Worship BG' : '🎵 Worship BG';
+      btnWorshipBg.title = 'Project this camera behind worship lyrics on the Church TV';
+      btnWorshipBg.onclick = (e) => {
+        e.stopPropagation();
+        if (isWorshipMode) {
+          updateCameraMode('none');
         } else {
-          btnAddTv.style.background = 'rgba(16, 185, 129, 0.2)';
-          btnAddTv.style.color = '#34d399';
-          btnAddTv.style.borderColor = 'rgba(16, 185, 129, 0.4)';
-          btnAddTv.textContent = '📺 Add to TV';
-          btnAddTv.onclick = (e) => {
-            e.stopPropagation();
-            switchCameraSource(dev.deviceId, dev.label, 'preacher');
-          };
+          switchCameraSource(dev.deviceId, dev.label, 'background');
         }
+      };
 
-        footer.appendChild(btnPreview);
-        footer.appendChild(btnAddTv);
-        card.appendChild(videoWrap);
-        card.appendChild(footer);
+      footer.appendChild(btnPreview);
+      footer.appendChild(btnAddTv);
+      footer.appendChild(btnWorshipBg);
 
-        // Click card to preview on laptop
-        card.addEventListener('click', () => {
-          setViewfinderCamera(dev.deviceId, dev.label);
-        });
+      card.appendChild(videoWrap);
+      card.appendChild(footer);
 
-        grid.appendChild(card);
-
-        // Stream video into card thumbnail
-        navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: dev.deviceId }, width: { ideal: 320 }, height: { ideal: 180 } },
-          audio: false
-        }).then(stream => {
-          cameraCardStreams.set(dev.deviceId, stream);
-          cardVideo.srcObject = stream;
-        }).catch(err => {
-          console.warn('Card video acquire error:', err);
-        });
+      card.addEventListener('click', () => {
+        setViewfinderCamera(dev.deviceId, dev.label);
+        renderCameraDisplaySection();
       });
-    }
+
+      grid.appendChild(card);
+
+      // Attach shared 1280x720 stream immediately (0ms delay, no duplicate getUserMedia!)
+      acquireSharedCameraStream(dev.deviceId).then(stream => {
+        if (stream) {
+          cardVideo.srcObject = stream;
+          cardVideo.play().catch(() => {});
+        }
+      }).catch(err => {
+        console.warn('Card stream attach error:', err);
+      });
+    });
   }
 
   // 11d. MOBILE WI-FI REMOTE CONTROL SYNCHRONIZATION
@@ -5415,7 +5601,7 @@ async function renderCameraDisplaySection() {
           focusInputSafely(bibleQuickSearch);
         } else if (tabId === 'tab-camera') {
           openCameraDisplaySection();
-          enumerateVideoDevices(true);
+          enumerateVideoDevices(false);
         } else {
           if (state.cameraDisplaySectionOpen) {
             closeCameraDisplaySection();
@@ -5482,13 +5668,14 @@ async function renderCameraDisplaySection() {
     }
 
 
-        const btnOpenCamStudio = document.getElementById('btn-open-camera-studio');
+    const btnOpenCamStudio = document.getElementById('btn-open-camera-studio');
     if (btnOpenCamStudio) {
       btnOpenCamStudio.addEventListener('click', () => {
         if (state.cameraDisplaySectionOpen) {
           closeCameraDisplaySection();
         } else {
           openCameraDisplaySection();
+          enumerateVideoDevices(false);
         }
       });
     }
@@ -5506,8 +5693,8 @@ async function renderCameraDisplaySection() {
     const btnCamViewRefresh = document.getElementById('btn-cam-view-refresh');
     if (btnCamViewRefresh) {
       btnCamViewRefresh.addEventListener('click', () => {
-        enumerateVideoDevices();
-        showToast('🔄 Rescanned cameras');
+        enumerateVideoDevices(true);
+        showToast('🔄 Rescanning connected cameras...');
       });
     }
 
@@ -5553,7 +5740,7 @@ async function renderCameraDisplaySection() {
         triggerAutoSave();
       });
     }
-    if (btnRefreshDevices) btnRefreshDevices.addEventListener('click', enumerateVideoDevices);
+    if (btnRefreshDevices) btnRefreshDevices.addEventListener('click', () => enumerateVideoDevices(true));
 
     camModeButtons.forEach(btn => {
       btn.addEventListener('click', () => {
@@ -5986,7 +6173,7 @@ async function renderCameraDisplaySection() {
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.3.5';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.4.2';
         }
       } catch (err) {
         console.warn('Update check warning:', err);

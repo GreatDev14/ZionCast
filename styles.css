@@ -3532,69 +3532,6 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Redesigned Camera Gallery Cards - Guaranteed Non-Collapsing! */
-.camera-multiview-grid {
-  display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)) !important;
-  gap: 10px !important;
-  flex: 1 !important;
-  overflow-y: auto !important;
-  padding: 4px !important;
-  min-height: 140px !important;
-}
-
-.camera-card {
-  background: var(--bg-surface) !important;
-  border: 1px solid var(--border-subtle) !important;
-  border-radius: 8px !important;
-  overflow: hidden !important;
-  display: flex !important;
-  flex-direction: column !important;
-  cursor: pointer !important;
-  transition: all 0.15s ease !important;
-  min-height: 110px !important;
-}
-
-.camera-card:hover {
-  border-color: rgba(255, 255, 255, 0.3) !important;
-  transform: translateY(-2px) !important;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5) !important;
-}
-
-.camera-card.selected-source {
-  border-color: #38bdf8 !important;
-  box-shadow: 0 0 14px rgba(56, 189, 248, 0.45) !important;
-  background: rgba(56, 189, 248, 0.06) !important;
-}
-
-.camera-card.live-on-tv {
-  border-color: #ef4444 !important;
-  box-shadow: 0 0 16px rgba(239, 68, 68, 0.5) !important;
-}
-
-.camera-card.live-worship-bg {
-  border-color: #06b6d4 !important;
-  box-shadow: 0 0 16px rgba(6, 182, 212, 0.5) !important;
-}
-
-.camera-card-body-preview {
-  position: relative;
-  width: 100%;
-  height: 90px;
-  background: #000000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.camera-card-video-thumb {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  background: #000;
-}
-
 /* ==========================================================================
    SLEEK SIDEBAR CAMERA CARDS & AVAILABLE-ONLY CAMERA STUDIO
    ========================================================================== */
@@ -3727,4 +3664,260 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+}
+
+
+/* =========================================================================
+   V1.4.2 REDESIGNED BROADCAST CAMERA SECTION & LIVE MONITOR CARDS
+   ========================================================================= */
+.camera-display-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: var(--bg-deep);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 14px 20px 14px !important;
+  min-height: 0;
+  gap: 8px;
+}
+
+.camera-multiview-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(318px, 375px)) !important;
+  gap: 12px !important;
+  padding: 2px 2px 12px 2px !important;
+  align-content: start !important;
+  flex: none !important;
+  overflow: visible !important;
+}
+
+.camera-empty-state-card {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 24px !important;
+  background: rgba(15, 23, 42, 0.55);
+  border-radius: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  text-align: center;
+  gap: 8px !important;
+}
+
+.camera-card {
+  background: #0f172a !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex-shrink: 0 !important;
+  transition: all 0.18s ease !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45) !important;
+  cursor: pointer !important;
+}
+
+.camera-card:hover {
+  border-color: rgba(255, 255, 255, 0.28) !important;
+  transform: translateY(-1px) !important;
+}
+
+.camera-card.selected-source {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35), 0 8px 22px rgba(0, 0, 0, 0.55) !important;
+}
+
+.camera-card.live-on-tv {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.5), 0 0 22px rgba(239, 68, 68, 0.3) !important;
+}
+
+.camera-card.live-worship-bg {
+  border-color: #06b6d4 !important;
+  box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.5), 0 0 22px rgba(6, 182, 212, 0.3) !important;
+}
+
+.camera-card-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 11px;
+  background: rgba(2, 6, 23, 0.78);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+
+.camera-card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.camera-card-icon {
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.camera-card-name {
+  font-weight: 800;
+  font-size: 0.8rem;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.camera-card-res-pill {
+  font-size: 0.63rem;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.camera-card-status-pill {
+  font-size: 0.64rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.camera-card-status-pill.ready {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.camera-card-status-pill.previewing {
+  background: rgba(56, 189, 248, 0.16);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.38);
+}
+
+.camera-card-status-pill.live {
+  background: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.45);
+}
+
+.camera-card-status-pill.worship {
+  background: #06b6d4;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.45);
+}
+
+.camera-card-body-preview {
+  position: relative !important;
+  width: 100% !important;
+  height: 130px !important;
+  min-height: 130px !important;
+  flex-shrink: 0 !important;
+  background: #000000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+}
+
+.camera-card-video-thumb {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  background: #000000 !important;
+}
+
+.camera-card-dark-hint {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  right: 10px;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #cbd5e1;
+  font-size: 0.7rem;
+  padding: 5px 10px;
+  border-radius: 6px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.camera-card-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  background: rgba(2, 6, 23, 0.85);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+
+.btn-cam-card-action {
+  flex: 1;
+  padding: 7px 8px;
+  font-size: 0.73rem;
+  font-weight: 800;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.btn-cam-card-action.preview {
+  background: rgba(255, 255, 255, 0.07);
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.btn-cam-card-action.preview:hover,
+.btn-cam-card-action.preview.active {
+  background: rgba(56, 189, 248, 0.18);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.btn-cam-card-action.preacher {
+  flex: 1.15;
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+}
+
+.btn-cam-card-action.preacher:hover {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.btn-cam-card-action.preacher.active {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #f87171;
+}
+
+.btn-cam-card-action.worship {
+  background: rgba(6, 182, 212, 0.15);
+  color: #22d3ee;
+  border: 1px solid rgba(6, 182, 212, 0.4);
+}
+
+.btn-cam-card-action.worship:hover,
+.btn-cam-card-action.worship.active {
+  background: #06b6d4;
+  color: #ffffff;
+  border-color: #22d3ee;
 }

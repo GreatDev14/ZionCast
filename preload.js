@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('zionApi', {
     ipcRenderer.on('control-state-update', (event, data) => callback(data));
   },
   requestCameraRelease: () => ipcRenderer.send('request-camera-release'),
+  getCameraAppStatus: () => ipcRenderer.invoke('get-camera-app-status'),
   onReleaseControlCamera: (callback) => {
     ipcRenderer.on('release-control-camera', () => callback());
   },
@@ -53,7 +54,7 @@ contextBridge.exposeInMainWorld('zionApi', {
   // In-app Updates & External Links
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
-  getVersion: () => '1.3.5',
+  getVersion: () => '1.4.2',
 
   // Mobile Wi-Fi Remote Control APIs
   getRemoteInfo: () => ipcRenderer.invoke('get-remote-info'),

@@ -716,15 +716,16 @@
         audio: false
       });
       attempts.push({
-        video: { deviceId: resolvedId },
+        video: { deviceId: { exact: resolvedId } },
         audio: false
       });
+    } else {
+      attempts.push({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      attempts.push({ video: true, audio: false });
     }
-    attempts.push({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false
-    });
-    attempts.push({ video: true, audio: false });
 
     let lastErr = null;
     for (const c of attempts) {

@@ -150,7 +150,7 @@
 
 <button id="btn-check-updates" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: var(--accent-gold); border-color: rgba(245, 158, 11, 0.35);" title="Check GitHub for latest ZionCast updates">
         <span id="update-badge-icon">🔄</span>
-        <span id="update-badge-text">v1.4.1</span>
+        <span id="update-badge-text">v1.4.2</span>
       </button>
     </div>
   </header>
@@ -303,22 +303,11 @@
           <!-- Clean Header -->
           <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle);">
             <div style="display: flex; align-items: center; gap: 6px;">
-              <span style="font-size: 0.82rem; font-weight: 800; color: var(--accent-gold);">Available Cameras</span>
+              <span style="font-size: 0.82rem; font-weight: 800; color: var(--accent-gold);">Connected Cameras</span>
               <span id="camera-status-badge" class="camera-status-pill" style="font-size: 0.68rem; padding: 2px 7px;">Scanning...</span>
             </div>
-            <button id="btn-refresh-devices" class="btn-fast" style="padding: 3px 8px; font-size: 0.72rem;" title="Rescan for Connected Cameras">
+            <button id="btn-refresh-devices" class="btn-fast" style="padding: 4px 10px; font-size: 0.72rem; font-weight: 700;" title="Rescan for Connected Cameras">
               🔄 Rescan
-            </button>
-          </div>
-
-          <!-- Quick Switcher Launch Banner -->
-          <div style="padding: 10px 12px; background: linear-gradient(135deg, rgba(244, 63, 94, 0.12) 0%, rgba(15, 23, 42, 0.4) 100%); border-bottom: 1px solid rgba(244, 63, 94, 0.2); display: flex; align-items: center; justify-content: space-between;">
-            <div>
-              <div style="font-size: 0.8rem; font-weight: 800; color: #fff;">Multi-Camera Studio</div>
-              <div style="font-size: 0.7rem; color: #94a3b8;">Full-screen preview & live video switcher</div>
-            </div>
-            <button id="btn-sidebar-open-studio" class="btn-fast" style="background: #f43f5e; color: #fff; font-weight: 800; border-color: #f43f5e; padding: 5px 12px; font-size: 0.75rem;">
-              🎥 Open Studio
             </button>
           </div>
 
@@ -330,7 +319,7 @@
           <!-- Compact Dimmer Control at bottom -->
           <div style="margin-top: auto; padding: 10px 12px; background: var(--bg-surface); border-top: 1px solid var(--border-subtle);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <span style="font-size: 0.74rem; font-weight: 700; color: var(--text-dim);">Lyrics Scrim Dimmer</span>
+              <span style="font-size: 0.74rem; font-weight: 700; color: var(--text-dim);">Worship BG Scrim Dimmer</span>
               <span id="badge-camera-dimmer" class="badge-value">75%</span>
             </div>
             <input type="range" id="camera-dimmer-slider" class="range-slider" style="width: 100%;" min="0.1" max="0.95" step="0.05" value="0.75">
@@ -418,87 +407,34 @@
       </div>
       <!-- DEDICATED CAMERA DISPLAY SECTION & MULTI-CAM SWITCHER -->
       <div id="camera-display-section" class="camera-display-section" style="display: none;">
-        <!-- Clean Studio Header -->
+        <!-- Clean Broadcast Camera Toolbar -->
         <div class="camera-display-toolbar">
           <div class="camera-display-info-heading">
             <span class="camera-display-title">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-              Camera Studio
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+              Live Cameras
             </span>
-            <span id="camera-display-meta" class="camera-display-meta">Scanning cameras...</span>
+            <span id="camera-display-meta" class="camera-display-meta">Scanning...</span>
           </div>
 
           <div class="camera-toolbar-actions">
-            <!-- Filter Toggle: Connected devices only vs All drivers -->
-            <button id="btn-toggle-cam-filter" class="btn-fast" style="padding: 4px 10px; font-size: 0.74rem; color: #34d399; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.1); font-weight: 700;" title="Show only cameras with active phone/video connections">
-              🟢 Active Connected Only
+            <button id="btn-vf-remove-tv" class="btn-fast" style="display: none; padding: 5px 12px; font-size: 0.75rem; background: #ef4444; color: #fff; border-color: #f87171; font-weight: 800;" title="Take camera off the TV immediately">
+              ⏹️ Take Camera Off TV
             </button>
-            <button id="btn-cam-view-refresh" class="btn-fast" style="padding: 4px 10px; font-size: 0.74rem;" title="Rescan Cameras">
-              🔄 Rescan
+            <button id="btn-cam-view-refresh" class="btn-fast" style="padding: 5px 12px; font-size: 0.75rem; font-weight: 700;" title="Rescan for Connected Cameras">
+              🔄 Rescan Cameras
             </button>
-            <button id="btn-cam-view-close" class="btn-fast" style="padding: 4px 10px; font-size: 0.74rem;" title="Close Camera Studio & Return to Slides">
+            <button id="btn-cam-view-close" class="btn-fast" style="padding: 5px 12px; font-size: 0.75rem;" title="Return to Presentation Slides">
               ✕ Back to Slides
             </button>
           </div>
         </div>
 
-        <!-- OPERATOR LIVE VIEWFINDER MONITOR -->
-        <div class="camera-main-viewfinder-box">
-          <div class="camera-viewfinder-header">
-            <div class="viewfinder-camera-title">
-              <span id="viewfinder-cam-icon">📱</span>
-              <span id="viewfinder-cam-name">Select Camera</span>
-              <span id="viewfinder-cam-resolution" class="viewfinder-res-badge">Ready</span>
-            </div>
-            <div id="viewfinder-cam-status-badge" class="viewfinder-status-badge">
-              LOCAL PREVIEW ONLY
-            </div>
-          </div>
-
-          <div class="camera-viewfinder-screen">
-            <video id="camera-studio-main-video" autoplay playsinline muted></video>
-            <div id="camera-viewfinder-placeholder" class="camera-viewfinder-placeholder">
-              <div style="font-size: 2rem;">📹</div>
-              <div style="font-size: 0.95rem; font-weight: 800; color: #fff;">Select an active camera below to view live feed</div>
-              <div style="font-size: 0.74rem; color: #94a3b8;">Clicking a camera only previews it here on your laptop. It will not display on TV until you click Add to TV.</div>
-            </div>
-            <div id="camera-viewfinder-live-banner" class="camera-viewfinder-live-banner" style="display: none;">
-              <span class="live-pulse-dot"></span>
-              <span id="viewfinder-live-banner-text">🔴 LIVE ON CHURCH TV (PREACHER MODE)</span>
-            </div>
-          </div>
-
-          <!-- THE ONLY TV CONTROLS: Camera NEVER goes to TV unless explicitly clicked here! -->
-          <div class="camera-viewfinder-actions-bar">
-            <button id="btn-vf-add-preacher" class="btn-fast btn-cam-preacher-live" style="flex: 1.2; padding: 9px 12px; font-size: 0.8rem; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 6px;" title="Project this camera full-screen onto the congregation TV">
-              <span>📺 Add to TV (Preacher Mode)</span>
-            </button>
-            <button id="btn-vf-add-worship" class="btn-fast btn-cam-worship-live" style="flex: 1.2; padding: 9px 12px; font-size: 0.8rem; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 6px;" title="Project this camera beneath worship lyrics on the TV">
-              <span>🎵 Add to TV (Worship BG)</span>
-            </button>
-            <button id="btn-vf-remove-tv" class="btn-fast" style="padding: 9px 14px; font-size: 0.8rem; color: #ef4444; border-color: rgba(239, 68, 68, 0.4); font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px;" title="Take camera off the TV immediately">
-              <span>⏹️ Remove from TV</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- CAMERA SELECTION SECTION -->
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 2px 4px;">
-          <span style="font-size: 0.74rem; font-weight: 800; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
-            <span>Connected Cameras In Use</span>
-            <span id="camera-gallery-count" class="badge-tag" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 0.68rem;">1 Active</span>
-          </span>
-          <span style="font-size: 0.7rem; color: var(--text-dim);">
-            Click camera to preview on laptop • Click "Add to TV" to project
-          </span>
-        </div>
-
-        <!-- Camera Cards Grid: Only Active / Connected Devices Shown! -->
+        <!-- Live Camera Feed Cards Grid (Only Active Connected Cameras!) -->
         <div id="camera-multiview-grid" class="camera-multiview-grid">
-          <!-- Dynamically populated camera preview cards -->
+          <!-- Dynamically populated live camera monitor cards -->
         </div>
       </div>
-
 
       <!-- BOTTOM: Interactive Grid of Slide Tiles -->
       <div class="center-tiles-section">
