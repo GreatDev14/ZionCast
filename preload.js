@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('zionApi', {
   // Dual-screen & window management
   getDisplays: () => ipcRenderer.invoke('get-displays'),
   extendDisplays: () => ipcRenderer.invoke('extend-displays'),
+  checkFirewallStatus: () => ipcRenderer.invoke('check-firewall-status'),
   fixWindowsFirewall: () => ipcRenderer.invoke('fix-windows-firewall'),
   launchDisplay: (displayId) => ipcRenderer.invoke('launch-display', displayId),
   closeDisplay: () => ipcRenderer.invoke('close-display'),
@@ -54,10 +55,10 @@ contextBridge.exposeInMainWorld('zionApi', {
   // In-app Updates & External Links
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
-  getVersion: () => '1.4.2',
+  getVersion: () => '1.4.3',
 
   // Mobile Wi-Fi Remote Control APIs
-  getRemoteInfo: () => ipcRenderer.invoke('get-remote-info'),
+  getRemoteInfo: (preferredIp = null) => ipcRenderer.invoke('get-remote-info', preferredIp),
   updateRemoteStatus: (status) => ipcRenderer.send('update-remote-status', status),
   onRemoteAction: (callback) => {
     ipcRenderer.on('remote-action', (event, data) => callback(data));

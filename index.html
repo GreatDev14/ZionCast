@@ -150,7 +150,7 @@
 
 <button id="btn-check-updates" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: var(--accent-gold); border-color: rgba(245, 158, 11, 0.35);" title="Check GitHub for latest ZionCast updates">
         <span id="update-badge-icon">🔄</span>
-        <span id="update-badge-text">v1.4.2</span>
+        <span id="update-badge-text">v1.4.3</span>
       </button>
     </div>
   </header>
@@ -1040,26 +1040,42 @@ My chains are gone, I've been set free..."></textarea>
 
   <!-- 9. Mobile Wi-Fi Remote Control Modal -->
   <div id="modal-remote" class="modal-overlay">
-    <div class="modal-container" style="width: 480px; text-align: center;">
+    <div class="modal-container" style="width: 510px; text-align: center;">
       <div class="modal-header">
         <span class="modal-title" style="display: flex; align-items: center; gap: 8px;">
           📱 Mobile Wi-Fi Remote Control
         </span>
         <button class="modal-close-btn" data-close="modal-remote">&times;</button>
       </div>
-      <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 16px;">
+      <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 16px;">
         
-        <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-size: 0.76rem; font-weight: 700;">
+        <div id="remote-modal-status-pill" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-size: 0.76rem; font-weight: 700;">
           <span class="remote-pulse-dot"></span>
           <span id="remote-modal-status-text">Server Active on Local Wi-Fi</span>
         </div>
 
-        <div style="background: #ffffff; padding: 12px; border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center;">
-          <img id="remote-qr-img" style="width: 200px; height: 200px; display: block;" alt="Scan QR Code with Phone Camera">
+        <div style="background: #ffffff; padding: 11px; border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center;">
+          <img id="remote-qr-img" style="width: 190px; height: 190px; display: block;" alt="Scan QR Code with Phone Camera">
+        </div>
+
+        <!-- Dynamic Wi-Fi / Hotspot Adapter Selector -->
+        <div style="width: 100%;">
+          <label class="form-label" style="text-align: left; margin-bottom: 5px; display: flex; align-items: center; justify-content: space-between;">
+            <span>Active Wi-Fi / Hotspot Network IP:</span>
+            <span id="remote-ssid-badge" style="color: #38bdf8; font-weight: 700; font-size: 0.72rem;">Auto-Detecting...</span>
+          </label>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <select id="remote-ip-select" class="form-select" style="flex: 1; font-size: 0.78rem; font-weight: 600;">
+              <option value="">Auto-detecting Wi-Fi IP...</option>
+            </select>
+            <button id="btn-refresh-remote-ip" class="btn-secondary" style="padding: 7px 11px; font-size: 0.76rem; font-weight: 700; white-space: nowrap;" title="Re-detect current Wi-Fi network IP & regenerate QR code">
+              🔄 Refresh Wi-Fi
+            </button>
+          </div>
         </div>
 
         <div style="width: 100%;">
-          <label class="form-label" style="text-align: center; margin-bottom: 6px;">Or open this address in your phone's browser:</label>
+          <label class="form-label" style="text-align: left; margin-bottom: 5px;">Or open this address in your phone's browser:</label>
           <div style="display: flex; gap: 6px; align-items: center; justify-content: center;">
             <input type="text" id="remote-url-display" class="form-input" style="font-family: monospace; font-weight: 700; color: var(--accent-gold); text-align: center; flex: 1;" readonly value="http://...">
             <button id="btn-copy-remote-url" class="btn-primary" style="padding: 7px 12px; font-size: 0.78rem; font-weight: 700;" title="Copy Remote Link">Copy</button>
@@ -1067,11 +1083,22 @@ My chains are gone, I've been set free..."></textarea>
           </div>
         </div>
 
-        <div style="background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 0.74rem; color: var(--text-dim); text-align: left; line-height: 1.5; width: 100%;">
-          <strong style="color: var(--accent-gold); display: block; margin-bottom: 4px;">Quick Phone Connection:</strong>
-          1. Connect your smartphone/tablet to the <strong>same Wi-Fi network</strong>.<br>
-          2. Open camera & scan the QR code above.<br>
-          3. Tap link to control slides, blackout, theme, and send alerts instantly!
+        <!-- Windows Firewall Unlock for New / Public Wi-Fi Networks -->
+        <div style="width: 100%; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-sm); padding: 9px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left;">
+          <div style="flex: 1; min-width: 0;">
+            <div id="remote-firewall-title" style="font-size: 0.75rem; font-weight: 800; color: #fbbf24;">Switched to another Wi-Fi?</div>
+            <div id="remote-firewall-desc" style="font-size: 0.69rem; color: var(--text-dim); line-height: 1.35;">Windows blocks new Wi-Fi networks ("Public") by default. Unblock once so any Wi-Fi works.</div>
+          </div>
+          <button id="btn-fix-remote-firewall" class="btn-fast" style="padding: 6px 11px; font-size: 0.73rem; font-weight: 800; color: #fbbf24; border-color: rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.16); white-space: nowrap; flex-shrink: 0;">
+            🛡️ Unblock New Wi-Fi
+          </button>
+        </div>
+
+        <div style="background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); padding: 9px 13px; font-size: 0.72rem; color: var(--text-dim); text-align: left; line-height: 1.45; width: 100%;">
+          <strong style="color: var(--accent-gold); display: block; margin-bottom: 3px;">Works on Any Wi-Fi or Hotspot:</strong>
+          1. Connect phone &amp; laptop to the <strong>same Wi-Fi</strong> (or turn on <strong>Phone / Laptop Hotspot</strong>).<br>
+          2. If you switch Wi-Fi networks, click <strong>🔄 Refresh Wi-Fi</strong> and rescan the new QR code.<br>
+          3. If a church guest router blocks phone-to-laptop traffic, use <strong>Mobile Hotspot</strong>.
         </div>
 
       </div>

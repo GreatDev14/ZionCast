@@ -8,6 +8,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const dgram = require('dgram');
+const { exec } = require('child_process');
 const QRCode = require('qrcode');
 
 class RemoteServer {
@@ -17,7 +19,13 @@ class RemoteServer {
     this.isRunning = false;
     this.clients = new Set();
     this.qrCodeDataUrl = '';
+    this.qrCache = new Map();
     this.localIps = [];
+    this.networkCandidates = [];
+    this.selectedIp = null;
+    this.lastWifiSsid = '';
+    this.lastWifiCheckAt = 0;
+    this.heartbeatTimer = null;
     this.currentStatus = {
       activeItemTitle: 'ZionCast Broadcast',
       currentSlideIndex: 0,
@@ -56,41 +64,170 @@ class RemoteServer {
     this.bibleCache = {};
   }
 
-  getLocalIps() {
+  getPrimaryRouteIp() {
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = (ip) => {
+        if (!settled) {
+          settled = true;
+          resolve(ip || null);
+        }
+      };
+      try {
+        const sock = dgram.createSocket('udp4');
+        const timer = setTimeout(() => {
+          try { sock.close(); } catch (_) {}
+          done(null);
+        }, 120);
+        sock.on('error', () => {
+          clearTimeout(timer);
+          try { sock.close(); } catch (_) {}
+          done(null);
+        });
+        sock.connect(80, '8.8.8.8', () => {
+          clearTimeout(timer);
+          let addr = null;
+          try { addr = sock.address().address; } catch (_) {}
+          try { sock.close(); } catch (_) {}
+          done(addr && addr !== '127.0.0.1' && addr !== '0.0.0.0' ? addr : null);
+        });
+      } catch (_) {
+        done(null);
+      }
+    });
+  }
+
+  getWifiSsid() {
+    if (process.platform !== 'win32') return Promise.resolve('');
+    const now = Date.now();
+    if (now - this.lastWifiCheckAt < 2000) {
+      return Promise.resolve(this.lastWifiSsid);
+    }
+    return new Promise((resolve) => {
+      exec('netsh wlan show interfaces', { windowsHide: true, timeout: 1200 }, (err, stdout) => {
+        this.lastWifiCheckAt = Date.now();
+        if (err || !stdout) {
+          resolve(this.lastWifiSsid || '');
+          return;
+        }
+        const stateMatch = stdout.match(/^\s*State\s*:\s*(.+)$/im);
+        const isConnected = stateMatch && stateMatch[1].trim().toLowerCase() === 'connected';
+        if (!isConnected) {
+          this.lastWifiSsid = '';
+          resolve('');
+          return;
+        }
+        const ssidMatch = stdout.match(/^\s*SSID\s*:\s*(.+)$/im);
+        this.lastWifiSsid = ssidMatch ? ssidMatch[1].trim() : '';
+        resolve(this.lastWifiSsid);
+      });
+    });
+  }
+
+  buildNetworkCandidates(routeIp = null, wifiSsid = '') {
     const interfaces = os.networkInterfaces();
-    const wifiIps = [];
-    const lanIps = [];
-    const otherIps = [];
+    const candidates = [];
 
     for (const name of Object.keys(interfaces)) {
       const lower = name.toLowerCase();
-      // Skip virtual / container / hypervisor adapters
       const isVirtual = lower.includes('vethernet') || lower.includes('virtualbox') ||
-        lower.includes('vmnet') || lower.includes('hyper-v') || lower.includes('docker') ||
-        lower.includes('bluetooth') || lower.includes('tailscale');
+        lower.includes('vmnet') || lower.includes('vmware') || lower.includes('hyper-v') ||
+        lower.includes('docker') || lower.includes('wsl') || lower.includes('bluetooth') ||
+        lower.includes('tailscale') || lower.includes('loopback');
 
-      for (const net of interfaces[name]) {
-        if (net.family === 'IPv4' && !net.internal) {
-          if (!isVirtual && (lower.includes('wi-fi') || lower.includes('wireless') || lower.includes('wlan'))) {
-            wifiIps.push(net.address);
-          } else if (!isVirtual && (lower.includes('ethernet') || lower.includes('lan'))) {
-            lanIps.push(net.address);
-          } else if (!isVirtual) {
-            otherIps.push(net.address);
-          } else {
-            otherIps.push(net.address);
-          }
+      for (const net of (interfaces[name] || [])) {
+        if (net.family !== 'IPv4' || net.internal) continue;
+        const ip = net.address;
+        if (!ip || ip.startsWith('169.254.') || ip === '192.168.56.1') continue;
+        if (isVirtual && ip !== routeIp) continue;
+
+        const isRoute = ip === routeIp;
+        const isHotspot = ip.startsWith('192.168.137.') || lower.includes('local area connection*');
+        const isWifi = lower.includes('wi-fi') || lower.includes('wireless') || lower.includes('wlan');
+        const isLan = lower.includes('ethernet') || lower.includes('lan');
+
+        let priority = 50;
+        let label = `${name} (${ip})`;
+
+        if (isWifi) {
+          priority = isRoute ? 1 : 5;
+          label = wifiSsid
+            ? `Wi-Fi "${wifiSsid}" (${ip})${isRoute ? ' • Active' : ''}`
+            : `Wi-Fi (${ip})${isRoute ? ' • Active' : ''}`;
+        } else if (isHotspot) {
+          priority = isRoute ? 2 : 10;
+          label = `Laptop Mobile Hotspot (${ip})`;
+        } else if (isLan) {
+          priority = isRoute ? 3 : 15;
+          label = `Ethernet / Hotspot (${ip})${isRoute ? ' • Active' : ''}`;
+        } else if (isRoute) {
+          priority = 4;
+          label = `Active Network (${ip})`;
         }
+
+        candidates.push({
+          ip,
+          interfaceName: name,
+          label,
+          isWifi,
+          isHotspot,
+          isRoute,
+          priority
+        });
       }
     }
 
-    const sorted = [...wifiIps, ...lanIps, ...otherIps];
-    return sorted.length > 0 ? sorted : ['127.0.0.1'];
+    candidates.sort((a, b) => a.priority - b.priority);
+
+    if (candidates.length === 0) {
+      candidates.push({
+        ip: '127.0.0.1',
+        interfaceName: 'Loopback',
+        label: 'Offline / Not Connected to Wi-Fi (127.0.0.1)',
+        isWifi: false,
+        isHotspot: false,
+        isRoute: false,
+        priority: 99
+      });
+    }
+
+    return candidates;
+  }
+
+  getLocalIps() {
+    const cands = this.buildNetworkCandidates(null, this.lastWifiSsid);
+    return cands.map(c => c.ip);
+  }
+
+  async getQrForUrl(urlStr) {
+    if (this.qrCache.has(urlStr)) {
+      return this.qrCache.get(urlStr);
+    }
+    try {
+      const dataUrl = await QRCode.toDataURL(urlStr, {
+        margin: 1,
+        width: 280,
+        color: {
+          dark: '#0d1117',
+          light: '#ffffff'
+        }
+      });
+      this.qrCache.set(urlStr, dataUrl);
+      return dataUrl;
+    } catch (e) {
+      console.warn('[Remote Server] Could not generate QR code:', e);
+      return '';
+    }
   }
 
   async init(onAction) {
     this.onActionCallback = onAction;
-    this.localIps = this.getLocalIps();
+    const [routeIp, wifiSsid] = await Promise.all([
+      this.getPrimaryRouteIp(),
+      this.getWifiSsid()
+    ]);
+    this.networkCandidates = this.buildNetworkCandidates(routeIp, wifiSsid);
+    this.localIps = this.networkCandidates.map(c => c.ip);
     return this.startWithPortRetry(3000, 3010);
   }
 
@@ -100,6 +237,13 @@ class RemoteServer {
 
       const tryListen = () => {
         const srv = http.createServer((req, res) => this.handleRequest(req, res));
+
+        srv.on('connection', (socket) => {
+          try {
+            socket.setNoDelay(true);
+            socket.setKeepAlive(true, 4000);
+          } catch (_) {}
+        });
 
         srv.on('error', (err) => {
           if (err.code === 'EADDRINUSE' && currentPort < maxPort) {
@@ -117,21 +261,20 @@ class RemoteServer {
           this.isRunning = true;
           const primaryIp = this.localIps[0] || '127.0.0.1';
           const primaryUrl = `http://${primaryIp}:${this.port}`;
+          this.qrCodeDataUrl = await this.getQrForUrl(primaryUrl);
 
-          try {
-            this.qrCodeDataUrl = await QRCode.toDataURL(primaryUrl, {
-              margin: 1,
-              width: 280,
-              color: {
-                dark: '#0d1117',
-                light: '#ffffff'
+          if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+          this.heartbeatTimer = setInterval(() => {
+            for (const client of this.clients) {
+              try {
+                client.write(': ping\n\n');
+              } catch (_) {
+                this.clients.delete(client);
               }
-            });
-          } catch (e) {
-            console.warn('[Remote Server] Could not generate QR code:', e);
-          }
+            }
+          }, 3000);
 
-          console.log(`[Remote Server] Running at ${primaryUrl}`);
+          console.log(`[Remote Server] Running at ${primaryUrl} (bound to 0.0.0.0:${this.port})`);
           resolve(true);
         });
       };
@@ -164,26 +307,65 @@ class RemoteServer {
     }
   }
 
-  getInfo() {
-    const primaryIp = this.localIps[0] || '127.0.0.1';
+  async getInfo(preferredIp = null) {
+    if (preferredIp && preferredIp !== 'auto') {
+      this.selectedIp = preferredIp;
+    } else if (preferredIp === null || preferredIp === 'auto') {
+      this.selectedIp = null;
+    }
+
+    const [routeIp, wifiSsid] = await Promise.all([
+      this.getPrimaryRouteIp(),
+      this.getWifiSsid()
+    ]);
+
+    this.networkCandidates = this.buildNetworkCandidates(routeIp, wifiSsid);
+    this.localIps = this.networkCandidates.map(c => c.ip);
+
+    let activeIp = this.localIps[0] || '127.0.0.1';
+    if (this.selectedIp && this.localIps.includes(this.selectedIp)) {
+      activeIp = this.selectedIp;
+    } else {
+      this.selectedIp = null;
+    }
+
+    const primaryUrl = `http://${activeIp}:${this.port}`;
+    this.qrCodeDataUrl = await this.getQrForUrl(primaryUrl);
+
     return {
       isRunning: this.isRunning,
       port: this.port,
+      primaryIp: activeIp,
+      selectedIp: activeIp,
+      wifiSsid: wifiSsid || '',
       localIps: this.localIps,
-      primaryUrl: `http://${primaryIp}:${this.port}`,
-      stageUrl: `http://${primaryIp}:${this.port}/stage`,
-      lowerThirdsUrl: `http://${primaryIp}:${this.port}/lower-thirds`,
+      networkCandidates: this.networkCandidates,
+      primaryUrl,
+      stageUrl: `http://${activeIp}:${this.port}/stage`,
+      lowerThirdsUrl: `http://${activeIp}:${this.port}/lower-thirds`,
       connectedCount: this.clients.size,
       qrCodeDataUrl: this.qrCodeDataUrl,
       currentStatus: this.currentStatus
     };
   }
 
+  executeRemoteAction(action, data) {
+    if (action === 'stage-message' && data && data.text) {
+      this.updateStatus({ stageMessage: data.text, stageMessageActive: true });
+    } else if (action === 'clear-stage-message') {
+      this.updateStatus({ stageMessage: '', stageMessageActive: false });
+    }
+    if (this.onActionCallback) {
+      this.onActionCallback(action, data || {});
+    }
+  }
+
   handleRequest(req, res) {
-    // Enable CORS for flexibility
+    // Enable CORS & prevent caching on mobile routers/proxies
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Cache-Control');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
     if (req.method === 'OPTIONS') {
       res.writeHead(204);
@@ -197,8 +379,9 @@ class RemoteServer {
     if (url.pathname === '/api/events') {
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'
       });
       res.write(`data: ${JSON.stringify({ type: 'status', data: this.currentStatus })}\n\n`);
       this.clients.add(res);
@@ -216,29 +399,39 @@ class RemoteServer {
       return;
     }
 
-    // 3. Action API (commands from phone)
-    if (url.pathname === '/api/action' && req.method === 'POST') {
-      let body = '';
-      req.on('data', chunk => { body += chunk; });
-      req.on('end', () => {
+    // 3. Action API (commands from phone - supports both POST JSON and GET query fallback)
+    if (url.pathname === '/api/action') {
+      if (req.method === 'GET') {
         try {
-          const parsed = JSON.parse(body || '{}');
-          if (parsed.action === 'stage-message' && parsed.data && parsed.data.text) {
-            this.updateStatus({ stageMessage: parsed.data.text, stageMessageActive: true });
-          } else if (parsed.action === 'clear-stage-message') {
-            this.updateStatus({ stageMessage: '', stageMessageActive: false });
-          }
-          if (this.onActionCallback) {
-            this.onActionCallback(parsed.action, parsed.data || {});
-          }
+          const action = url.searchParams.get('action') || '';
+          const rawData = url.searchParams.get('data') || '{}';
+          const parsedData = JSON.parse(rawData);
+          this.executeRemoteAction(action, parsedData);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: true }));
         } catch (err) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: false, error: err.message }));
         }
-      });
-      return;
+        return;
+      }
+
+      if (req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+          try {
+            const parsed = JSON.parse(body || '{}');
+            this.executeRemoteAction(parsed.action, parsed.data || {});
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true }));
+          } catch (err) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: err.message }));
+          }
+        });
+        return;
+      }
     }
 
     // 4. Stage Display / Confidence Monitor (Preacher & Choir Screen)
@@ -1433,12 +1626,42 @@ class RemoteServer {
             navigator.vibrate(20);
           }
         } catch (e) {}
+        var payloadObj = data || {};
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 3500) : null;
         return fetch('/api/action', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: action, data: data || {} })
-        }).catch(function(err) {
-          console.error('Action failed:', err);
+          cache: 'no-store',
+          signal: controller ? controller.signal : undefined,
+          body: JSON.stringify({ action: action, data: payloadObj })
+        }).then(function(r) {
+          if (timeoutId) clearTimeout(timeoutId);
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          connBadge.classList.remove('disconnected');
+          connText.textContent = 'Connected';
+          return r;
+        }).catch(function() {
+          if (timeoutId) clearTimeout(timeoutId);
+          // Fallback to GET query params if POST body was dropped on guest/church Wi-Fi
+          var qs = '?action=' + encodeURIComponent(action) +
+            '&data=' + encodeURIComponent(JSON.stringify(payloadObj)) +
+            '&_t=' + Date.now();
+          return fetch('/api/action' + qs, {
+            method: 'GET',
+            cache: 'no-store'
+          }).then(function(r2) {
+            if (r2 && r2.ok) {
+              connBadge.classList.remove('disconnected');
+              connText.textContent = 'Connected';
+            }
+            return r2;
+          }).catch(function(err2) {
+            console.error('Action failed:', err2);
+            connBadge.classList.add('disconnected');
+            connText.textContent = 'Reconnecting...';
+            showToast('⚠️ Connection lost — check Wi-Fi or rescan QR code on laptop');
+          });
         });
       }
 
@@ -2283,26 +2506,50 @@ renderCamerasUI(state);
         }
       }
 
+      var activeEventSource = null;
+      var sseReconnectTimer = null;
+      var statusPollInterval = null;
+
+      function pollStatus() {
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timeoutId = controller ? setTimeout(function() { controller.abort(); }, 3000) : null;
+        fetch('/api/status?_t=' + Date.now(), {
+          cache: 'no-store',
+          signal: controller ? controller.signal : undefined
+        })
+          .then(function(r) {
+            if (timeoutId) clearTimeout(timeoutId);
+            return r.json();
+          })
+          .then(function(res) {
+            if (res && res.status) {
+              connBadge.classList.remove('disconnected');
+              connText.textContent = 'Connected';
+              renderUI(res.status);
+            }
+          })
+          .catch(function() {
+            if (timeoutId) clearTimeout(timeoutId);
+            connBadge.classList.add('disconnected');
+            connText.textContent = 'Reconnecting...';
+          });
+      }
+
       function connectSSE() {
-        var es = null;
-        function pollStatus() {
-          fetch('/api/status')
-            .then(function(r) { return r.json(); })
-            .then(function(res) {
-              if (res && res.status) {
-                connBadge.classList.remove('disconnected');
-                connText.textContent = 'Connected';
-                renderUI(res.status);
-              }
-            })
-            .catch(function() {
-              connBadge.classList.add('disconnected');
-              connText.textContent = 'Reconnecting...';
-            });
+        if (sseReconnectTimer) {
+          clearTimeout(sseReconnectTimer);
+          sseReconnectTimer = null;
         }
-        setInterval(pollStatus, 2500);
+        if (!statusPollInterval) {
+          statusPollInterval = setInterval(pollStatus, 2500);
+        }
+        if (activeEventSource) {
+          try { activeEventSource.close(); } catch (e) {}
+          activeEventSource = null;
+        }
 
         var es = new EventSource('/api/events');
+        activeEventSource = es;
         es.onopen = function() {
           connBadge.classList.remove('disconnected');
           connText.textContent = 'Connected';
@@ -2311,6 +2558,8 @@ renderCamerasUI(state);
           try {
             var payload = JSON.parse(e.data);
             if (payload.type === 'status') {
+              connBadge.classList.remove('disconnected');
+              connText.textContent = 'Connected';
               renderUI(payload.data);
             }
           } catch (err) {}
@@ -2318,10 +2567,27 @@ renderCamerasUI(state);
         es.onerror = function() {
           connBadge.classList.add('disconnected');
           connText.textContent = 'Reconnecting...';
-          es.close();
-          setTimeout(connectSSE, 2000);
+          try { es.close(); } catch (e) {}
+          if (activeEventSource === es) activeEventSource = null;
+          if (!sseReconnectTimer) {
+            sseReconnectTimer = setTimeout(connectSSE, 1800);
+          }
         };
       }
+
+      // Immediately reconnect when phone screen wakes up or Wi-Fi reconnects
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+          pollStatus();
+          if (!activeEventSource || activeEventSource.readyState === 2) {
+            connectSSE();
+          }
+        }
+      });
+      window.addEventListener('online', function() {
+        pollStatus();
+        connectSSE();
+      });
 
       // Initial Boot
       connectSSE();
@@ -3024,6 +3290,10 @@ renderCamerasUI(state);
   }
 
   stop() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
     if (this.server) {
       this.server.close();
       this.server = null;

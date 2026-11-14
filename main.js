@@ -471,8 +471,8 @@ app.on('will-quit', () => {
 });
 
 // Mobile Remote IPC Handlers
-ipcMain.handle('get-remote-info', () => {
-  return remoteServer.getInfo();
+ipcMain.handle('get-remote-info', async (event, preferredIp = null) => {
+  return await remoteServer.getInfo(preferredIp);
 });
 
 ipcMain.on('update-remote-status', (event, status) => {
@@ -519,16 +519,58 @@ ipcMain.handle('extend-displays', async () => {
   }
 });
 
+function checkFirewallStatus() {
+  return new Promise((resolve) => {
+    if (process.platform !== 'win32') return resolve({ allowed: true });
+    const { execFile } = require('child_process');
+    execFile(
+      'netsh',
+      ['advfirewall', 'firewall', 'show', 'rule', 'name=ZionCast Remote'],
+      { timeout: 2500, windowsHide: true },
+      (err, stdout) => {
+        if (!err && stdout && /ZionCast Remote/i.test(stdout) && /Allow/i.test(stdout) && /(Any|Public)/i.test(stdout)) {
+          return resolve({ allowed: true });
+        }
+        resolve({ allowed: false });
+      }
+    );
+  });
+}
+
+ipcMain.handle('check-firewall-status', async () => {
+  return await checkFirewallStatus();
+});
+
 ipcMain.handle('fix-windows-firewall', async () => {
   try {
-    const { exec } = require('child_process');
-    const psCmd = 'powershell -Command "Start-Process cmd -ArgumentList \'/c netsh advfirewall firewall add rule name=\\\"ZionCast Remote\\\" dir=in action=allow protocol=TCP localport=3000-3020\' -Verb RunAs -WindowStyle Hidden"';
-    exec(psCmd, (err) => {
-      if (err) console.warn('Firewall rule elevation error:', err);
+    if (process.platform !== 'win32') return { success: true, allowed: true };
+    const { execFile } = require('child_process');
+    const exePath = process.execPath;
+    // Build a single batch command that:
+    // 1. Removes stale ZionCast Remote rules
+    // 2. Updates any auto-created Windows Firewall Block rules for ZionCast/electron to Allow on ALL profiles (Public + Private + Domain)
+    // 3. Adds inbound TCP port 3000-3020 Allow rule on ALL profiles (profile=any)
+    // 4. Adds inbound Program Allow rule for ZionCast.exe on ALL profiles (profile=any)
+    const cmdArgs = [
+      'netsh advfirewall firewall delete rule name="ZionCast Remote"',
+      'netsh advfirewall firewall delete rule name="ZionCast Remote App"',
+      'netsh advfirewall firewall set rule name="ZionCast" new action=allow profile=any enable=yes',
+      'netsh advfirewall firewall set rule name="zioncast.exe" new action=allow profile=any enable=yes',
+      'netsh advfirewall firewall add rule name="ZionCast Remote" dir=in action=allow protocol=TCP localport=3000-3020 profile=any',
+      `netsh advfirewall firewall add rule name="ZionCast Remote App" dir=in action=allow program="${exePath}" profile=any`
+    ].join(' & ');
+
+    await new Promise((resolve) => {
+      const psScript = `Start-Process cmd.exe -ArgumentList '/c ${cmdArgs.replace(/'/g, "''")}' -Verb RunAs -WindowStyle Hidden -Wait`;
+      execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', psScript], { timeout: 30000, windowsHide: true }, () => {
+        resolve();
+      });
     });
-    return { success: true };
+
+    const status = await checkFirewallStatus();
+    return { success: true, allowed: status.allowed };
   } catch (err) {
-    return { success: false, error: err.message };
+    return { success: false, allowed: false, error: err.message };
   }
 });
 

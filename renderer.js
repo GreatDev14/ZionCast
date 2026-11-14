@@ -4061,6 +4061,18 @@
       };
     });
 
+    const mappedCameras = (state.videoDevices || []).map((dev, idx) => {
+      const info = parseCameraDeviceInfo(dev, idx);
+      return {
+        id: dev.deviceId,
+        name: info.cleanName,
+        rawLabel: dev.label,
+        type: info.typeBadge,
+        camNumber: idx + 1,
+        isLive: !!(state.cameraEnabled && state.cameraDeviceId === dev.deviceId)
+      };
+    });
+
     const statusPayload = {
       activeItemTitle: state.activeItem ? state.activeItem.title : 'ZionCast Broadcast',
       currentSlideIndex: state.activeSlideIndex || 0,
@@ -4076,6 +4088,11 @@
       showClockOnTv: !!state.showClockOnTv,
       bannerActive: !!state.bannerActive,
       bannerText: state.bannerText || '',
+      cameraActive: !!state.cameraEnabled,
+      cameraMode: state.cameraMode || 'none',
+      cameraDeviceId: state.cameraDeviceId || '',
+      cameraDeviceLabel: state.cameraDeviceLabel || '',
+      availableCameras: mappedCameras,
       stageMessage: stageAlertMessageText || '',
       stageMessageActive: !!stageAlertMessageActive,
       countdownActive: !!countdownProjected,
@@ -4178,25 +4195,152 @@
       });
     }
 
+    const remoteIpSelect = document.getElementById('remote-ip-select');
+    const btnRefreshRemoteIp = document.getElementById('btn-refresh-remote-ip');
+    const remoteSsidBadge = document.getElementById('remote-ssid-badge');
+    const btnFixRemoteFirewall = document.getElementById('btn-fix-remote-firewall');
+    const remoteFirewallTitle = document.getElementById('remote-firewall-title');
+    const remoteFirewallDesc = document.getElementById('remote-firewall-desc');
+    let remoteModalPollTimer = null;
+
+    async function updateFirewallBadgeUI() {
+      if (!window.zionApi || !window.zionApi.checkFirewallStatus) return;
+      try {
+        const res = await window.zionApi.checkFirewallStatus();
+        if (res && res.allowed) {
+          if (remoteFirewallTitle) {
+            remoteFirewallTitle.textContent = '✅ Firewall Unlocked for All Wi-Fi Networks';
+            remoteFirewallTitle.style.color = '#34d399';
+          }
+          if (remoteFirewallDesc) {
+            remoteFirewallDesc.textContent = 'Public, Private & Hotspot Wi-Fi connections are allowed on ports 3000–3020.';
+          }
+          if (btnFixRemoteFirewall) {
+            btnFixRemoteFirewall.textContent = '🛡️ Re-Verify Firewall';
+            btnFixRemoteFirewall.style.color = '#34d399';
+            btnFixRemoteFirewall.style.borderColor = 'rgba(16, 185, 129, 0.45)';
+            btnFixRemoteFirewall.style.background = 'rgba(16, 185, 129, 0.14)';
+          }
+        } else {
+          if (remoteFirewallTitle) {
+            remoteFirewallTitle.textContent = '⚠️ Switched to Another Wi-Fi? Unblock Firewall';
+            remoteFirewallTitle.style.color = '#fbbf24';
+          }
+          if (remoteFirewallDesc) {
+            remoteFirewallDesc.textContent = 'Windows blocks new ("Public") Wi-Fi networks by default. Click once to allow all Wi-Fi.';
+          }
+          if (btnFixRemoteFirewall) {
+            btnFixRemoteFirewall.textContent = '🛡️ Unblock New Wi-Fi';
+            btnFixRemoteFirewall.style.color = '#fbbf24';
+            btnFixRemoteFirewall.style.borderColor = 'rgba(245, 158, 11, 0.5)';
+            btnFixRemoteFirewall.style.background = 'rgba(245, 158, 11, 0.16)';
+          }
+        }
+      } catch (e) {}
+    }
+
+    async function refreshRemoteModalUI(preferredIp = null) {
+      if (!window.zionApi || !window.zionApi.getRemoteInfo) return;
+      try {
+        const info = await window.zionApi.getRemoteInfo(preferredIp);
+        if (!info) return;
+
+        if (remoteQrImg && info.qrCodeDataUrl) {
+          remoteQrImg.src = info.qrCodeDataUrl;
+        }
+        if (remoteUrlDisplay && info.primaryUrl) {
+          remoteUrlDisplay.value = info.primaryUrl;
+        }
+        if (remoteSsidBadge) {
+          remoteSsidBadge.textContent = info.wifiSsid
+            ? `📶 Wi-Fi: "${info.wifiSsid}"`
+            : (info.selectedIp && info.selectedIp !== '127.0.0.1' ? `📶 Active IP: ${info.selectedIp}` : '⚠️ Check Wi-Fi / Hotspot');
+        }
+        if (remoteIpSelect && Array.isArray(info.networkCandidates)) {
+          const prevVal = preferredIp || info.selectedIp || '';
+          remoteIpSelect.innerHTML = '';
+          if (info.networkCandidates.length === 0) {
+            const opt = document.createElement('option');
+            opt.value = '127.0.0.1';
+            opt.textContent = 'No Wi-Fi / Hotspot detected (127.0.0.1)';
+            remoteIpSelect.appendChild(opt);
+          } else {
+            info.networkCandidates.forEach((cand) => {
+              const opt = document.createElement('option');
+              opt.value = cand.ip;
+              opt.textContent = cand.label;
+              if (cand.ip === prevVal || cand.ip === info.selectedIp) {
+                opt.selected = true;
+              }
+              remoteIpSelect.appendChild(opt);
+            });
+          }
+        }
+        if (remoteModalStatusText) {
+          const count = info.connectedCount || 0;
+          const activeIpLabel = info.selectedIp || (info.localIps && info.localIps[0]) || 'Local';
+          const ssidSuffix = info.wifiSsid ? ` on "${info.wifiSsid}"` : '';
+          remoteModalStatusText.textContent = count > 0
+            ? `Active • ${count} Mobile Device${count > 1 ? 's' : ''} Connected (${activeIpLabel})`
+            : `Server Ready${ssidSuffix} • ${activeIpLabel}:${info.port || 3000}`;
+        }
+      } catch (err) {
+        console.warn('Failed to refresh remote info:', err);
+      }
+    }
+
     if (btnOpenRemoteModal) {
       btnOpenRemoteModal.addEventListener('click', async () => {
         if (modalRemote) modalRemote.classList.add('open');
-        if (window.zionApi && window.zionApi.getRemoteInfo) {
-          const info = await window.zionApi.getRemoteInfo();
-          if (info) {
-            if (remoteQrImg && info.qrCodeDataUrl) {
-              remoteQrImg.src = info.qrCodeDataUrl;
-            }
-            if (remoteUrlDisplay && info.primaryUrl) {
-              remoteUrlDisplay.value = info.primaryUrl;
-            }
-            if (remoteModalStatusText) {
-              const count = info.connectedCount || 0;
-              remoteModalStatusText.textContent = count > 0 
-                ? `Active • ${count} Mobile Device${count > 1 ? 's' : ''} Connected`
-                : `Server Active on Local Wi-Fi (${info.localIps ? info.localIps[0] : 'Local'})`;
-            }
+        await refreshRemoteModalUI(null);
+        await updateFirewallBadgeUI();
+        if (remoteModalPollTimer) clearInterval(remoteModalPollTimer);
+        remoteModalPollTimer = setInterval(() => {
+          if (!modalRemote || !modalRemote.classList.contains('open')) {
+            clearInterval(remoteModalPollTimer);
+            remoteModalPollTimer = null;
+            return;
           }
+          const chosenIp = remoteIpSelect ? remoteIpSelect.value : null;
+          refreshRemoteModalUI(chosenIp || null);
+        }, 2500);
+      });
+    }
+
+    if (remoteIpSelect) {
+      remoteIpSelect.addEventListener('change', () => {
+        const chosenIp = remoteIpSelect.value || null;
+        refreshRemoteModalUI(chosenIp);
+        if (chosenIp) {
+          showToast(`📱 Switched Remote QR Code to ${chosenIp}`);
+        }
+      });
+    }
+
+    if (btnRefreshRemoteIp) {
+      btnRefreshRemoteIp.addEventListener('click', async () => {
+        if (remoteIpSelect) remoteIpSelect.value = '';
+        await refreshRemoteModalUI(null);
+        await updateFirewallBadgeUI();
+        showToast('🔄 Re-detected active Wi-Fi network & updated QR code!');
+      });
+    }
+
+    if (btnFixRemoteFirewall) {
+      btnFixRemoteFirewall.addEventListener('click', async () => {
+        if (!window.zionApi || !window.zionApi.fixWindowsFirewall) return;
+        const origText = btnFixRemoteFirewall.textContent;
+        btnFixRemoteFirewall.textContent = '⏳ Unlocking...';
+        try {
+          const res = await window.zionApi.fixWindowsFirewall();
+          await updateFirewallBadgeUI();
+          if (res && res.allowed) {
+            showToast('🛡️ Windows Firewall unlocked for all Wi-Fi & Hotspot networks!');
+          } else {
+            showToast('🛡️ Firewall rule command sent — click Yes on the Windows prompt if shown.');
+          }
+        } catch (e) {
+          btnFixRemoteFirewall.textContent = origText;
         }
       });
     }
