@@ -3044,10 +3044,11 @@ body {
   background: var(--bg-deep);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
-  overflow: hidden;
-  padding: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 14px 60px 14px;
   min-height: 0;
-  gap: 10px;
+  gap: 12px;
 }
 
 .camera-display-toolbar {
@@ -3183,11 +3184,10 @@ body {
 
 .camera-multiview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 12px;
-  flex: 1;
-  overflow-y: auto;
-  padding: 2px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+  padding: 4px 4px 24px 4px;
+  min-height: 120px;
 }
 
 /* 4-Camera Layout / Quad View: if 3 or 4 cameras, make clean 2x2 grid */
@@ -3475,8 +3475,9 @@ body {
 .camera-viewfinder-screen {
   position: relative;
   width: 100%;
-  height: 220px;
-  min-height: 200px;
+  height: 200px;
+  min-height: 160px;
+  max-height: 220px;
   background: #000000;
   display: flex;
   align-items: center;

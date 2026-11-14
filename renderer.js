@@ -1039,23 +1039,15 @@
   }
 
   
-  // Probe active live signal for a camera device (detects live phone vs idle logo)
-  // Live signal cache to prevent redundant probing
+  // Probe active live signal for a camera device (detects real physical video vs idle virtual driver logo)
   const cameraSignalCache = new Map(); // deviceId -> { isLive: boolean, time: number }
 
-  // Probe active live signal for a camera device (detects real video vs idle frozen logo)
   async function probeCameraSignal(deviceId, forceRefresh = false) {
     if (!forceRefresh) {
       const cached = cameraSignalCache.get(deviceId);
-      if (cached && (Date.now() - cached.time < 15000)) {
+      if (cached && (Date.now() - cached.time < 10000)) {
         return cached.isLive;
       }
-    }
-
-    // If currently on-air or actively streaming in ZionCast, it is live!
-    if (state.cameraEnabled && (state.cameraDeviceId === deviceId)) {
-      cameraSignalCache.set(deviceId, { isLive: true, time: Date.now() });
-      return true;
     }
 
     let stream = null;
@@ -1069,29 +1061,49 @@
       v.playsInline = true;
       v.srcObject = stream;
       await v.play();
-      await new Promise(r => setTimeout(r, 80));
+      await new Promise(r => setTimeout(r, 120));
 
       const c = document.createElement('canvas');
-      c.width = 16;
-      c.height = 12;
+      c.width = 32;
+      c.height = 24;
       const ctx = c.getContext('2d');
-      ctx.drawImage(v, 0, 0, 16, 12);
-      const f1 = ctx.getImageData(0, 0, 16, 12).data;
+      ctx.drawImage(v, 0, 0, 32, 24);
+      const f1 = ctx.getImageData(0, 0, 32, 24).data;
 
-      await new Promise(r => setTimeout(r, 80));
-      ctx.drawImage(v, 0, 0, 16, 12);
-      const f2 = ctx.getImageData(0, 0, 16, 12).data;
+      await new Promise(r => setTimeout(r, 120));
+      ctx.drawImage(v, 0, 0, 32, 24);
+      const f2 = ctx.getImageData(0, 0, 32, 24).data;
 
-      let diff = 0;
+      const totalPixels = 32 * 24; // 768 pixels
+      let diffPixels = 0;
+      let blackPixels = 0;
+      let totalBrightness = 0;
+
       for (let i = 0; i < f1.length; i += 4) {
-        diff += Math.abs(f1[i] - f2[i]) + Math.abs(f1[i+1] - f2[i+1]) + Math.abs(f1[i+2] - f2[i+2]);
+        const r = f2[i];
+        const g = f2[i + 1];
+        const b = f2[i + 2];
+        totalBrightness += (r + g + b) / 3;
+        if (r < 18 && g < 18 && b < 18) blackPixels++;
+
+        const d = Math.abs(f1[i] - f2[i]) + Math.abs(f1[i + 1] - f2[i + 1]) + Math.abs(f1[i + 2] - f2[i + 2]);
+        if (d > 6) diffPixels++;
       }
-      const avgDiff = diff / (16 * 12);
+
+      const fluctuationRatio = diffPixels / totalPixels;
+      const blackRatio = blackPixels / totalPixels;
+      const avgBrightness = totalBrightness / totalPixels;
+
       stream.getTracks().forEach(t => t.stop());
 
-      // Live camera feeds have micro-movements/sensor noise (avgDiff > 0.04).
-      // Disconnected idle drivers (Camo, Iriun, SplitCam, DroidCam idle) have diff = 0.
-      const isLive = avgDiff > 0.04;
+      // Physical CMOS camera sensors have micro-noise and real motion across >= 8% of pixels.
+      // Virtual drivers without a connected phone (Iriun cat, Camo logo, DroidCam idle, SplitCam)
+      // are either 100% static (diff = 0) or are a pitch-black screen (blackRatio > 0.75, avgBrightness < 16)
+      // with only a tiny blinking text dot (diff < 1%).
+      const isSplashBlackScreen = (blackRatio > 0.75 && avgBrightness < 16);
+      const hasSensoryMotion = fluctuationRatio >= 0.08;
+      const isLive = hasSensoryMotion && !isSplashBlackScreen;
+
       cameraSignalCache.set(deviceId, { isLive, time: Date.now() });
       return isLive;
     } catch (e) {
@@ -1134,6 +1146,23 @@
       const availableOnly = videoInputs.filter(d => d.isLiveDevice);
       state.videoDevices = availableOnly;
       state.allRawDevices = videoInputs;
+
+      // STRICT SAFETY: If active camera was set to an offline/disconnected device, shut it down immediately!
+      const activeIsStillAvailable = state.cameraDeviceId && availableOnly.some(d => d.deviceId === state.cameraDeviceId);
+      if (!activeIsStillAvailable) {
+        if (state.cameraEnabled) {
+          state.cameraEnabled = false;
+          state.cameraMode = 'none';
+          if (previewVideoStream && previewVideoStream.srcObject) {
+            previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
+            previewVideoStream.srcObject = null;
+          }
+          if (liveVideoStream) liveVideoStream.srcObject = null;
+          broadcastDisplayState();
+        }
+        state.cameraDeviceId = availableOnly.length > 0 ? availableOnly[0].deviceId : null;
+        state.cameraDeviceLabel = availableOnly.length > 0 ? (availableOnly[0].label || '') : '';
+      }
 
       // Update hidden fallback select for backward compatibility
       if (cameraDeviceSelect) {
@@ -3448,8 +3477,10 @@
     state.cameraDisplaySectionOpen = true;
     const camSection = document.getElementById('camera-display-section');
     const tilesSection = document.querySelector('.center-tiles-section');
+    const dualMonitors = document.querySelector('.dual-monitors-row');
     if (camSection) camSection.style.display = 'flex';
     if (tilesSection) tilesSection.style.display = 'none';
+    if (dualMonitors) dualMonitors.style.display = 'none';
 
     // Highlight top-bar button
     const btnTopCam = document.getElementById('btn-open-camera-studio');
@@ -3477,8 +3508,10 @@
     state.cameraDisplaySectionOpen = false;
     const camSection = document.getElementById('camera-display-section');
     const tilesSection = document.querySelector('.center-tiles-section');
+    const dualMonitors = document.querySelector('.dual-monitors-row');
     if (camSection) camSection.style.display = 'none';
     if (tilesSection) tilesSection.style.display = 'flex';
+    if (dualMonitors) dualMonitors.style.display = 'grid';
 
     // Reset top-bar button
     const btnTopCam = document.getElementById('btn-open-camera-studio');
