@@ -183,10 +183,52 @@ function initFaqAccordion() {
    3. Download Click Handlers & Toast Fallback
    ========================================================================== */
 const GITHUB_REPO = 'GreatDev14/ZionCast';
-const GITHUB_RELEASE_TAG = 'v1.0.0';
+const GITHUB_RELEASE_TAG = 'v1.5.1';
 const GITHUB_RELEASE_BASE = `https://github.com/${GITHUB_REPO}/releases/download/${GITHUB_RELEASE_TAG}/`;
 
+async function syncLatestGitHubReleaseToWebsite() {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
+      headers: { Accept: 'application/vnd.github+json' }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const tag = data.tag_name;
+    const ver = tag ? tag.replace(/^v/i, '') : '';
+    const assets = Array.isArray(data.assets) ? data.assets : [];
+
+    const setupAsset = assets.find(a => /ZionCast-Setup-.*\.exe$/i.test(a.name));
+    const portableZipAsset = assets.find(a => /ZionCast-Portable-.*\.zip$/i.test(a.name));
+
+    const heroWinBtn = document.getElementById('hero-win-download');
+    const winInstallerBtn = document.getElementById('win-installer-download');
+    const winPortableBtn = document.getElementById('win-portable-download');
+    const winVerLabel = document.getElementById('win-version-label');
+
+    if (setupAsset && setupAsset.browser_download_url) {
+      if (heroWinBtn) {
+        heroWinBtn.setAttribute('href', setupAsset.browser_download_url);
+        heroWinBtn.setAttribute('download', setupAsset.name);
+      }
+      if (winInstallerBtn) {
+        winInstallerBtn.setAttribute('href', setupAsset.browser_download_url);
+        winInstallerBtn.setAttribute('download', setupAsset.name);
+      }
+    }
+    if (portableZipAsset && portableZipAsset.browser_download_url && winPortableBtn) {
+      winPortableBtn.setAttribute('href', portableZipAsset.browser_download_url);
+      winPortableBtn.setAttribute('download', portableZipAsset.name);
+    }
+    if (ver && winVerLabel) {
+      winVerLabel.textContent = `${ver} (Latest Release)`;
+    }
+  } catch (err) {
+    // Fallback to static v1.5.1 links already in HTML
+  }
+}
+
 function initDownloadHandlers() {
+  syncLatestGitHubReleaseToWebsite();
   const downloadLinks = document.querySelectorAll('a[download]');
   const isLocal = window.location.hostname === 'localhost' || 
                   window.location.hostname === '127.0.0.1' || 
@@ -202,9 +244,10 @@ function initDownloadHandlers() {
     }
 
     link.addEventListener('click', () => {
+      const currentName = link.getAttribute('download') || filename;
       showToast(
         'Download Initiated',
-        `Starting download for ${filename}. Thank you for choosing ZionCast!`,
+        `Starting download for ${currentName}. Thank you for choosing ZionCast!`,
         'gold'
       );
     });
