@@ -8,155 +8,148 @@
 </head>
 <body>
 
-  <!-- ================= TOP HEADER CONTROL BAR ================= -->
+  <!-- ================= TOP HEADER CONTROL BAR (REFINED PRO STUDIO LAYOUT) ================= -->
   <header class="top-header">
-    <div class="brand-section">
-      <img src="assets/icon.png" alt="ZionCast Logo" class="brand-real-logo">
-      <span class="brand-name">ZionCast</span>
-    </div>
+    <!-- Tier 1: Brand + Workspace Mode Switch + Projector Output + Monochrome Tools -->
+    <div class="header-row-primary">
+      <div class="header-left-cluster">
+        <div class="brand-section">
+          <img src="assets/icon.png" alt="ZionCast Logo" class="brand-real-logo">
+          <span class="brand-name">ZionCast</span>
+        </div>
 
-    <!-- Quick Frictionless Typography & Styling Bar -->
-    <div class="quick-control-bar">
-      <!-- Font Size Slider -->
-      <div class="toolbar-group">
-        <span class="toolbar-label" title="Dynamic Font Size (16px - 84px)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="4 7 4 4 20 4 20 7"></polyline>
-            <line x1="9" y1="20" x2="15" y2="20"></line>
-            <line x1="12" y1="4" x2="12" y2="20"></line>
-          </svg>
-          Size
-        </span>
-        <input type="range" id="toolbar-font-size" class="range-slider" min="16" max="84" value="44" step="2">
-        <span id="badge-font-size" class="badge-value">44px</span>
-      </div>
-
-      <div class="toolbar-divider"></div>
-
-      <!-- Font Family -->
-      <div class="toolbar-group">
-        <select id="toolbar-font-family" class="select-custom" style="padding: 3px 6px; font-size: 0.76rem;">
-          <option value="Outfit">Outfit (Modern)</option>
-          <option value="Inter">Inter (Clean)</option>
-          <option value="Cinzel">Cinzel (Hymnal)</option>
-          <option value="Playfair Display">Playfair (Majestic)</option>
-        </select>
-      </div>
-
-      <div class="toolbar-divider"></div>
-
-      <!-- Font Color -->
-      <div class="toolbar-group">
-        <span class="toolbar-label" title="Font Color">Color</span>
-        <div class="color-picker-wrapper">
-          <input type="color" id="toolbar-font-color" class="color-input" value="#ffffff" title="Text Color">
+        <!-- Two-Part ZionCast Workspace Switcher -->
+        <div class="workspace-switch" role="tablist" aria-label="ZionCast Mode Switch">
+          <button id="mode-switch-presentation" class="workspace-switch-btn active" title="Songs, Bible Scriptures, Media, Themes & Order of Service">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            <span>Presentation</span>
+          </button>
+          <button id="mode-switch-studio" class="workspace-switch-btn" title="Cameras Multi-View, Videographer Google Meet Comms & Audio Routing">
+            <span id="studio-switch-dot" class="switch-status-dot"></span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+            <span>Cameras &amp; Comms</span>
+          </button>
         </div>
       </div>
 
-      <div class="toolbar-divider"></div>
+      <!-- Center: Screen Target & Projector TV Output -->
+      <div class="tv-output-section">
+        <select id="select-target-screen" class="select-custom select-compact" title="Select which physical screen to project on">
+          <option value="">Auto-Detect TV / Projector</option>
+        </select>
+        <button id="btn-identify-screens" class="btn-header-neutral" title="Show large numbers on each display to identify laptop vs projector">
+          Identify
+        </button>
+        <button id="btn-snap-laptop" class="btn-header-neutral" title="If ZionCast Control Desk ever shows on the TV, snap it back to Laptop">
+          Desk to Laptop
+        </button>
 
-      <!-- Stroke / Outline Slider -->
-      <div class="toolbar-group">
-        <span class="toolbar-label" title="Text Outline/Stroke (Ensures legibility on camera feeds)">Outline</span>
-        <input type="range" id="toolbar-stroke-width" class="range-slider" style="width: 60px;" min="0" max="8" value="0" step="1">
-        <span id="badge-stroke-width" class="badge-value" style="min-width: 28px;">0px</span>
+        <div class="tv-cta-wrap">
+          <div id="tv-status-dot" class="status-dot" title="Projector / TV Output Status"></div>
+          <button id="btn-launch-tv" class="btn-launch-tv" title="Toggle Audience Projector / TV Window">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            <span id="btn-tv-label">Show TV Output</span>
+          </button>
+        </div>
       </div>
 
-      <div class="toolbar-divider"></div>
-
-      <!-- Drop Shadow Toggle -->
-      <div class="toolbar-group">
-        <button id="btn-toggle-shadow" class="btn-fast" title="Toggle High-Contrast Shadow">
-          Shadow
+      <!-- Right: Calm Monochrome Utility Tools -->
+      <div class="header-tools-cluster">
+        <button id="btn-open-remote-modal" class="btn-header-neutral" title="Open Wi-Fi Mobile Remote Control & Scan QR Code">
+          <span class="mini-dot green"></span>
+          <span>Remote</span>
         </button>
-      </div>
-
-      <div class="toolbar-divider"></div>
-
-      <!-- Alignment Toggle -->
-      <div class="toolbar-group">
-        <button id="btn-align-left" class="btn-icon-action" style="width: 26px; height: 26px;" title="Align Left">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+        <button id="btn-open-stage-modal" class="btn-header-neutral" title="Preacher & Choir Stage Display / Confidence Monitor">
+          <span>Stage</span>
         </button>
-        <button id="btn-align-center" class="btn-icon-action" style="width: 26px; height: 26px; border-color: var(--accent-cyan);" title="Align Center">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>
+        <button id="btn-open-countdown-modal" class="btn-header-neutral" title="Pre-Service Countdown Timers">
+          <span>Timer</span>
+        </button>
+        <button id="btn-open-pads-modal" class="btn-header-neutral" title="Ambient Worship Pad Player">
+          <span>Pads</span>
+        </button>
+        <button id="btn-check-updates" class="btn-header-neutral btn-version-pill" title="Check GitHub for latest ZionCast updates">
+          <span id="update-badge-icon">🔄</span>
+          <span id="update-badge-text">v1.6.0</span>
         </button>
       </div>
     </div>
 
-    <!-- Fast Action Controls (OpenLP Friction Reducers) -->
-    <div class="fast-actions">
-      <button id="btn-fast-blackout" class="btn-fast" title="Shortcut: Press 'B'">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect width="18" height="18" x="3" y="3" rx="2"></rect></svg>
-        Blackout (B)
-      </button>
+    <!-- Tier 2: Clean Contextual Presentation Formatting & Live Stage Bar (hidden in Studio Mode) -->
+    <div id="header-context-bar" class="header-row-context">
+      <!-- Typography & Styling -->
+      <div class="quick-control-bar">
+        <div class="toolbar-group">
+          <span class="toolbar-label" title="Dynamic Font Size (16px - 84px)">Size</span>
+          <input type="range" id="toolbar-font-size" class="range-slider" min="16" max="84" value="44" step="2">
+          <span id="badge-font-size" class="badge-value">44px</span>
+        </div>
 
-      <button id="btn-fast-theme" class="btn-fast" title="Shortcut: Press 'T'">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-        Theme Only (T)
-      </button>
+        <div class="toolbar-divider"></div>
 
-      <button id="btn-fast-clear" class="btn-fast" title="Shortcut: Press 'C'">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
-        Clear Text (C)
-      </button>
+        <div class="toolbar-group">
+          <select id="toolbar-font-family" class="select-custom select-compact">
+            <option value="Outfit">Outfit (Modern)</option>
+            <option value="Inter">Inter (Clean)</option>
+            <option value="Cinzel">Cinzel (Hymnal)</option>
+            <option value="Playfair Display">Playfair (Majestic)</option>
+          </select>
+        </div>
 
-      <button id="btn-open-banner" class="btn-fast" title="Nursery / Car / Church Live Ticker Banner">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-        Alert Banner
-      </button>
-    </div>
+        <div class="toolbar-divider"></div>
 
-    <!-- Multi-Screen Launch TV Output Button & Screen Selector -->
-    <div class="tv-output-section">
-      <select id="select-target-screen" class="select-custom" style="padding: 4px 6px; font-size: 0.74rem; background: var(--bg-deep); max-width: 150px;" title="Select which physical screen to project on">
-        <option value="">Auto-Detect TV / Projector</option>
-      </select>
+        <div class="toolbar-group">
+          <span class="toolbar-label" title="Font Color">Color</span>
+          <div class="color-picker-wrapper">
+            <input type="color" id="toolbar-font-color" class="color-input" value="#ffffff" title="Text Color">
+          </div>
+        </div>
 
-      <button id="btn-identify-screens" class="btn-fast" style="padding: 5px 8px; font-size: 0.74rem;" title="Show large numbers on each display to identify laptop vs projector">
-        Identify
-      </button>
+        <div class="toolbar-divider"></div>
 
-      <button id="btn-snap-laptop" class="btn-fast" style="padding: 5px 8px; font-size: 0.74rem;" title="If ZionCast Control Desk ever shows on the TV, click here to snap it back to your Laptop screen">
-        💻 Desk to Laptop
-      </button>
+        <div class="toolbar-group">
+          <span class="toolbar-label" title="Text Outline/Stroke">Outline</span>
+          <input type="range" id="toolbar-stroke-width" class="range-slider" style="width: 58px;" min="0" max="8" value="0" step="1">
+          <span id="badge-stroke-width" class="badge-value" style="min-width: 30px;">0px</span>
+        </div>
 
-      <div id="tv-status-dot" class="status-dot" title="Projector / TV Output Status"></div>
-      <button id="btn-launch-tv" class="btn-launch-tv" title="Toggle Audience Projector / TV Window">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
-        <span id="btn-tv-label">Projector Output</span>
-      </button>
+        <div class="toolbar-divider"></div>
 
-      <button id="btn-open-remote-modal" class="btn-fast btn-remote-top" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: #34d399; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.1);" title="Open Wi-Fi Mobile Remote Control & Scan QR Code">
-        <span class="remote-pulse-dot"></span>
-        <span>📱 Remote</span>
-      </button>
+        <div class="toolbar-group">
+          <button id="btn-toggle-shadow" class="btn-fast" title="Toggle High-Contrast Shadow">Shadow</button>
+        </div>
 
-      <button id="btn-open-stage-modal" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); background: rgba(56, 189, 248, 0.08);" title="Preacher & Choir Stage Display / Confidence Monitor & OBS Lower-Thirds">
-        <span>🖥️ Stage</span>
-      </button>
-      <button id="btn-open-camera-studio" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: #f43f5e; border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.1);" title="Camera Display Section & Multi-Cam Video Switcher (Iriun, DroidCam, OBS)">
-        <span class="live-pulse-dot" style="background: #f43f5e;"></span>
-        <span>🎥 Cameras</span>
-      </button>
+        <div class="toolbar-divider"></div>
 
-      <button id="btn-open-crew-meet" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: #10b981; border-color: rgba(16, 185, 129, 0.42); background: rgba(16, 185, 129, 0.11); font-weight: 700;" title="Google Meet Crew Comms — Talk to Videographers via Headset (Stays off Church TV)">
-        <span id="crew-meet-header-dot" class="remote-pulse-dot" style="display: none;"></span>
-        <span>📞 Crew Meet</span>
-      </button>
+        <div class="toolbar-group">
+          <button id="btn-align-left" class="btn-icon-action" style="width: 24px; height: 24px;" title="Align Left">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="17" y1="18" x2="3" y2="18"></line></svg>
+          </button>
+          <button id="btn-align-center" class="btn-icon-action" style="width: 24px; height: 24px; border-color: var(--accent-cyan);" title="Align Center">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="10" x2="6" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="18" y1="18" x2="6" y2="18"></line></svg>
+          </button>
+        </div>
+      </div>
 
-      <button id="btn-open-countdown-modal" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.08);" title="Pre-Service Countdown Timers (5m, 10m, Custom)">
-        <span>⏱️ Timer</span>
-      </button>
-
-      <button id="btn-open-pads-modal" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: #a855f7; border-color: rgba(168, 85, 247, 0.35); background: rgba(168, 85, 247, 0.08);" title="Ambient Worship Pad Player (Continuous Synth Drone in 12 Keys)">
-        <span>🎵 Pads</span>
-      </button>
-
-<button id="btn-check-updates" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: var(--accent-gold); border-color: rgba(245, 158, 11, 0.35);" title="Check GitHub for latest ZionCast updates">
-        <span id="update-badge-icon">🔄</span>
-        <span id="update-badge-text">v1.5.2</span>
-      </button>
+      <!-- Fast Stage Output Toggles -->
+      <div class="fast-actions">
+        <button id="btn-fast-blackout" class="btn-fast" title="Shortcut: Press 'B'">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect width="18" height="18" x="3" y="3" rx="2"></rect></svg>
+          Blackout (B)
+        </button>
+        <button id="btn-fast-theme" class="btn-fast" title="Shortcut: Press 'T'">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+          Theme (T)
+        </button>
+        <button id="btn-fast-clear" class="btn-fast" title="Shortcut: Press 'C'">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+          Clear (C)
+        </button>
+        <button id="btn-open-banner" class="btn-fast" title="Nursery / Car / Church Live Ticker Banner">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          Alert Banner
+        </button>
+      </div>
     </div>
   </header>
 
@@ -461,11 +454,8 @@
             <button id="btn-cam-view-refresh" class="btn-fast" style="padding: 5px 12px; font-size: 0.75rem; font-weight: 700;" title="Rescan for Connected Cameras">
               🔄 Rescan Cameras
             </button>
-            <button id="btn-cam-open-meet" class="btn-fast" style="padding: 5px 11px; font-size: 0.75rem; font-weight: 700; color: #34d399; border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.12);" title="Open Google Meet Crew Comms to talk to Videographers">
-              📞 Crew Meet
-            </button>
-            <button id="btn-cam-view-close" class="btn-fast" style="padding: 5px 12px; font-size: 0.75rem;" title="Return to Presentation Slides">
-              ✕ Back to Slides
+            <button id="btn-cam-view-close" class="btn-fast" style="padding: 5px 12px; font-size: 0.75rem;" title="Switch back to Presentation Slides">
+              🖥️ Presentation Mode
             </button>
           </div>
         </div>
@@ -547,69 +537,121 @@
       </div>
     </section>
 
+    <!-- ================= 4. STUDIO RIGHT PANEL: CREW COMMS & AUDIO HUB (ONLY IN CAMERAS & COMMS MODE) ================= -->
+    <aside id="studio-comms-panel" class="panel studio-comms-panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+          Crew Comms (Google Meet)
+        </div>
+        <span id="meet-code-badge" class="meet-status-pill">Ready</span>
+      </div>
+
+      <div class="studio-comms-scroll">
+        <!-- Card 1: Error-Free Google Meet App Window -->
+        <div class="studio-card">
+          <div class="studio-card-title">
+            <span>1. Operator Voice Call (Laptop Headset)</span>
+            <span class="studio-badge-safe">Off Church TV</span>
+          </div>
+          <p class="studio-card-desc">
+            Opens Google Meet cleanly in Chrome / Edge using your existing Google login — zero "browser not secure" errors.
+          </p>
+          <button id="btn-meet-launch-browser" class="btn-studio-primary">
+            📞 Start / Open Google Meet (Chrome / Edge)
+          </button>
+
+          <div class="studio-room-row">
+            <input type="text" id="meet-link-input" class="input-search" style="font-size: 0.76rem;" placeholder="Paste Meet code (e.g. abc-defg-hij) &amp; Save">
+            <button id="btn-meet-join-link" class="btn-header-neutral" style="padding: 6px 12px; font-weight: 700;">Save &amp; Join</button>
+          </div>
+        </div>
+
+        <!-- Card 2: Invite Videographers (Embedded Live QR + WhatsApp) -->
+        <div class="studio-card">
+          <div class="studio-card-title">
+            <span>2. Invite Videographers</span>
+            <span class="studio-hint-muted">QR • WhatsApp • Remote</span>
+          </div>
+
+          <div id="studio-qr-container" class="studio-qr-container" style="display: none;">
+            <div class="studio-qr-frame">
+              <img id="meet-qr-img" style="width: 145px; height: 145px; display: block;" alt="Scan QR to join Crew Google Meet">
+            </div>
+            <div id="meet-qr-url-label" class="studio-qr-url"></div>
+          </div>
+          <div id="studio-qr-empty" class="studio-qr-empty">
+            Start a Google Meet above and paste your room code (e.g. <code>abc-defg-hij</code>) to show a scannable QR code for your cameramen.
+          </div>
+
+          <div class="studio-invite-actions">
+            <button id="btn-meet-copy-link" class="btn-header-neutral" style="flex: 1; justify-content: center;">📋 Copy Link</button>
+            <button id="btn-meet-whatsapp" class="btn-header-neutral" style="flex: 1; justify-content: center;">💬 WhatsApp</button>
+          </div>
+          <p class="studio-tip-box">
+            <strong>Cameraman Tip:</strong> When joining Meet on the same phone running <strong>Iriun / Camo</strong>, keep <strong>Camera OFF</strong> inside Google Meet so your earpiece works while video streams to TV.
+          </p>
+        </div>
+
+        <!-- Card 3: Silent Camera Cues & Split Headset/TV Audio -->
+        <div class="studio-card">
+          <div class="studio-card-title">
+            <span>3. Silent Camera Cues &amp; Audio Routing</span>
+          </div>
+          <p class="studio-card-desc">
+            During loud praise, send instant visual cues to videographers' Phone Remotes:
+          </p>
+          <div class="studio-cues-grid">
+            <button class="btn-header-neutral meet-cue-btn" data-cue="🔴 HOLD STEADY — YOU ARE LIVE ON TV">🔴 Hold Steady</button>
+            <button class="btn-header-neutral meet-cue-btn" data-cue="🔍 ZOOM IN ON PREACHER">🔍 Zoom In</button>
+            <button class="btn-header-neutral meet-cue-btn" data-cue="↔️ WIDE SANCTUARY SHOT">↔️ Wide Shot</button>
+            <button class="btn-header-neutral meet-cue-btn" data-cue="🎤 FOCUS ON CHOIR">🎤 Focus Choir</button>
+          </div>
+
+          <div class="studio-audio-split">
+            <label class="studio-audio-label" for="studio-video-audio-sink">TV / Video Sound Output (Separate from Headset):</label>
+            <select id="studio-video-audio-sink" class="select-custom" style="width: 100%; font-size: 0.74rem;">
+              <option value="">🔊 TV / Video Audio: System Default</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </aside>
+
   </main>
 
-  <!-- ================= BOTTOM STATUS BAR ================= -->
+  <!-- ================= CLEAN BOTTOM STATUS BAR ================= -->
   <footer class="bottom-status-bar">
-    <div class="status-item" id="status-display-info">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
-      <span id="label-display-status">Detecting displays...</span>
-    </div>
-    <div class="status-item" id="status-camera-info" style="display: none;">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-      <span id="label-camera-status">Camera: Standby</span>
-    </div>
-
-    <!-- Audience Screen Brightness / Dimmer & Image Booster Quick Shortcut -->
-    <div class="bottom-brightness-pill" title="Audience Display Brightness & Image Booster (0% Dim - 100% Normal - 200% Brightness Boost)">
-      <span class="toolbar-label" id="label-brightness-reset" title="Click to reset to 100% Normal" style="cursor: pointer; user-select: none;">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent-gold); flex-shrink: 0;">
-          <circle cx="12" cy="12" r="5"></circle>
-          <line x1="12" y1="1" x2="12" y2="3"></line>
-          <line x1="12" y1="21" x2="12" y2="23"></line>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-          <line x1="1" y1="12" x2="3" y2="12"></line>
-          <line x1="21" y1="12" x2="23" y2="12"></line>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-        </svg>
-        Brightness
-      </span>
-      <input type="range" id="toolbar-brightness" class="range-slider" min="0" max="200" value="100" step="1" title="Audience Display Brightness (0% Dim - 100% Normal - 200% Brightness Boost)">
-      <span id="badge-brightness" class="badge-value" style="cursor: pointer; user-select: none;" title="Click to reset to 100%">100%</span>
+    <div class="bottom-left-cluster">
+      <div class="status-item" id="status-display-info">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+        <span id="label-display-status">Detecting displays...</span>
+      </div>
+      <div class="status-item" id="status-camera-info" style="display: none;">
+        <span id="label-camera-status">Camera: Standby</span>
+      </div>
+      <div class="bottom-brightness-pill" title="Audience Display Brightness (0% Dim - 100% Normal - 200% Boost)">
+        <span class="toolbar-label" id="label-brightness-reset" style="cursor: pointer;">Brightness</span>
+        <input type="range" id="toolbar-brightness" class="range-slider" min="0" max="200" value="100" step="1">
+        <span id="badge-brightness" class="badge-value">100%</span>
+      </div>
     </div>
 
-    <div class="status-item">
-      <span>Active: <strong id="label-active-slide-ref" style="color: var(--accent-gold);">None</strong></span>
-    </div>
-
-    <!-- Quick Access Hub for Churches with One TV / Screen -->
-    <div class="status-item" style="display: flex; align-items: center; gap: 8px;">
-      <button id="btn-open-remote-modal-bottom" class="btn-fast" style="padding: 3px 9px; font-size: 0.72rem; display: flex; align-items: center; gap: 5px; color: #34d399; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.15); font-weight: 700; cursor: pointer;" title="Open Mobile Phone Remote & Scan QR Code">
-        <span class="remote-pulse-dot"></span>
-        <span>📱 Phone Remote</span>
+    <div class="bottom-center-cluster">
+      <div class="status-item" style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+        <span>Active: <strong id="label-active-slide-ref" style="color: var(--text-bright);">None</strong></span>
+      </div>
+      <button id="btn-open-remote-modal-bottom" class="btn-footer-pill" title="Open Phone Remote & QR">
+        <span class="mini-dot green"></span>
+        <span>Remote</span>
       </button>
-
-      <button id="btn-toggle-tv-clock" class="btn-fast" style="padding: 3px 9px; font-size: 0.72rem; display: flex; align-items: center; gap: 5px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.12); font-weight: 700; cursor: pointer;" title="Show / Hide Live Sanctuary Clock on Audience TV">
-        <span>🕒 TV Clock: OFF</span>
-      </button>
-
-      <button id="btn-open-countdown-bottom" class="btn-fast" style="padding: 3px 9px; font-size: 0.72rem; display: flex; align-items: center; gap: 5px; color: #38bdf8; border-color: rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.12); font-weight: 700; cursor: pointer;" title="Open Pre-Service Countdown Timer for Congregation">
-        <span>⏱️ Countdown</span>
-      </button>
-
-      <button id="btn-open-pads-bottom" class="btn-fast" style="padding: 3px 9px; font-size: 0.72rem; display: flex; align-items: center; gap: 5px; color: #a855f7; border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.12); font-weight: 700; cursor: pointer;" title="Open Ambient Worship Pad Player">
-        <span>🎵 Pads</span>
+      <button id="btn-toggle-tv-clock" class="btn-footer-pill" title="Show / Hide Live Sanctuary Clock on TV">
+        <span>🕒 Clock: OFF</span>
       </button>
     </div>
-    <div class="status-item">
-      <span class="hotkeys-helper-badge">[Space/→] Next</span>
-      <span class="hotkeys-helper-badge">[←] Prev</span>
-      <span class="hotkeys-helper-badge">[B] Blackout</span>
-      <span class="hotkeys-helper-badge">[C] Clear</span>
-      <span class="hotkeys-helper-badge">[T] Theme</span>
-      <span class="hotkeys-helper-badge">[F11] Fullscreen</span>
+
+    <div class="bottom-right-shortcuts">
+      <span>Space/→ Next • ← Prev • B Blackout • C Clear • T Theme • F11 Fullscreen</span>
     </div>
   </footer>
 
@@ -1376,135 +1418,6 @@ My chains are gone, I've been set free..."></textarea>
         <button id="btn-confirm-cancel" class="btn-secondary">Cancel</button>
         <button id="btn-confirm-ok" class="btn-primary" style="background: linear-gradient(135deg, #dc2626, #ef4444); border-color: #f87171;">Confirm</button>
       </div>
-    </div>
-  </div>
-
-  <!-- ================= 12. GOOGLE MEET CREW COMMS STUDIO DRAWER (LAPTOP ONLY) ================= -->
-  <div id="crew-meet-drawer" class="crew-meet-drawer">
-    <!-- Clean Single-Line Header -->
-    <div class="crew-meet-header">
-      <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
-        <span class="remote-pulse-dot"></span>
-        <span style="font-weight: 800; font-size: 0.9rem; color: #f8fafc; white-space: nowrap;">📞 Crew Meet</span>
-        <span id="meet-code-badge" class="meet-status-pill">Ready</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-        <button id="btn-meet-mini" class="btn-fast" style="padding: 4px 10px; font-size: 0.72rem; color: #fbbf24; border-color: rgba(245, 158, 11, 0.38); white-space: nowrap;" title="Collapse into a small floating bar while keeping your voice call live">
-          🗕 Mini
-        </button>
-        <button id="btn-meet-close" class="modal-close-btn" style="font-size: 1.25rem; padding: 0 6px;" title="Hide Panel (Voice call stays connected)">&times;</button>
-      </div>
-    </div>
-
-    <!-- Clean 2-Row Action Bar -->
-    <div class="crew-meet-toolbar">
-      <!-- Row 1: Join or Create Room -->
-      <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
-        <input type="text" id="meet-link-input" class="form-input" style="flex: 1; font-size: 0.78rem; padding: 7px 10px;" placeholder="Paste Meet code or link (e.g. abc-defg-hij)...">
-        <button id="btn-meet-join-link" class="btn-primary" style="padding: 7px 13px; font-size: 0.76rem; font-weight: 800; white-space: nowrap;">Join</button>
-        <button id="btn-meet-new" class="btn-fast" style="padding: 7px 11px; font-size: 0.76rem; font-weight: 700; color: #34d399; border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.14); white-space: nowrap;" title="Start a new Google Meet room">+ New Room</button>
-      </div>
-
-      <!-- Row 2: 4 Clean Controls -->
-      <div class="crew-meet-pill-row">
-        <button id="btn-meet-signin" class="btn-fast meet-pill-btn" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.35);" title="Sign in once with your free Gmail account">
-          🔑 Sign In
-        </button>
-        <button id="btn-meet-show-qr" class="btn-fast meet-pill-btn" style="color: #fbbf24; border-color: rgba(245, 158, 11, 0.4);" title="Show QR Code, Copy Link, or Share on WhatsApp to Videographers">
-          📤 Invite Crew
-        </button>
-        <button id="btn-meet-mute-speaker" class="btn-fast meet-pill-btn" style="color: #34d399; border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.14);" title="Mute/Unmute videographer voices in your headset">
-          🔊 Voice: ON
-        </button>
-        <button id="btn-meet-toggle-options" class="btn-fast meet-pill-btn" style="color: #cbd5e1;" title="Headset audio selector, TV Camera Protection & Silent Cues">
-          ⚙️ Audio &amp; Cues
-        </button>
-      </div>
-
-      <!-- Collapsible Advanced Options (Headset, Cam Safety & Quick Cues) -->
-      <div id="meet-options-panel" class="meet-options-panel" style="display: none;">
-        <div style="display: flex; align-items: center; gap: 6px; width: 100%;">
-          <select id="select-meet-audio-sink" class="select-custom" style="flex: 1; padding: 4px 8px; font-size: 0.72rem;" title="Send Google Meet crew voice ONLY to your Headset">
-            <option value="">🎧 Headset: System Default</option>
-          </select>
-          <button id="btn-meet-cam-lock" class="btn-fast" style="padding: 4px 9px; font-size: 0.71rem; font-weight: 700; color: #38bdf8; border-color: rgba(56, 189, 248, 0.45); background: rgba(56, 189, 248, 0.12); white-space: nowrap;" title="Blocks Google Meet from stealing Iriun/Camo TV cameras">
-            🛡️ TV Cams Safe
-          </button>
-        </div>
-        <div class="meet-cues-bar">
-          <span style="font-size: 0.67rem; font-weight: 800; color: var(--text-dim); text-transform: uppercase;">Quick Cue:</span>
-          <button class="btn-fast meet-cue-btn" data-cue="🔴 HOLD STEADY — YOU ARE LIVE ON TV">🔴 Hold Steady</button>
-          <button class="btn-fast meet-cue-btn" data-cue="🔍 ZOOM IN ON PREACHER">🔍 Zoom In</button>
-          <button class="btn-fast meet-cue-btn" data-cue="↔️ WIDE SANCTUARY SHOT">↔️ Wide Shot</button>
-          <button class="btn-fast meet-cue-btn" data-cue="🎤 FOCUS ON CHOIR">🎤 Choir</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Invite Crew Popover (QR + Copy + WhatsApp) -->
-    <div id="meet-qr-popover" class="meet-qr-popover" style="display: none;">
-      <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 8px;">
-        <span style="font-weight: 800; font-size: 0.82rem; color: #fbbf24;">📤 Invite Videographers to Voice Call</span>
-        <button id="btn-meet-close-qr" class="modal-close-btn" style="font-size: 1.1rem;">&times;</button>
-      </div>
-      <div style="background: #ffffff; padding: 9px; border-radius: 10px; display: inline-block; margin-bottom: 8px;">
-        <img id="meet-qr-img" style="width: 155px; height: 155px; display: block;" alt="Google Meet QR Code">
-      </div>
-      <div id="meet-qr-url-label" style="font-family: monospace; font-size: 0.73rem; color: #38bdf8; word-break: break-all; margin-bottom: 8px;"></div>
-      <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 8px;">
-        <button id="btn-meet-copy-link" class="btn-primary" style="padding: 5px 12px; font-size: 0.74rem; font-weight: 700;">📋 Copy Link</button>
-        <button id="btn-meet-whatsapp" class="btn-fast" style="padding: 5px 12px; font-size: 0.74rem; font-weight: 700; color: #4ade80; border-color: rgba(74, 222, 128, 0.45); background: rgba(74, 222, 128, 0.12);">💬 Send on WhatsApp</button>
-      </div>
-      <div style="font-size: 0.69rem; color: var(--text-dim); line-height: 1.35;">
-        Videographers using Iriun/Camo on the same phone should keep <strong>Camera OFF</strong> in Google Meet (Voice Only).
-      </div>
-    </div>
-
-    <!-- Clean Embedded Meet Area + Setup Welcome Card (Hides Google's Marketing Page) -->
-    <div class="crew-meet-webview-wrap">
-      <div id="meet-welcome-overlay" class="meet-welcome-overlay">
-        <div class="meet-welcome-card">
-          <div style="font-size: 2rem; line-height: 1; margin-bottom: 6px;">🎧</div>
-          <div style="font-size: 1.02rem; font-weight: 800; color: #f8fafc; margin-bottom: 4px;">Crew Voice Comms (Headset Only)</div>
-          <div style="font-size: 0.76rem; color: #94a3b8; line-height: 1.45; margin-bottom: 14px;">
-            Talk privately with your videographers through your headset — <strong>never heard on the Church TV</strong>.
-          </div>
-
-          <div class="meet-steps-list">
-            <div class="meet-step-item">
-              <span class="meet-step-num">1</span>
-              <span><strong>Sign in once</strong> with any free Gmail account (so Google Meet doesn't show "Start a trial").</span>
-            </div>
-            <div class="meet-step-item">
-              <span class="meet-step-num">2</span>
-              <span>Click <strong>+ New Room</strong> (or paste a Meet link created on your phone).</span>
-            </div>
-            <div class="meet-step-item">
-              <span class="meet-step-num">3</span>
-              <span>Click <strong>📤 Invite Crew</strong> so cameramen scan the QR code or join on WhatsApp.</span>
-            </div>
-          </div>
-
-          <div style="display: flex; gap: 8px; width: 100%; margin-top: 14px;">
-            <button id="btn-meet-welcome-signin" class="btn-fast" style="flex: 1; padding: 9px 10px; font-size: 0.78rem; font-weight: 700; color: #38bdf8; border-color: rgba(56, 189, 248, 0.45); background: rgba(56, 189, 248, 0.12); justify-content: center;">
-              🔑 1. Sign In (Free)
-            </button>
-            <button id="btn-meet-welcome-new" class="btn-primary" style="flex: 1; padding: 9px 10px; font-size: 0.78rem; font-weight: 800; background: linear-gradient(135deg, #059669, #10b981); border-color: #34d399; justify-content: center;">
-              📞 2. Start Crew Call
-            </button>
-          </div>
-          <div style="display: flex; gap: 12px; justify-content: center; margin-top: 10px;">
-            <button id="btn-meet-open-browser" style="background: none; border: none; color: #38bdf8; font-size: 0.72rem; cursor: pointer; text-decoration: underline;">
-              🌐 Open in Chrome / Edge
-            </button>
-            <button id="btn-meet-show-raw" style="background: none; border: none; color: #64748b; font-size: 0.72rem; cursor: pointer; text-decoration: underline;">
-              Show Google Meet page
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <webview id="crew-meet-webview" src="https://meet.google.com/landing" partition="persist:zioncast-meet" preload="./meet-preload.js" allowpopups style="width: 100%; height: 100%; border: none; background: #0d1322;"></webview>
     </div>
   </div>
 

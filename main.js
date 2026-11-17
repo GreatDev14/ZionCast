@@ -79,7 +79,6 @@ function createControlWindow() {
       nodeIntegration: false,
       sandbox: false,
       webSecurity: false,
-      webviewTag: true,
       backgroundThrottling: false,
       autoplayPolicy: 'no-user-gesture-required'
     }
@@ -431,9 +430,6 @@ app.whenReady().then(async () => {
     }
     callback({ cancel: false });
   });
-
-  // Initialize Google Meet Crew Comms isolated persistent session (Chrome UA + Media Permissions)
-  setupGoogleMeetSession();
 
   // Initialize Mobile Remote & Local YouTube Embed Server BEFORE opening windows so port is ready
   await remoteServer.init((action, data) => {
@@ -999,141 +995,67 @@ ipcMain.handle('check-for-updates', async () => {
 });
 
 // ============================================================================
-// GOOGLE MEET CREW COMMS SESSION & QR GENERATOR
+// GOOGLE MEET CREW COMMS LAUNCHER (ZERO-ERROR CHROME / EDGE APP MODE) & QR
 // ============================================================================
-const CHROME_MEET_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-const FIREFOX_AUTH_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0';
+function findChromiumBrowserExe() {
+  if (process.platform !== 'win32') return null;
+  const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
+  const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+  const localAppData = process.env['LOCALAPPDATA'] || '';
 
-function isGoogleAuthUrl(rawUrl) {
-  if (!rawUrl) return false;
-  try {
-    const u = new URL(rawUrl);
-    return (
-      u.hostname === 'accounts.google.com' ||
-      u.hostname.endsWith('.accounts.google.com') ||
-      u.hostname === 'accounts.youtube.com'
-    );
-  } catch (_) {
-    return false;
+  const candidates = [
+    path.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    path.join(programFilesX86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    path.join(programFiles, 'Microsoft', 'Edge', 'Application', 'msedge.exe')
+  ];
+
+  for (const exePath of candidates) {
+    try {
+      if (exePath && fs.existsSync(exePath)) return exePath;
+    } catch (_) {}
   }
+  return null;
 }
 
-function isTrustedMeetUrl(rawUrl) {
-  if (!rawUrl) return false;
+ipcMain.handle('launch-meet-app-window', async (event, rawUrl) => {
+  let targetUrl = 'https://meet.google.com/new';
   try {
-    const u = new URL(rawUrl);
-    return (
-      u.hostname === 'meet.google.com' ||
-      u.hostname.endsWith('.meet.google.com') ||
-      u.hostname === 'accounts.google.com' ||
-      u.hostname.endsWith('.google.com')
-    );
-  } catch (_) {
-    return false;
-  }
-}
-
-function setupGoogleMeetSession() {
-  const meetSession = session.fromPartition('persist:zioncast-meet');
-  meetSession.setUserAgent(CHROME_MEET_UA);
-
-  meetSession.webRequest.onBeforeSendHeaders((details, callback) => {
-    if (isGoogleAuthUrl(details.url)) {
-      // Use Firefox Desktop UA + strip Chromium Client Hints so Google OAuth does not flag Electron
-      details.requestHeaders['User-Agent'] = FIREFOX_AUTH_UA;
-      Object.keys(details.requestHeaders).forEach((k) => {
-        if (k.toLowerCase().startsWith('sec-ch-ua')) {
-          delete details.requestHeaders[k];
-        }
-      });
-    } else {
-      details.requestHeaders['User-Agent'] = CHROME_MEET_UA;
-    }
-    callback({ cancel: false, requestHeaders: details.requestHeaders });
-  });
-
-  meetSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    const url = webContents.getURL();
-    const allowed = ['media', 'mediaKeySystem', 'notifications', 'clipboard-sanitized-write', 'fullscreen', 'display-capture'];
-    if (allowed.includes(permission) && isTrustedMeetUrl(url)) {
-      return callback(true);
-    }
-    return callback(false);
-  });
-
-  meetSession.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
-    const allowed = ['media', 'mediaKeySystem', 'notifications', 'clipboard-sanitized-write', 'fullscreen', 'display-capture'];
-    if (allowed.includes(permission) && (isTrustedMeetUrl(requestingOrigin) || isTrustedMeetUrl(webContents?.getURL?.()))) {
-      return true;
-    }
-    return false;
-  });
-
-  app.on('web-contents-created', (event, contents) => {
-    if (contents.getType() === 'webview') {
-      contents.setWindowOpenHandler(({ url }) => {
-        if (isTrustedMeetUrl(url)) {
-          return {
-            action: 'allow',
-            overrideBrowserWindowOptions: {
-              width: 520,
-              height: 680,
-              parent: controlWindow || undefined,
-              autoHideMenuBar: true,
-              title: 'Google Sign-In — ZionCast Crew Meet',
-              webPreferences: {
-                partition: 'persist:zioncast-meet',
-                contextIsolation: true,
-                nodeIntegration: false
-              }
-            }
-          };
-        }
-        if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-          shell.openExternal(url);
-        }
-        return { action: 'deny' };
-      });
-    }
-  });
-}
-
-ipcMain.handle('open-meet-auth-window', () => {
-  const authWin = new BrowserWindow({
-    width: 520,
-    height: 680,
-    parent: controlWindow || undefined,
-    autoHideMenuBar: true,
-    title: 'Sign in to Google — ZionCast Crew Meet',
-    icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
-    webPreferences: {
-      partition: 'persist:zioncast-meet',
-      contextIsolation: true,
-      nodeIntegration: false
-    }
-  });
-  authWin.webContents.setUserAgent(FIREFOX_AUTH_UA);
-  authWin.webContents.on('dom-ready', () => {
-    authWin.webContents.executeJavaScript(`
-      try {
-        Object.defineProperty(navigator, 'userAgentData', { get: () => undefined, configurable: true });
-      } catch (_) {}
-    `).catch(() => {});
-  });
-  authWin.webContents.on('did-navigate', (event, navUrl) => {
-    if (navUrl && navUrl.startsWith('https://meet.google.com')) {
-      if (controlWindow && !controlWindow.isDestroyed()) {
-        controlWindow.webContents.send('meet-auth-complete', navUrl);
+    if (rawUrl && String(rawUrl).trim()) {
+      const parsed = new URL(String(rawUrl).trim());
+      if (parsed.hostname === 'meet.google.com' || parsed.hostname.endsWith('.meet.google.com')) {
+        targetUrl = parsed.toString();
       }
-      setTimeout(() => {
-        if (!authWin.isDestroyed()) authWin.close();
-      }, 400);
     }
-  });
-  authWin.loadURL('https://accounts.google.com/ServiceLogin?continue=https://meet.google.com/landing', {
-    userAgent: FIREFOX_AUTH_UA
-  });
-  return { success: true };
+  } catch (_) {}
+
+  try {
+    const { spawn } = require('child_process');
+    const browserExe = findChromiumBrowserExe();
+    if (browserExe) {
+      const child = spawn(
+        browserExe,
+        [`--app=${targetUrl}`, '--new-window', '--window-size=540,740'],
+        { detached: true, stdio: 'ignore' }
+      );
+      child.unref();
+      return {
+        success: true,
+        browser: browserExe.toLowerCase().includes('chrome') ? 'Google Chrome' : 'Microsoft Edge',
+        url: targetUrl
+      };
+    }
+  } catch (err) {
+    console.warn('Could not launch Chrome/Edge app window, falling back to default browser:', err);
+  }
+
+  try {
+    await shell.openExternal(targetUrl);
+    return { success: true, browser: 'System Browser', url: targetUrl };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 
 ipcMain.handle('generate-qr-data-url', async (event, text) => {
