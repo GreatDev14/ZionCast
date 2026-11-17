@@ -49,6 +49,7 @@ let currentDisplayState = {
   videoLoop: true,
   videoVolume: 1.0,
   videoRestartSeq: 0,
+  videoAudioSinkId: '',
   cameraEnabled: false,
   cameraMode: 'none',
   cameraDeviceId: '',
@@ -78,6 +79,7 @@ function createControlWindow() {
       nodeIntegration: false,
       sandbox: false,
       webSecurity: false,
+      webviewTag: true,
       backgroundThrottling: false,
       autoplayPolicy: 'no-user-gesture-required'
     }
@@ -429,6 +431,9 @@ app.whenReady().then(async () => {
     }
     callback({ cancel: false });
   });
+
+  // Initialize Google Meet Crew Comms isolated persistent session (Chrome UA + Media Permissions)
+  setupGoogleMeetSession();
 
   // Initialize Mobile Remote & Local YouTube Embed Server BEFORE opening windows so port is ready
   await remoteServer.init((action, data) => {
@@ -991,4 +996,112 @@ ipcMain.handle('check-for-updates', async () => {
     latestVersion: currentVersion,
     releaseName: 'ZionCast v' + currentVersion
   };
+});
+
+// ============================================================================
+// GOOGLE MEET CREW COMMS SESSION & QR GENERATOR
+// ============================================================================
+const CHROME_MEET_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+function isTrustedMeetUrl(rawUrl) {
+  if (!rawUrl) return false;
+  try {
+    const u = new URL(rawUrl);
+    return (
+      u.hostname === 'meet.google.com' ||
+      u.hostname.endsWith('.meet.google.com') ||
+      u.hostname === 'accounts.google.com' ||
+      u.hostname.endsWith('.google.com')
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
+function setupGoogleMeetSession() {
+  const meetSession = session.fromPartition('persist:zioncast-meet');
+  meetSession.setUserAgent(CHROME_MEET_UA);
+
+  meetSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    details.requestHeaders['User-Agent'] = CHROME_MEET_UA;
+    callback({ cancel: false, requestHeaders: details.requestHeaders });
+  });
+
+  meetSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const url = webContents.getURL();
+    const allowed = ['media', 'mediaKeySystem', 'notifications', 'clipboard-sanitized-write', 'fullscreen', 'display-capture'];
+    if (allowed.includes(permission) && isTrustedMeetUrl(url)) {
+      return callback(true);
+    }
+    return callback(false);
+  });
+
+  meetSession.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
+    const allowed = ['media', 'mediaKeySystem', 'notifications', 'clipboard-sanitized-write', 'fullscreen', 'display-capture'];
+    if (allowed.includes(permission) && (isTrustedMeetUrl(requestingOrigin) || isTrustedMeetUrl(webContents?.getURL?.()))) {
+      return true;
+    }
+    return false;
+  });
+
+  app.on('web-contents-created', (event, contents) => {
+    if (contents.getType() === 'webview') {
+      contents.setWindowOpenHandler(({ url }) => {
+        if (isTrustedMeetUrl(url)) {
+          return {
+            action: 'allow',
+            overrideBrowserWindowOptions: {
+              width: 520,
+              height: 680,
+              parent: controlWindow || undefined,
+              autoHideMenuBar: true,
+              title: 'Google Sign-In — ZionCast Crew Meet',
+              webPreferences: {
+                partition: 'persist:zioncast-meet',
+                contextIsolation: true,
+                nodeIntegration: false
+              }
+            }
+          };
+        }
+        if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+          shell.openExternal(url);
+        }
+        return { action: 'deny' };
+      });
+    }
+  });
+}
+
+ipcMain.handle('open-meet-auth-window', () => {
+  const authWin = new BrowserWindow({
+    width: 520,
+    height: 680,
+    parent: controlWindow || undefined,
+    autoHideMenuBar: true,
+    title: 'Sign in to Google — ZionCast Crew Meet',
+    icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    webPreferences: {
+      partition: 'persist:zioncast-meet',
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+  authWin.webContents.setUserAgent(CHROME_MEET_UA);
+  authWin.loadURL('https://accounts.google.com/ServiceLogin?continue=https://meet.google.com/');
+  return { success: true };
+});
+
+ipcMain.handle('generate-qr-data-url', async (event, text) => {
+  try {
+    const QRCode = require('qrcode');
+    const dataUrl = await QRCode.toDataURL(String(text || ''), {
+      margin: 1,
+      width: 260,
+      color: { dark: '#0d1117', light: '#ffffff' }
+    });
+    return { success: true, dataUrl };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });

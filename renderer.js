@@ -38,6 +38,11 @@
     videoRestartSeq: 0,
     videoTitle: '',
     videoIsStandalone: false,
+    videoAudioSinkId: '',
+    meetUrl: '',
+    meetCode: '',
+    meetCueText: '',
+    meetCueTime: 0,
     cameraEnabled: false,
     cameraMode: 'none',    // 'none', 'background', 'preacher'
     cameraDeviceId: '',
@@ -1609,6 +1614,7 @@
       videoLoop: state.videoLoop !== false,
       videoVolume: typeof state.videoVolume === 'number' ? state.videoVolume : 1.0,
       videoRestartSeq: state.videoRestartSeq || 0,
+      videoAudioSinkId: state.videoAudioSinkId || '',
       cameraEnabled: state.cameraEnabled,
       cameraMode: state.cameraMode,
       cameraDeviceId: state.cameraDeviceId,
@@ -4414,6 +4420,10 @@
       cameraDeviceId: state.cameraDeviceId || '',
       cameraDeviceLabel: state.cameraDeviceLabel || '',
       availableCameras: mappedCameras,
+      meetUrl: state.meetUrl || '',
+      meetCode: state.meetCode || '',
+      meetCueText: state.meetCueText || '',
+      meetCueTime: state.meetCueTime || 0,
       stageMessage: stageAlertMessageText || '',
       stageMessageActive: !!stageAlertMessageActive,
       countdownActive: !!countdownProjected,
@@ -6469,6 +6479,8 @@
     initCountdownTimer();
     initDualBibleComparison();
     initAmbientWorshipPads();
+    initAudioOutputRouting();
+    initCrewMeetStudio();
     if (serviceTitleInput) {
       serviceTitleInput.addEventListener('input', () => {
         triggerAutoSave();
@@ -6638,7 +6650,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.4.2';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.5.0';
         }
       } catch (err) {
         console.warn('Update check warning:', err);
@@ -6657,6 +6669,372 @@
     setTimeout(() => {
       performUpdateCheck(false);
     }, 3000);
+  }
+
+  // =========================================================================
+  // 16. SPLIT HEADSET / TV AUDIO ROUTING & GOOGLE MEET CREW COMMS STUDIO
+  // =========================================================================
+  async function refreshAudioOutputSelectors() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const outputs = devices.filter(d => d.kind === 'audiooutput');
+      const selectVideoSink = document.getElementById('select-video-audio-sink');
+      const selectMeetSink = document.getElementById('select-meet-audio-sink');
+
+      if (selectVideoSink) {
+        const savedVideoSink = state.videoAudioSinkId || localStorage.getItem('zioncast_video_audio_sink') || '';
+        selectVideoSink.innerHTML = '<option value="">🔊 TV/Video Audio: Default</option>';
+        outputs.forEach((d, idx) => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          const lbl = d.label || `Audio Output ${idx + 1}`;
+          opt.textContent = `🔊 ${lbl}`;
+          if (d.deviceId === savedVideoSink) opt.selected = true;
+          selectVideoSink.appendChild(opt);
+        });
+        if (savedVideoSink) {
+          state.videoAudioSinkId = savedVideoSink;
+        }
+      }
+
+      if (selectMeetSink) {
+        const savedMeetSink = localStorage.getItem('zioncast_meet_audio_sink') || '';
+        selectMeetSink.innerHTML = '<option value="">🎧 Headset: System Default</option>';
+        outputs.forEach((d, idx) => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          const lbl = d.label || `Audio Output ${idx + 1}`;
+          opt.textContent = `🎧 ${lbl}`;
+          if (d.deviceId === savedMeetSink) opt.selected = true;
+          selectMeetSink.appendChild(opt);
+        });
+      }
+    } catch (e) {
+      console.warn('Could not enumerate audio output devices:', e);
+    }
+  }
+
+  function initAudioOutputRouting() {
+    refreshAudioOutputSelectors();
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', refreshAudioOutputSelectors);
+    }
+
+    const selectVideoSink = document.getElementById('select-video-audio-sink');
+    if (selectVideoSink) {
+      selectVideoSink.addEventListener('change', (e) => {
+        const sinkId = e.target.value || '';
+        state.videoAudioSinkId = sinkId;
+        try { localStorage.setItem('zioncast_video_audio_sink', sinkId); } catch (_) {}
+        broadcastDisplayState();
+        const label = e.target.options[e.target.selectedIndex]?.textContent || 'Default';
+        showToast(`🔊 Media Video audio routed to: ${label}`);
+      });
+    }
+  }
+
+  function normalizeMeetUrl(raw) {
+    if (!raw) return { url: '', code: '' };
+    const clean = String(raw).trim();
+    if (!clean) return { url: '', code: '' };
+
+    // Match meet.google.com/xxx-xxxx-xxx or plain xxx-xxxx-xxx
+    const codeMatch = clean.match(/([a-z]{3}-[a-z]{4}-[a-z]{3})/i);
+    if (codeMatch) {
+      const code = codeMatch[1].toLowerCase();
+      return { url: `https://meet.google.com/${code}`, code };
+    }
+    if (clean.startsWith('https://meet.google.com/')) {
+      return { url: clean, code: clean.replace('https://meet.google.com/', '').split('?')[0] };
+    }
+    if (/^[a-z0-9-]+$/i.test(clean)) {
+      return { url: `https://meet.google.com/${clean.toLowerCase()}`, code: clean.toLowerCase() };
+    }
+    return { url: clean.startsWith('http') ? clean : `https://${clean}`, code: '' };
+  }
+
+  function initCrewMeetStudio() {
+    const drawer = document.getElementById('crew-meet-drawer');
+    const btnOpenHeader = document.getElementById('btn-open-crew-meet');
+    const btnOpenFromCam = document.getElementById('btn-cam-open-meet');
+    const btnClose = document.getElementById('btn-meet-close');
+    const btnMini = document.getElementById('btn-meet-mini');
+    const btnSignIn = document.getElementById('btn-meet-signin');
+    const headerDot = document.getElementById('crew-meet-header-dot');
+
+    const linkInput = document.getElementById('meet-link-input');
+    const btnJoinLink = document.getElementById('btn-meet-join-link');
+    const btnNewMeet = document.getElementById('btn-meet-new');
+    const codeBadge = document.getElementById('meet-code-badge');
+
+    const btnShowQr = document.getElementById('btn-meet-show-qr');
+    const btnCloseQr = document.getElementById('btn-meet-close-qr');
+    const qrPopover = document.getElementById('meet-qr-popover');
+    const qrImg = document.getElementById('meet-qr-img');
+    const qrUrlLabel = document.getElementById('meet-qr-url-label');
+    const btnCopyLink = document.getElementById('btn-meet-copy-link');
+    const btnWhatsapp = document.getElementById('btn-meet-whatsapp');
+
+    const selectMeetSink = document.getElementById('select-meet-audio-sink');
+    const btnMuteSpeaker = document.getElementById('btn-meet-mute-speaker');
+    const btnCamLock = document.getElementById('btn-meet-cam-lock');
+    const webview = document.getElementById('crew-meet-webview');
+
+    if (!drawer || !webview) return;
+
+    let isCrewAudioMuted = false;
+    let isTvCamsProtected = true;
+    let webviewReady = false;
+
+    function updateMeetRoomUI(url, code) {
+      state.meetUrl = url || '';
+      state.meetCode = code || '';
+      try {
+        if (state.meetUrl) localStorage.setItem('zioncast_meet_url', state.meetUrl);
+      } catch (_) {}
+
+      if (codeBadge) {
+        codeBadge.textContent = state.meetCode ? `Room: ${state.meetCode}` : (state.meetUrl ? 'Meet Ready' : 'No Active Room');
+      }
+      if (linkInput && state.meetUrl && document.activeElement !== linkInput) {
+        linkInput.value = state.meetUrl;
+      }
+      if (headerDot) {
+        headerDot.style.display = state.meetUrl ? 'inline-block' : 'none';
+      }
+      syncRemoteStatus();
+    }
+
+    // Restore saved permanent Google Meet room on startup
+    try {
+      const savedUrl = localStorage.getItem('zioncast_meet_url') || '';
+      if (savedUrl) {
+        const parsed = normalizeMeetUrl(savedUrl);
+        updateMeetRoomUI(parsed.url, parsed.code);
+      }
+    } catch (_) {}
+
+    function openDrawer() {
+      drawer.classList.add('open');
+      drawer.classList.remove('mini-mode');
+      if (btnMini) btnMini.textContent = '🗕 Mini Mode';
+      refreshAudioOutputSelectors();
+      if (state.meetUrl && webview.getURL && !webview.getURL().includes(state.meetCode || state.meetUrl)) {
+        try { webview.loadURL(state.meetUrl); } catch (_) {}
+      }
+    }
+
+    if (btnOpenHeader) {
+      btnOpenHeader.addEventListener('click', () => {
+        if (drawer.classList.contains('open') && !drawer.classList.contains('mini-mode')) {
+          drawer.classList.remove('open');
+        } else {
+          openDrawer();
+        }
+      });
+    }
+
+    if (btnOpenFromCam) {
+      btnOpenFromCam.addEventListener('click', openDrawer);
+    }
+
+    if (btnClose) {
+      btnClose.addEventListener('click', () => {
+        drawer.classList.remove('open');
+      });
+    }
+
+    if (btnMini) {
+      btnMini.addEventListener('click', () => {
+        const nowMini = drawer.classList.toggle('mini-mode');
+        btnMini.textContent = nowMini ? '🔼 Expand Meet' : '🗕 Mini Mode';
+      });
+    }
+
+    if (btnSignIn) {
+      btnSignIn.addEventListener('click', () => {
+        if (window.zionApi && window.zionApi.openMeetAuthWindow) {
+          window.zionApi.openMeetAuthWindow();
+          showToast('🔑 Sign into Google once in the popup — your session is saved for future services!');
+        }
+      });
+    }
+
+    function applyWebviewAudioAndCamSafety() {
+      if (!webviewReady) return;
+      try {
+        webview.setAudioMuted(isCrewAudioMuted);
+        const sinkId = (selectMeetSink && selectMeetSink.value) || localStorage.getItem('zioncast_meet_audio_sink') || '';
+        const allowCamBool = !isTvCamsProtected;
+        webview.executeJavaScript(`
+          if (window.__zionMeetSetAllowCamera) window.__zionMeetSetAllowCamera(${allowCamBool});
+          if (window.__zionMeetSetAudioOutput) window.__zionMeetSetAudioOutput(${JSON.stringify(sinkId)});
+        `).catch(() => {});
+      } catch (_) {}
+    }
+
+    webview.addEventListener('dom-ready', () => {
+      webviewReady = true;
+      applyWebviewAudioAndCamSafety();
+    });
+
+    const handleMeetNav = (navUrl) => {
+      if (!navUrl) return;
+      const m = navUrl.match(/https:\/\/meet\.google\.com\/([a-z]{3}-[a-z]{4}-[a-z]{3})/i);
+      if (m) {
+        const full = `https://meet.google.com/${m[1].toLowerCase()}`;
+        updateMeetRoomUI(full, m[1].toLowerCase());
+      }
+    };
+    webview.addEventListener('did-navigate', (e) => handleMeetNav(e.url));
+    webview.addEventListener('did-navigate-in-page', (e) => handleMeetNav(e.url));
+
+    if (btnJoinLink && linkInput) {
+      const joinFromInput = () => {
+        const { url, code } = normalizeMeetUrl(linkInput.value);
+        if (!url) {
+          showToast('Paste a Google Meet link or room code (e.g. abc-defg-hij), or click + New Meet.', 'warning');
+          return;
+        }
+        updateMeetRoomUI(url, code);
+        try { webview.loadURL(url); } catch (_) { webview.src = url; }
+        showToast(`📞 Opening Crew Meet (${code || url})...`);
+      };
+      btnJoinLink.addEventListener('click', joinFromInput);
+      linkInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          joinFromInput();
+        }
+      });
+    }
+
+    if (btnNewMeet) {
+      btnNewMeet.addEventListener('click', () => {
+        try { webview.loadURL('https://meet.google.com/new'); } catch (_) { webview.src = 'https://meet.google.com/new'; }
+        showToast('📞 Creating a new Google Meet room...');
+      });
+    }
+
+    if (btnShowQr && qrPopover) {
+      btnShowQr.addEventListener('click', async () => {
+        const target = state.meetUrl || (linkInput ? normalizeMeetUrl(linkInput.value).url : '');
+        if (!target) {
+          showToast('Start or paste a Google Meet link first to generate a QR code for your videographers.', 'warning');
+          return;
+        }
+        if (qrPopover.style.display === 'block') {
+          qrPopover.style.display = 'none';
+          return;
+        }
+        if (window.zionApi && window.zionApi.generateQrDataUrl) {
+          const res = await window.zionApi.generateQrDataUrl(target);
+          if (res && res.success && qrImg) {
+            qrImg.src = res.dataUrl;
+          }
+        }
+        if (qrUrlLabel) qrUrlLabel.textContent = target;
+        qrPopover.style.display = 'block';
+      });
+    }
+
+    if (btnCloseQr && qrPopover) {
+      btnCloseQr.addEventListener('click', () => {
+        qrPopover.style.display = 'none';
+      });
+    }
+
+    if (btnCopyLink) {
+      btnCopyLink.addEventListener('click', () => {
+        const target = state.meetUrl || (linkInput ? normalizeMeetUrl(linkInput.value).url : '');
+        if (!target) {
+          showToast('No active Meet link yet. Click + New Meet or paste a link first.', 'warning');
+          return;
+        }
+        navigator.clipboard.writeText(target).then(() => {
+          showToast('📋 Google Meet link copied!');
+        });
+      });
+    }
+
+    if (btnWhatsapp) {
+      btnWhatsapp.addEventListener('click', () => {
+        const target = state.meetUrl || (linkInput ? normalizeMeetUrl(linkInput.value).url : '');
+        if (!target) {
+          showToast('No active Meet link yet. Click + New Meet or paste a link first.', 'warning');
+          return;
+        }
+        const msg = encodeURIComponent(`🎥 ZionCast Crew Comms (Voice Only — keep Camera OFF if using Iriun/Camo): ${target}`);
+        const waUrl = `https://wa.me/?text=${msg}`;
+        if (window.zionApi && window.zionApi.openExternalUrl) {
+          window.zionApi.openExternalUrl(waUrl);
+        } else {
+          window.open(waUrl, '_blank');
+        }
+      });
+    }
+
+    if (selectMeetSink) {
+      selectMeetSink.addEventListener('change', (e) => {
+        const sinkId = e.target.value || '';
+        try { localStorage.setItem('zioncast_meet_audio_sink', sinkId); } catch (_) {}
+        applyWebviewAudioAndCamSafety();
+        const label = e.target.options[e.target.selectedIndex]?.textContent || 'Default';
+        showToast(`🎧 Crew Meet voice routed to: ${label}`);
+      });
+    }
+
+    if (btnMuteSpeaker) {
+      btnMuteSpeaker.addEventListener('click', () => {
+        isCrewAudioMuted = !isCrewAudioMuted;
+        if (isCrewAudioMuted) {
+          btnMuteSpeaker.textContent = '🔇 Crew Voice: MUTED';
+          btnMuteSpeaker.style.color = '#f87171';
+          btnMuteSpeaker.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+          btnMuteSpeaker.style.background = 'rgba(239, 68, 68, 0.16)';
+        } else {
+          btnMuteSpeaker.textContent = '🔊 Crew Voice: ON';
+          btnMuteSpeaker.style.color = '#34d399';
+          btnMuteSpeaker.style.borderColor = 'rgba(16, 185, 129, 0.45)';
+          btnMuteSpeaker.style.background = 'rgba(16, 185, 129, 0.15)';
+        }
+        applyWebviewAudioAndCamSafety();
+      });
+    }
+
+    if (btnCamLock) {
+      btnCamLock.addEventListener('click', () => {
+        isTvCamsProtected = !isTvCamsProtected;
+        if (isTvCamsProtected) {
+          btnCamLock.textContent = '🛡️ TV Cams Safe';
+          btnCamLock.style.color = '#38bdf8';
+          btnCamLock.style.borderColor = 'rgba(56, 189, 248, 0.45)';
+          btnCamLock.style.background = 'rgba(56, 189, 248, 0.12)';
+          showToast('🛡️ TV Cameras protected — Google Meet uses Headset Microphone only.');
+        } else {
+          btnCamLock.textContent = '📷 Meet Cam Unlocked';
+          btnCamLock.style.color = '#fbbf24';
+          btnCamLock.style.borderColor = 'rgba(245, 158, 11, 0.45)';
+          btnCamLock.style.background = 'rgba(245, 158, 11, 0.15)';
+          showToast('⚠️ Meet Camera unlocked — reload Meet tab if you want Meet to see webcams.');
+        }
+        applyWebviewAudioAndCamSafety();
+      });
+    }
+
+    // Silent Visual Camera Cues (syncs to Phone Remote + copies/notifies)
+    document.querySelectorAll('.meet-cue-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const cue = btn.getAttribute('data-cue');
+        if (!cue) return;
+        state.meetCueText = cue;
+        state.meetCueTime = Date.now();
+        syncRemoteStatus();
+        try { navigator.clipboard.writeText(cue); } catch (_) {}
+        showToast(`📣 Cue sent to Crew Remotes & copied: ${cue}`);
+      });
+    });
   }
 
   // Utility escape HTML

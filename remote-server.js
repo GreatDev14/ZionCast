@@ -1544,6 +1544,21 @@ class RemoteServer {
         <div id="stage-msg-active-status" style="display: none; font-size: 0.74rem; font-weight: 700; color: #f87171;"></div>
       </div>
 
+      <!-- Crew Google Meet Voice Comms Card -->
+      <div id="remote-meet-card" class="r-card" style="display: none; flex-direction: column; gap: 8px; border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.08);">
+        <div class="r-card-header" style="margin-bottom: 0;">
+          <span class="r-card-title" style="color: #34d399;">📞 Crew Comms (Google Meet)</span>
+          <span id="remote-meet-code" class="slide-counter-pill" style="background: rgba(16,185,129,0.2); color: #34d399;">LIVE</span>
+        </div>
+        <div style="font-size: 0.72rem; color: #cbd5e1; line-height: 1.4;">
+          Tap below to talk with the ZionCast operator via earpiece. <strong>Keep Camera OFF</strong> in Meet if using Iriun/Camo on this phone!
+        </div>
+        <a id="btn-remote-join-meet" href="#" target="_blank" rel="noopener noreferrer" class="btn-sm-action" style="display: block; text-align: center; text-decoration: none; background: #10b981; color: #052e16; border-color: #34d399; font-weight: 800; padding: 10px;">
+          📞 Join Crew Google Meet
+        </a>
+        <div id="remote-meet-cue-box" style="display: none; padding: 8px 10px; border-radius: 8px; background: rgba(245, 158, 11, 0.18); border: 1px solid rgba(245, 158, 11, 0.5); color: #fbbf24; font-size: 0.78rem; font-weight: 800; text-align: center;"></div>
+      </div>
+
       <!-- Audience TV Alert Banner -->
       <div class="r-card" style="display: flex; flex-direction: column; gap: 9px;">
         <div class="r-card-header" style="margin-bottom: 0;">
@@ -2502,6 +2517,29 @@ renderCamerasUI(state);
             stageStatus.textContent = '● Active on Stage: "' + state.stageMessage + '"';
           } else {
             stageStatus.style.display = 'none';
+          }
+        }
+
+        // Crew Google Meet Sync + Live Camera Cue
+        var meetCard = document.getElementById('remote-meet-card');
+        var meetCodeEl = document.getElementById('remote-meet-code');
+        var meetJoinBtn = document.getElementById('btn-remote-join-meet');
+        var meetCueBox = document.getElementById('remote-meet-cue-box');
+        if (meetCard) {
+          if (state.meetUrl) {
+            meetCard.style.display = 'flex';
+            if (meetCodeEl) meetCodeEl.textContent = state.meetCode || 'ACTIVE';
+            if (meetJoinBtn) meetJoinBtn.href = state.meetUrl;
+          } else {
+            meetCard.style.display = 'none';
+          }
+        }
+        if (meetCueBox && state.meetCueText) {
+          meetCueBox.style.display = 'block';
+          meetCueBox.textContent = state.meetCueText;
+          if (state.meetCueTime && window.__lastMeetCueTime !== state.meetCueTime) {
+            window.__lastMeetCueTime = state.meetCueTime;
+            showToast(state.meetCueText);
           }
         }
       }

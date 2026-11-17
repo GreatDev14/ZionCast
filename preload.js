@@ -55,7 +55,11 @@ contextBridge.exposeInMainWorld('zionApi', {
   // In-app Updates & External Links
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
-  getVersion: () => '1.4.4',
+  getVersion: () => '1.5.0',
+
+  // Google Meet Crew Comms & QR Helper APIs
+  openMeetAuthWindow: () => ipcRenderer.invoke('open-meet-auth-window'),
+  generateQrDataUrl: (text) => ipcRenderer.invoke('generate-qr-data-url', text),
 
   // Mobile Wi-Fi Remote Control APIs
   getRemoteInfo: (preferredIp = null) => ipcRenderer.invoke('get-remote-info', preferredIp),

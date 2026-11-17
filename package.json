@@ -1,6 +1,6 @@
 {
   "name": "zioncast",
-  "version": "1.4.4",
+  "version": "1.5.0",
   "description": "Production-Grade Church Presentation Desktop Application",
   "main": "main.js",
   "author": "ZionCast Team",
@@ -31,6 +31,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "meet-preload.js",
       "index.html",
       "display.html",
       "styles.css",

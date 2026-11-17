@@ -55,6 +55,7 @@
     videoLoop: true,
     videoVolume: 1.0,
     videoRestartSeq: 0,
+    videoAudioSinkId: '',
     cameraEnabled: false,
     cameraMode: 'none',
     cameraDeviceId: '',
@@ -1018,6 +1019,17 @@
         const shouldMute = !!(state.blackout || state.videoMuted);
         mediaVideo.volume = targetVol;
         mediaVideo.muted = shouldMute;
+
+        // Route Media Video audio directly to TV HDMI / Church Mixer (separate from Operator Headset)
+        if (typeof mediaVideo.setSinkId === 'function') {
+          const desiredSink = state.videoAudioSinkId || '';
+          if ((mediaVideo.dataset.activeSinkId || '') !== desiredSink) {
+            mediaVideo.dataset.activeSinkId = desiredSink;
+            mediaVideo.setSinkId(desiredSink).catch((e) => {
+              console.warn('Could not route video audio sink:', e);
+            });
+          }
+        }
 
         if (isNewVideo) {
           mediaVideo.dataset.loadedRawUrl = rawKey;
