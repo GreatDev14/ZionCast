@@ -47,7 +47,15 @@
     cameraMode: 'none',    // 'none', 'background', 'preacher'
     cameraDeviceId: '',
     cameraDeviceLabel: '',
+    wirelessCamViewUrl: '',
     cameraOpacity: 0.75,
+    vdoRoomId: '',
+    activeVdoCamSlots: [],
+    offlineWirelessCams: [],
+    wcamSetupMode: 'vdo',
+    wcamSelectedSlot: '1',
+    wcamDrawerOpen: false,
+    wcamServerInfo: null,
     bannerText: '',
     bannerActive: false,
     bannerStyle: 'urgent-red',
@@ -342,12 +350,14 @@
   // Center Monitors & Tiles
   const previewCanvas = document.getElementById('preview-canvas');
   const previewVideoStream = document.getElementById('preview-video-stream');
+  const previewWcamIframe = document.getElementById('preview-wcam-iframe');
   const previewTextTitle = document.getElementById('preview-text-title');
   const previewTextBody = document.getElementById('preview-text-body');
   const btnPushLive = document.getElementById('btn-push-live');
 
   const liveCanvas = document.getElementById('live-canvas');
   const liveVideoStream = document.getElementById('live-video-stream');
+  const liveWcamIframe = document.getElementById('live-wcam-iframe');
   const liveTextTitle = document.getElementById('live-text-title');
   const liveTextBody = document.getElementById('live-text-body');
   const liveBlackoutOverlay = document.getElementById('live-blackout-overlay');
@@ -755,6 +765,7 @@
     }
 
     // 6. Asynchronous hardware and database populating in background
+    initWirelessCameraEngine();
     loadBackgroundPresets().catch(console.warn);
     loadBibleData(currentBibleVersion).catch(console.warn);
     enumerateVideoDevices().then(() => {
@@ -1002,9 +1013,510 @@
 
   
   // =========================================================================
-  // CAMERA DEVICE & MULTI-CAM DISPLAY SECTION HELPERS
+  // CAMERA DEVICE & WIRELESS PHONE CAMERA ENGINE HELPERS
   // =========================================================================
+  function getOrCreateVdoRoomId() {
+    if (state.vdoRoomId) return state.vdoRoomId;
+    let saved = '';
+    try { saved = localStorage.getItem('zioncast_vdo_room_id') || ''; } catch (_) {}
+    if (!saved) {
+      saved = 'zc' + Math.random().toString(36).slice(2, 8);
+      try { localStorage.setItem('zioncast_vdo_room_id', saved); } catch (_) {}
+    }
+    state.vdoRoomId = saved;
+    return saved;
+  }
+
+  function loadSavedVdoCamSlots() {
+    try {
+      const raw = localStorage.getItem('zioncast_active_vdo_slots');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          state.activeVdoCamSlots = parsed.map(String).filter(s => ['1', '2', '3', '4'].includes(s));
+        }
+      }
+    } catch (_) {}
+  }
+
+  function saveVdoCamSlots() {
+    try {
+      localStorage.setItem('zioncast_active_vdo_slots', JSON.stringify(state.activeVdoCamSlots || []));
+    } catch (_) {}
+  }
+
+  function getVdoPushUrl(slot = '1') {
+    const room = getOrCreateVdoRoomId();
+    const s = String(slot || '1');
+    return `https://vdo.ninja/?push=${room}_cam${s}&room=${room}&webcam&facingmode=environment&cleanoutput&autostart&noaudio`;
+  }
+
+  function getVdoViewUrl(slot = '1') {
+    const room = getOrCreateVdoRoomId();
+    const s = String(slot || '1');
+    return `https://vdo.ninja/?view=${room}_cam${s}&room=${room}&cleanoutput&autostart&noaudio`;
+  }
+
+  function getOfflineCamPushUrl(slot = '1') {
+    const s = String(slot || '1');
+    const info = state.wcamServerInfo;
+    const base = (info && info.offlineCamBaseUrl)
+      ? info.offlineCamBaseUrl
+      : `https://${(info && info.ip) ? info.ip : '127.0.0.1'}:${(info && info.httpsPort) ? info.httpsPort : 3443}/cam`;
+    return `${base}?slot=${encodeURIComponent(s)}`;
+  }
+
+  function setMonitorWcamIframe(iframeEl, viewUrl) {
+    if (!iframeEl) return;
+    if (viewUrl) {
+      if (iframeEl.dataset.loadedUrl !== viewUrl) {
+        iframeEl.dataset.loadedUrl = viewUrl;
+        iframeEl.src = viewUrl;
+      }
+      iframeEl.style.display = 'block';
+    } else {
+      if (iframeEl.dataset.loadedUrl) {
+        iframeEl.dataset.loadedUrl = '';
+        iframeEl.src = 'about:blank';
+      }
+      iframeEl.style.display = 'none';
+    }
+  }
+
+  function setMonitorVideoStream(videoEl, stream) {
+    if (!videoEl) return;
+    if (stream) {
+      if (videoEl.srcObject !== stream) videoEl.srcObject = stream;
+      videoEl.style.display = 'block';
+      videoEl.play().catch(() => {});
+    } else {
+      videoEl.srcObject = null;
+      videoEl.style.display = 'none';
+    }
+  }
+
+  const offlineControlWcamStreams = new Map();
+  const offlineControlWcamPcs = new Map();
+  let offlineControlSse = null;
+  const offlineControlViewerId = 'ctrl-' + Math.random().toString(36).slice(2, 8);
+
+  function getLocalHttpBase() {
+    const port = (state.wcamServerInfo && state.wcamServerInfo.port) ? state.wcamServerInfo.port : 3000;
+    return `http://127.0.0.1:${port}`;
+  }
+
+  async function sendControlCamSignal(payload) {
+    try {
+      await fetch(`${getLocalHttpBase()}/api/cam-signal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (_) {}
+  }
+
+  function attachOfflineStreamToActiveTargets(slot, stream) {
+    const devId = `wcam-offline:${slot}`;
+    document.querySelectorAll(`video.wcam-offline-video[data-wcam-slot="${slot}"]`).forEach(v => {
+      if (v.srcObject !== stream) {
+        v.srcObject = stream;
+        v.play().catch(() => {});
+      }
+    });
+    if (selectedViewfinderDeviceId === devId && state.cameraDisplaySectionOpen) {
+      setMonitorWcamIframe(previewWcamIframe, '');
+      setMonitorVideoStream(previewVideoStream, stream);
+    }
+    if (state.cameraEnabled && state.cameraDeviceId === devId) {
+      setMonitorWcamIframe(liveWcamIframe, '');
+      setMonitorVideoStream(liveVideoStream, stream);
+      setMonitorWcamIframe(previewWcamIframe, '');
+      setMonitorVideoStream(previewVideoStream, stream);
+    }
+  }
+
+  async function startControlOfflineWcamPeer(slot) {
+    const cleanSlot = String(slot || '1');
+    const existingPc = offlineControlWcamPcs.get(cleanSlot);
+    if (existingPc && existingPc.connectionState !== 'failed' && existingPc.connectionState !== 'closed') {
+      const existingStream = offlineControlWcamStreams.get(cleanSlot);
+      if (existingStream) {
+        attachOfflineStreamToActiveTargets(cleanSlot, existingStream);
+        return existingStream;
+      }
+    }
+    if (existingPc) {
+      try { existingPc.close(); } catch (_) {}
+      offlineControlWcamPcs.delete(cleanSlot);
+    }
+
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    offlineControlWcamPcs.set(cleanSlot, pc);
+    try { pc.addTransceiver('video', { direction: 'recvonly' }); } catch (_) {}
+
+    pc.ontrack = (ev) => {
+      const stream = (ev.streams && ev.streams[0]) ? ev.streams[0] : new MediaStream([ev.track]);
+      offlineControlWcamStreams.set(cleanSlot, stream);
+      attachOfflineStreamToActiveTargets(cleanSlot, stream);
+    };
+
+    pc.onicecandidate = (ev) => {
+      if (ev.candidate) {
+        sendControlCamSignal({
+          type: 'ice',
+          targetRole: 'publisher',
+          slot: cleanSlot,
+          viewerId: offlineControlViewerId,
+          candidate: ev.candidate
+        });
+      }
+    };
+
+    try {
+      const offer = await pc.createOffer({ offerToReceiveVideo: true });
+      await pc.setLocalDescription(offer);
+      await sendControlCamSignal({
+        type: 'offer',
+        targetRole: 'publisher',
+        slot: cleanSlot,
+        viewerId: offlineControlViewerId,
+        sdp: pc.localDescription
+      });
+    } catch (err) {
+      console.warn('[Control WCam Offer Error]', err);
+    }
+    return offlineControlWcamStreams.get(cleanSlot) || null;
+  }
+
+  function ensureControlOfflineWcamSse() {
+    if (offlineControlSse && offlineControlSse.readyState !== 2) return;
+    if (!state.wcamServerInfo && window.zionApi && window.zionApi.getRemoteInfo) {
+      fetchWcamServerInfo().then((info) => {
+        if (info) ensureControlOfflineWcamSse();
+      }).catch(() => {});
+      return;
+    }
+    try {
+      const sse = new EventSource(`${getLocalHttpBase()}/api/cam-events?role=viewer&viewerId=${encodeURIComponent(offlineControlViewerId)}`);
+      offlineControlSse = sse;
+      sse.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'wcam-sync' && Array.isArray(msg.cams)) {
+            state.offlineWirelessCams = msg.cams;
+            msg.cams.forEach(c => startControlOfflineWcamPeer(c.slot));
+            renderSidebarCameraList();
+            if (state.cameraDisplaySectionOpen) renderCameraDisplaySection();
+          } else if (msg.type === 'cam-joined' && msg.cam) {
+            const slot = String(msg.cam.slot);
+            if (!state.offlineWirelessCams.some(c => String(c.slot) === slot)) {
+              state.offlineWirelessCams.push(msg.cam);
+            }
+            startControlOfflineWcamPeer(slot);
+            renderSidebarCameraList();
+            if (state.cameraDisplaySectionOpen) renderCameraDisplaySection();
+          } else if (msg.type === 'cam-left' && msg.slot) {
+            const slot = String(msg.slot);
+            state.offlineWirelessCams = state.offlineWirelessCams.filter(c => String(c.slot) !== slot);
+            const oldPc = offlineControlWcamPcs.get(slot);
+            if (oldPc) { try { oldPc.close(); } catch (_) {} offlineControlWcamPcs.delete(slot); }
+            offlineControlWcamStreams.delete(slot);
+            renderSidebarCameraList();
+            if (state.cameraDisplaySectionOpen) renderCameraDisplaySection();
+          } else if (msg.type === 'answer' && msg.slot && msg.sdp) {
+            const pc = offlineControlWcamPcs.get(String(msg.slot));
+            if (pc) pc.setRemoteDescription(new RTCSessionDescription(msg.sdp)).catch(() => {});
+          } else if (msg.type === 'ice' && msg.slot && msg.candidate) {
+            const pc = offlineControlWcamPcs.get(String(msg.slot));
+            if (pc) pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
+          }
+        } catch (_) {}
+      };
+    } catch (_) {}
+  }
+
+  async function bindSourceToMonitor(deviceId, target = 'preview') {
+    const updatePreview = target === 'preview' || target === 'both';
+    const updateLive = target === 'live' || target === 'both';
+    if (!deviceId) {
+      if (updatePreview) { setMonitorWcamIframe(previewWcamIframe, ''); setMonitorVideoStream(previewVideoStream, null); }
+      if (updateLive) { setMonitorWcamIframe(liveWcamIframe, ''); setMonitorVideoStream(liveVideoStream, null); }
+      return '';
+    }
+
+    const idStr = String(deviceId);
+    if (idStr.startsWith('wcam-vdo:')) {
+      const slot = idStr.split(':')[1] || '1';
+      const viewUrl = getVdoViewUrl(slot);
+      if (updatePreview) { setMonitorVideoStream(previewVideoStream, null); setMonitorWcamIframe(previewWcamIframe, viewUrl); }
+      if (updateLive) { setMonitorVideoStream(liveVideoStream, null); setMonitorWcamIframe(liveWcamIframe, viewUrl); }
+      return viewUrl;
+    }
+
+    if (idStr.startsWith('wcam-offline:')) {
+      const slot = idStr.split(':')[1] || '1';
+      ensureControlOfflineWcamSse();
+      let stream = offlineControlWcamStreams.get(slot);
+      if (!stream) stream = await startControlOfflineWcamPeer(slot);
+      if (updatePreview) { setMonitorWcamIframe(previewWcamIframe, ''); setMonitorVideoStream(previewVideoStream, stream || null); }
+      if (updateLive) { setMonitorWcamIframe(liveWcamIframe, ''); setMonitorVideoStream(liveVideoStream, stream || null); }
+      return '';
+    }
+
+    try {
+      const stream = await acquireSharedCameraStream(idStr);
+      if (updatePreview) { setMonitorWcamIframe(previewWcamIframe, ''); setMonitorVideoStream(previewVideoStream, stream); }
+      if (updateLive) { setMonitorWcamIframe(liveWcamIframe, ''); setMonitorVideoStream(liveVideoStream, stream); }
+    } catch (e) {
+      console.warn('Could not bind monitor camera stream:', e);
+    }
+    return '';
+  }
+
+  function getAllCameraSources() {
+    const out = [];
+    (state.videoDevices || []).forEach((dev, index) => {
+      const info = parseCameraDeviceInfo(dev, index);
+      out.push({
+        id: dev.deviceId,
+        kind: 'hardware',
+        slot: '',
+        cleanName: info.cleanName,
+        typeBadge: info.typeBadge,
+        icon: info.isIriun ? '📱' : (info.typeBadge.includes('Camo') ? '✨' : '📹'),
+        rawLabel: dev.label || '',
+        camNumber: info.camNumber,
+        isIriun: info.isIriun
+      });
+    });
+
+    (state.offlineWirelessCams || []).forEach((cam) => {
+      const slot = String(cam.slot || '1');
+      out.push({
+        id: `wcam-offline:${slot}`,
+        kind: 'offline',
+        slot,
+        cleanName: cam.label || `Wi-Fi Phone Cam ${slot} (Offline)`,
+        typeBadge: 'Offline Wi-Fi HTTPS',
+        icon: '📱',
+        rawLabel: cam.label || `Offline Wi-Fi Cam ${slot}`,
+        camNumber: parseInt(slot, 10) || 1,
+        isIriun: false
+      });
+    });
+
+    (state.activeVdoCamSlots || []).forEach((slotVal) => {
+      const slot = String(slotVal);
+      out.push({
+        id: `wcam-vdo:${slot}`,
+        kind: 'vdo',
+        slot,
+        cleanName: `Wi-Fi Phone Cam ${slot} (Zero-Cert)`,
+        typeBadge: 'Zero-Cert Wi-Fi',
+        icon: '📱',
+        rawLabel: `VDO.Ninja Room Cam ${slot}`,
+        camNumber: parseInt(slot, 10) || 1,
+        isIriun: false
+      });
+    });
+    return out;
+  }
+
+  async function fetchWcamServerInfo() {
+    if (!window.zionApi || !window.zionApi.getRemoteInfo) return null;
+    try {
+      const info = await window.zionApi.getRemoteInfo();
+      if (info) {
+        state.wcamServerInfo = info;
+        if (Array.isArray(info.offlineCams)) {
+          state.offlineWirelessCams = info.offlineCams;
+        }
+      }
+      return info;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function refreshWcamSetupDrawer() {
+    const drawer = document.getElementById('wcam-setup-drawer');
+    if (!drawer) return;
+    if (!state.wcamServerInfo) await fetchWcamServerInfo();
+
+    const isOffline = state.wcamSetupMode === 'offline';
+    const slot = state.wcamSelectedSlot || '1';
+    const url = isOffline ? getOfflineCamPushUrl(slot) : getVdoPushUrl(slot);
+
+    const btnVdo = document.getElementById('btn-wcam-mode-vdo');
+    const btnOff = document.getElementById('btn-wcam-mode-offline');
+    if (btnVdo) btnVdo.classList.toggle('active', !isOffline);
+    if (btnOff) btnOff.classList.toggle('active', isOffline);
+
+    const descEl = document.getElementById('wcam-mode-desc');
+    if (descEl) {
+      descEl.innerHTML = isOffline
+        ? `<strong>100% Offline Mode (No Internet):</strong> Uses ZionCast's built-in HTTPS LAN server on port <strong>${(state.wcamServerInfo && state.wcamServerInfo.httpsPort) || 3443}</strong>. Phone connects directly on opening <em>/cam?slot=${escapeHtml(slot)}</em>.`
+        : `<strong>Zero-Cert Mode (Recommended):</strong> Phone uses brief internet handshake, then streams direct P2P over your church Wi-Fi. No app, no cables, zero certificate prompt.`;
+    }
+
+    document.querySelectorAll('.wcam-slot-pill').forEach(pill => {
+      pill.classList.toggle('active', pill.dataset.wcamSlot === slot);
+    });
+
+    const btnActivate = document.getElementById('btn-wcam-activate-slot');
+    if (btnActivate) {
+      btnActivate.style.display = isOffline ? 'none' : 'inline-flex';
+      const activeAlready = (state.activeVdoCamSlots || []).includes(slot);
+      btnActivate.textContent = activeAlready ? `✓ Cam ${slot} Active in Grid` : `+ Activate Cam ${slot} in Grid`;
+    }
+
+    const urlInput = document.getElementById('wcam-url-input');
+    if (urlInput) urlInput.value = url;
+
+    const offlineBox = document.getElementById('wcam-offline-box');
+    if (offlineBox) offlineBox.style.display = isOffline ? 'flex' : 'none';
+
+    const qrBox = document.getElementById('wcam-qr-box');
+    const qrCap = document.getElementById('wcam-qr-caption');
+    if (qrCap) qrCap.textContent = isOffline ? `Cam ${slot} (Offline HTTPS)` : `Cam ${slot} (Zero-Cert)`;
+    if (qrBox && window.zionApi && window.zionApi.generateQrDataUrl) {
+      try {
+        const res = await window.zionApi.generateQrDataUrl(url);
+        if (res && res.success && res.dataUrl) {
+          qrBox.innerHTML = `<img src="${res.dataUrl}" alt="Scan with phone">`;
+        }
+      } catch (_) {}
+    }
+  }
+
+  function initWirelessCameraEngine() {
+    getOrCreateVdoRoomId();
+    loadSavedVdoCamSlots();
+    fetchWcamServerInfo().then(() => {
+      ensureControlOfflineWcamSse();
+    });
+
+    const btnToggle = document.getElementById('btn-wcam-toggle');
+    const drawer = document.getElementById('wcam-setup-drawer');
+    if (btnToggle && drawer) {
+      btnToggle.addEventListener('click', async () => {
+        state.wcamDrawerOpen = !state.wcamDrawerOpen;
+        drawer.style.display = state.wcamDrawerOpen ? 'flex' : 'none';
+        btnToggle.classList.toggle('active', state.wcamDrawerOpen);
+        if (state.wcamDrawerOpen) {
+          ensureControlOfflineWcamSse();
+          await refreshWcamSetupDrawer();
+        }
+      });
+    }
+
+    const btnModeVdo = document.getElementById('btn-wcam-mode-vdo');
+    const btnModeOff = document.getElementById('btn-wcam-mode-offline');
+    if (btnModeVdo) {
+      btnModeVdo.addEventListener('click', () => {
+        state.wcamSetupMode = 'vdo';
+        refreshWcamSetupDrawer();
+      });
+    }
+    if (btnModeOff) {
+      btnModeOff.addEventListener('click', () => {
+        state.wcamSetupMode = 'offline';
+        ensureControlOfflineWcamSse();
+        refreshWcamSetupDrawer();
+      });
+    }
+
+    document.querySelectorAll('.wcam-slot-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        state.wcamSelectedSlot = pill.dataset.wcamSlot || '1';
+        refreshWcamSetupDrawer();
+      });
+    });
+
+    const btnActivate = document.getElementById('btn-wcam-activate-slot');
+    if (btnActivate) {
+      btnActivate.addEventListener('click', () => {
+        const slot = state.wcamSelectedSlot || '1';
+        if (!(state.activeVdoCamSlots || []).includes(slot)) {
+          state.activeVdoCamSlots.push(slot);
+          saveVdoCamSlots();
+        }
+        renderSidebarCameraList();
+        renderCameraDisplaySection();
+        refreshWcamSetupDrawer();
+        showToast(`📱 Wi-Fi Phone Cam ${slot} added to studio grid — scan the QR on your phone!`);
+      });
+    }
+
+    const btnCopyUrl = document.getElementById('btn-wcam-copy-url');
+    if (btnCopyUrl) {
+      btnCopyUrl.addEventListener('click', () => {
+        const urlInput = document.getElementById('wcam-url-input');
+        const val = urlInput ? urlInput.value : '';
+        if (!val) return;
+        navigator.clipboard.writeText(val).then(() => showToast('📋 Phone camera link copied!'));
+      });
+    }
+
+    const btnOpenTab = document.getElementById('btn-wcam-open-tab');
+    if (btnOpenTab) {
+      btnOpenTab.addEventListener('click', () => {
+        const urlInput = document.getElementById('wcam-url-input');
+        const val = urlInput ? urlInput.value : '';
+        if (!val) return;
+        if (window.zionApi && window.zionApi.openExternalUrl) window.zionApi.openExternalUrl(val);
+        else window.open(val, '_blank');
+      });
+    }
+
+    const getCertUrl = () => {
+      const info = state.wcamServerInfo;
+      return (info && info.caCertUrl)
+        ? info.caCertUrl
+        : `http://${(info && info.ip) ? info.ip : '127.0.0.1'}:${(info && info.port) ? info.port : 3000}/zioncast-ca.crt`;
+    };
+
+    const btnCopyCert = document.getElementById('btn-wcam-copy-cert');
+    if (btnCopyCert) {
+      btnCopyCert.addEventListener('click', () => {
+        navigator.clipboard.writeText(getCertUrl()).then(() => showToast('📄 Certificate download link copied!'));
+      });
+    }
+
+    const btnOpenCert = document.getElementById('btn-wcam-open-cert');
+    if (btnOpenCert) {
+      btnOpenCert.addEventListener('click', () => {
+        const url = getCertUrl();
+        if (window.zionApi && window.zionApi.openExternalUrl) window.zionApi.openExternalUrl(url);
+        else window.open(url, '_blank');
+      });
+    }
+  }
+
   function parseCameraDeviceInfo(device, index) {
+    const devId = device && device.deviceId ? String(device.deviceId) : '';
+    if (devId.startsWith('wcam-vdo:')) {
+      const slot = devId.split(':')[1] || '1';
+      return {
+        deviceId: devId,
+        rawLabel: device.label || `Wi-Fi Phone Cam ${slot} (Zero-Cert)`,
+        cleanName: `Wi-Fi Phone Cam ${slot} (Zero-Cert)`,
+        typeBadge: 'Zero-Cert Wi-Fi',
+        camNumber: parseInt(slot, 10) || (index + 1),
+        isIriun: false
+      };
+    }
+    if (devId.startsWith('wcam-offline:')) {
+      const slot = devId.split(':')[1] || '1';
+      return {
+        deviceId: devId,
+        rawLabel: device.label || `Wi-Fi Phone Cam ${slot} (Offline)`,
+        cleanName: device.label || `Wi-Fi Phone Cam ${slot} (Offline)`,
+        typeBadge: 'Offline Wi-Fi HTTPS',
+        camNumber: parseInt(slot, 10) || (index + 1),
+        isIriun: false
+      };
+    }
     const rawLabel = (device && device.label ? device.label : '').trim();
     const low = rawLabel.toLowerCase();
     let cleanName = rawLabel || ('Camera ' + (index + 1));
@@ -1330,7 +1842,8 @@
               state.cameraDeviceId = d.deviceId;
               state.cameraDeviceLabel = d.label || '';
             }
-            updateCameraStatusBadges(state.videoDevices.length);
+            const totalCams = getAllCameraSources().length;
+            updateCameraStatusBadges(totalCams);
             renderSidebarCameraList();
             if (state.cameraDisplaySectionOpen) {
               renderCameraDisplaySection();
@@ -1343,33 +1856,33 @@
         state.videoDevices = availableOnly;
         state.allRawDevices = videoInputs;
 
-        // STRICT SAFETY: If active camera was set to an offline/disconnected device, shut it down immediately!
-        const activeIsStillAvailable = state.cameraDeviceId && availableOnly.some(d => d.deviceId === state.cameraDeviceId);
+        // STRICT SAFETY: If active camera was set to an offline/disconnected device (hardware OR wireless), shut it down!
+        const allAvailableNow = getAllCameraSources();
+        const activeIsStillAvailable = state.cameraDeviceId && allAvailableNow.some(s => s.id === state.cameraDeviceId);
         if (!activeIsStillAvailable) {
           if (state.cameraEnabled) {
             state.cameraEnabled = false;
             state.cameraMode = 'none';
-            if (liveVideoStream) {
-              liveVideoStream.srcObject = null;
-              liveVideoStream.style.display = 'none';
-            }
-            if (previewVideoStream) {
-              previewVideoStream.srcObject = null;
-              previewVideoStream.style.display = 'none';
+            state.wirelessCamViewUrl = '';
+            setMonitorWcamIframe(liveWcamIframe, '');
+            setMonitorVideoStream(liveVideoStream, null);
+            if (!state.cameraDisplaySectionOpen || !selectedViewfinderDeviceId) {
+              setMonitorWcamIframe(previewWcamIframe, '');
+              setMonitorVideoStream(previewVideoStream, null);
             }
             broadcastDisplayState();
           }
-          state.cameraDeviceId = availableOnly.length > 0 ? availableOnly[0].deviceId : null;
-          state.cameraDeviceLabel = availableOnly.length > 0 ? (availableOnly[0].label || '') : '';
+          state.cameraDeviceId = allAvailableNow.length > 0 ? allAvailableNow[0].id : null;
+          state.cameraDeviceLabel = allAvailableNow.length > 0 ? (allAvailableNow[0].cleanName || '') : '';
         }
 
         // Update hidden fallback select for backward compatibility
         if (cameraDeviceSelect) {
           cameraDeviceSelect.innerHTML = '';
-          availableOnly.forEach(d => {
+          allAvailableNow.forEach(src => {
             const opt = document.createElement('option');
-            opt.value = d.deviceId;
-            opt.textContent = d.label || d.deviceId;
+            opt.value = src.id;
+            opt.textContent = src.cleanName || src.id;
             cameraDeviceSelect.appendChild(opt);
           });
           if (state.cameraDeviceId) {
@@ -1383,7 +1896,7 @@
           renderCameraDisplaySection();
         }
 
-        updateCameraStatusBadges(availableOnly.length);
+        updateCameraStatusBadges(allAvailableNow.length);
       } catch (err) {
         console.warn('Could not enumerate video hardware:', err);
       } finally {
@@ -1403,7 +1916,7 @@
     const list = document.getElementById('sidebar-camera-list');
     if (!list) return;
 
-    const available = state.videoDevices || [];
+    const available = getAllCameraSources();
     list.innerHTML = '';
 
     if (available.length === 0) {
@@ -1412,23 +1925,34 @@
           <div style="font-size: 1.6rem; margin-bottom: 6px;">📱</div>
           <div style="font-size: 0.82rem; font-weight: 800; color: #fff;">No Camera Connected</div>
           <div style="font-size: 0.72rem; color: #94a3b8; line-height: 1.45; margin: 4px 0 12px 0;">
-            Connect your phone with <strong>Iriun Webcam</strong> or <strong>Camo Studio</strong>, or plug in a USB webcam.
+            Connect a phone directly over Wi-Fi (Zero-Cert or Offline), open <strong>Iriun / Camo</strong>, or plug in USB.
           </div>
+          <button id="btn-sidebar-wifi-cam" class="btn-fast" style="padding: 6px 14px; font-size: 0.75rem; background: #0284c7; color: #fff; border-color: #38bdf8; font-weight: 800; margin-bottom: 6px;">
+            📱 Connect Wi-Fi Phone Cam
+          </button>
           <button id="btn-sidebar-rescan" class="btn-fast" style="padding: 6px 14px; font-size: 0.75rem; background: #10b981; color: #fff; border-color: #059669; font-weight: 800;">
             🔄 Scan for Cameras
           </button>
         </div>
       `;
+      const btnWifi = document.getElementById('btn-sidebar-wifi-cam');
+      if (btnWifi) btnWifi.addEventListener('click', () => {
+        openCameraDisplaySection();
+        const drawer = document.getElementById('wcam-setup-drawer');
+        const btnToggle = document.getElementById('btn-wcam-toggle');
+        state.wcamDrawerOpen = true;
+        if (drawer) drawer.style.display = 'flex';
+        if (btnToggle) btnToggle.classList.add('active');
+        refreshWcamSetupDrawer();
+      });
       const btnScan = document.getElementById('btn-sidebar-rescan');
       if (btnScan) btnScan.addEventListener('click', () => enumerateVideoDevices(true));
       return;
     }
 
-    available.forEach((dev, index) => {
-      const info = parseCameraDeviceInfo(dev, index);
-      const isLiveOnTv = state.cameraEnabled && (state.cameraDeviceId === dev.deviceId || state.cameraDeviceLabel === dev.label);
-      const isPreviewing = selectedViewfinderDeviceId === dev.deviceId;
-      const icon = info.isIriun ? '📱' : (info.typeBadge.includes('Camo') ? '✨' : '📹');
+    available.forEach((src) => {
+      const isLiveOnTv = state.cameraEnabled && (state.cameraDeviceId === src.id || (src.rawLabel && state.cameraDeviceLabel === src.rawLabel));
+      const isPreviewing = selectedViewfinderDeviceId === src.id;
 
       const card = document.createElement('div');
       card.className = 'sidebar-cam-card';
@@ -1437,9 +1961,9 @@
 
       card.innerHTML = `
         <div class="sidebar-cam-info">
-          <div class="sidebar-cam-name" title="${escapeHtml(dev.label || info.cleanName)}">
-            <span>${icon}</span>
-            <span>${escapeHtml(info.cleanName)}</span>
+          <div class="sidebar-cam-name" title="${escapeHtml(src.rawLabel || src.cleanName)}">
+            <span>${src.icon}</span>
+            <span>${escapeHtml(src.cleanName)}</span>
           </div>
           <span class="sidebar-cam-badge ${isLiveOnTv ? 'live' : 'ready'}">
             ${isLiveOnTv ? (state.cameraMode === 'preacher' ? '🔴 ON TV' : '🎵 WORSHIP') : '🟢 READY'}
@@ -1458,7 +1982,7 @@
         btnPreview.addEventListener('click', (e) => {
           e.stopPropagation();
           openCameraDisplaySection();
-          setViewfinderCamera(dev.deviceId, dev.label);
+          setViewfinderCamera(src.id, src.rawLabel || src.cleanName);
         });
       }
 
@@ -1469,7 +1993,7 @@
           if (isLiveOnTv) {
             updateCameraMode('none');
           } else {
-            switchCameraSource(dev.deviceId, dev.label, 'preacher');
+            switchCameraSource(src.id, src.rawLabel || src.cleanName, 'preacher');
           }
           renderSidebarCameraList();
           if (state.cameraDisplaySectionOpen) renderCameraDisplaySection();
@@ -1478,7 +2002,7 @@
 
       card.addEventListener('click', () => {
         openCameraDisplaySection();
-        setViewfinderCamera(dev.deviceId, dev.label);
+        setViewfinderCamera(src.id, src.rawLabel || src.cleanName);
       });
 
       list.appendChild(card);
@@ -1513,29 +2037,18 @@
       state.blackout = false;
       if (btnFastBlackout) btnFastBlackout.classList.remove('active-blackout');
 
-      const matchedDev = state.videoDevices.find(d => d.deviceId === state.cameraDeviceId) || state.videoDevices[0];
-      if (matchedDev) {
-        if (!state.cameraDeviceId) state.cameraDeviceId = matchedDev.deviceId;
-        state.cameraDeviceLabel = matchedDev.label || '';
+      const allSources = getAllCameraSources();
+      const matchedSrc = allSources.find(s => s.id === state.cameraDeviceId) || allSources[0];
+      if (matchedSrc) {
+        if (!state.cameraDeviceId) state.cameraDeviceId = matchedSrc.id;
+        if (!state.cameraDeviceLabel) state.cameraDeviceLabel = matchedSrc.cleanName;
       }
 
       if (state.cameraDeviceId) {
-        try {
-          const stream = await acquireSharedCameraStream(state.cameraDeviceId);
-          activeControlCameraId = state.cameraDeviceId;
-          if (previewVideoStream) {
-            previewVideoStream.srcObject = stream;
-            previewVideoStream.style.display = 'block';
-            previewVideoStream.play().catch(() => {});
-          }
-          if (liveVideoStream) {
-            liveVideoStream.srcObject = stream;
-            liveVideoStream.style.display = 'block';
-            liveVideoStream.play().catch(() => {});
-          }
-        } catch (e) {
-          console.warn('Could not bind monitor camera stream:', e);
-        }
+        activeControlCameraId = state.cameraDeviceId;
+        state.wirelessCamViewUrl = await bindSourceToMonitor(state.cameraDeviceId, 'both');
+      } else {
+        state.wirelessCamViewUrl = '';
       }
 
       if (labelCameraStatus) labelCameraStatus.textContent = `Camera: ${mode.toUpperCase()} LIVE ON TV`;
@@ -1543,18 +2056,15 @@
       if (statusCamInfo) statusCamInfo.style.display = 'inline-flex';
     } else {
       activeControlCameraId = null;
-      if (liveVideoStream) {
-        liveVideoStream.srcObject = null;
-        liveVideoStream.style.display = 'none';
-      }
+      state.wirelessCamViewUrl = '';
+      setMonitorWcamIframe(liveWcamIframe, '');
+      setMonitorVideoStream(liveVideoStream, null);
       if (!state.cameraDisplaySectionOpen || !selectedViewfinderDeviceId) {
-        if (previewVideoStream) {
-          previewVideoStream.srcObject = null;
-          previewVideoStream.style.display = 'none';
-        }
+        setMonitorWcamIframe(previewWcamIframe, '');
+        setMonitorVideoStream(previewVideoStream, null);
       }
       if (labelCameraStatus) {
-        const count = (state.videoDevices || []).length;
+        const count = getAllCameraSources().length;
         labelCameraStatus.textContent = count > 0 ? ('Cameras: ' + count + ' Connected') : 'Cameras: None';
       }
       const statusCamInfo = document.getElementById('status-camera-info');
@@ -1619,6 +2129,7 @@
       cameraMode: state.cameraMode,
       cameraDeviceId: state.cameraDeviceId,
       cameraDeviceLabel: state.cameraDeviceLabel || '',
+      wirelessCamViewUrl: state.wirelessCamViewUrl || '',
       cameraOpacity: state.cameraOpacity,
       bannerText: state.bannerText,
       bannerActive: state.bannerActive,
@@ -1672,6 +2183,7 @@
       }
       if (liveCanvas) liveCanvas.style.filter = 'none';
       if (liveVideoStream) liveVideoStream.style.filter = 'none';
+      if (liveWcamIframe) liveWcamIframe.style.filter = 'none';
       if (liveScrim) liveScrim.style.opacity = '1';
     } else {
       if (liveDimmerOverlay) {
@@ -1681,6 +2193,7 @@
       const boostFilter = `brightness(${boostFactor}) contrast(${1 + (boostFactor - 1) * 0.15}) saturate(${1 + (boostFactor - 1) * 0.1})`;
       if (liveCanvas) liveCanvas.style.filter = boostFilter;
       if (liveVideoStream) liveVideoStream.style.filter = boostFilter;
+      if (liveWcamIframe) liveWcamIframe.style.filter = boostFilter;
       if (liveScrim) {
         const extraRatio = (bVal - 100) / 100;
         liveScrim.style.opacity = Math.max(0.15, 1 - extraRatio * 0.75);
@@ -3261,6 +3774,7 @@
     if (state.cameraEnabled || state.cameraMode !== 'none') {
       state.cameraMode = 'none';
       state.cameraEnabled = false;
+      state.wirelessCamViewUrl = '';
       if (previewVideoStream && previewVideoStream.srcObject) {
         previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
         previewVideoStream.srcObject = null;
@@ -3268,6 +3782,8 @@
       if (liveVideoStream) liveVideoStream.srcObject = null;
       if (previewVideoStream) previewVideoStream.style.display = 'none';
       if (liveVideoStream) liveVideoStream.style.display = 'none';
+      setMonitorWcamIframe(previewWcamIframe, '');
+      setMonitorWcamIframe(liveWcamIframe, '');
       activeControlCameraId = null;
       if (labelCameraStatus) labelCameraStatus.textContent = 'Camera: Standby';
       const statusCamInfo = document.getElementById('status-camera-info');
@@ -3358,6 +3874,7 @@
     if (state.cameraEnabled || state.cameraMode !== 'none') {
       state.cameraMode = 'none';
       state.cameraEnabled = false;
+      state.wirelessCamViewUrl = '';
       if (previewVideoStream && previewVideoStream.srcObject) {
         previewVideoStream.srcObject.getTracks().forEach(t => t.stop());
         previewVideoStream.srcObject = null;
@@ -3365,6 +3882,8 @@
       if (liveVideoStream) liveVideoStream.srcObject = null;
       if (previewVideoStream) previewVideoStream.style.display = 'none';
       if (liveVideoStream) liveVideoStream.style.display = 'none';
+      setMonitorWcamIframe(previewWcamIframe, '');
+      setMonitorWcamIframe(liveWcamIframe, '');
       activeControlCameraId = null;
       if (labelCameraStatus) labelCameraStatus.textContent = 'Camera: Standby';
     }
@@ -4026,8 +4545,9 @@
     const previewScrim = document.querySelector('#preview-screen-box .monitor-dark-scrim');
     const previewTextWrap = document.querySelector('#preview-screen-box .monitor-slide-text-wrap');
     const btnPushLive = document.getElementById('btn-push-live');
+    const hasAnyCam = getAllCameraSources().length > 0;
     const isShowingCleanCamInPreview = (
-      (state.cameraDisplaySectionOpen && (state.videoDevices || []).length > 0 && state.cameraMode !== 'background') ||
+      (state.cameraDisplaySectionOpen && hasAnyCam && state.cameraMode !== 'background') ||
       (state.cameraEnabled && state.cameraMode === 'preacher')
     );
     if (previewScrim) {
@@ -4058,10 +4578,10 @@
     if (btnModePres) btnModePres.classList.add('active');
     if (btnModeStudio) btnModeStudio.classList.remove('active');
 
-    // If camera is not live on TV, clear laptop Operator Preview video stream so slides are visible
-    if (!state.cameraEnabled && previewVideoStream) {
-      previewVideoStream.srcObject = null;
-      previewVideoStream.style.display = 'none';
+    // If camera is not live on TV, clear laptop Operator Preview video/iframe so slides are visible
+    if (!state.cameraEnabled) {
+      setMonitorWcamIframe(previewWcamIframe, '');
+      setMonitorVideoStream(previewVideoStream, null);
     }
     syncOperatorPreviewCameraOverlay();
     stopAllCameraCardStreams(true);
@@ -4100,25 +4620,16 @@
   // Previews the selected camera ONLY inside the top-left Operator Preview monitor on the laptop (never on TV!)
   async function setViewfinderCamera(deviceId, deviceLabel = '') {
     selectedViewfinderDeviceId = deviceId;
-    const devices = state.videoDevices || [];
-    const matchedDev = devices.find(d => d.deviceId === deviceId) || devices[0];
-    if (!matchedDev) return;
+    const allSources = getAllCameraSources();
+    const matchedSrc = allSources.find(s => s.id === deviceId) || allSources[0];
+    if (!matchedSrc) return;
 
-    try {
-      const stream = await acquireSharedCameraStream(matchedDev.deviceId);
-      if (previewVideoStream && stream) {
-        previewVideoStream.srcObject = stream;
-        previewVideoStream.style.display = 'block';
-        previewVideoStream.play().catch(() => {});
-      }
-    } catch (err) {
-      console.warn('Operator preview stream error:', err);
-    }
-
+    selectedViewfinderDeviceId = matchedSrc.id;
+    await bindSourceToMonitor(matchedSrc.id, 'preview');
     syncOperatorPreviewCameraOverlay();
 
     document.querySelectorAll('.camera-card').forEach(card => {
-      card.classList.toggle('selected-source', card.dataset.deviceId === matchedDev.deviceId);
+      card.classList.toggle('selected-source', card.dataset.deviceId === matchedSrc.id);
     });
     renderSidebarCameraList();
   }
@@ -4127,75 +4638,87 @@
     const camSection = document.getElementById('camera-display-section');
     if (!camSection || camSection.style.display === 'none') return;
 
+    ensureControlOfflineWcamSse();
+
     const metaLabel = document.getElementById('camera-display-meta');
     const btnRemoveTvToolbar = document.getElementById('btn-vf-remove-tv');
     const grid = document.getElementById('camera-multiview-grid');
 
-    const devices = state.videoDevices || [];
+    const sources = getAllCameraSources();
 
     if (metaLabel) {
-      metaLabel.textContent = devices.length + (devices.length === 1 ? ' Camera Connected' : ' Cameras Connected');
-      metaLabel.style.background = devices.length > 0 ? 'rgba(16, 185, 129, 0.18)' : 'rgba(255, 255, 255, 0.08)';
-      metaLabel.style.color = devices.length > 0 ? '#34d399' : '#94a3b8';
+      metaLabel.textContent = sources.length + (sources.length === 1 ? ' Camera Ready' : ' Cameras Ready');
+      metaLabel.style.background = sources.length > 0 ? 'rgba(16, 185, 129, 0.18)' : 'rgba(255, 255, 255, 0.08)';
+      metaLabel.style.color = sources.length > 0 ? '#34d399' : '#94a3b8';
     }
     if (btnRemoveTvToolbar) {
       btnRemoveTvToolbar.style.display = state.cameraEnabled ? 'inline-flex' : 'none';
     }
 
-    // Default-preview the first connected camera on the laptop Operator Preview monitor (does NOT send to TV!)
-    if (devices.length > 0) {
+    // Default-preview the active/selected source on Operator Preview monitor
+    if (sources.length > 0) {
       const preferredId = (state.cameraEnabled && state.cameraDeviceId)
         ? state.cameraDeviceId
-        : (devices.some(d => d.deviceId === selectedViewfinderDeviceId) ? selectedViewfinderDeviceId : devices[0].deviceId);
+        : (sources.some(s => s.id === selectedViewfinderDeviceId) ? selectedViewfinderDeviceId : sources[0].id);
       if (preferredId) {
         selectedViewfinderDeviceId = preferredId;
-        acquireSharedCameraStream(preferredId).then(stream => {
-          if (previewVideoStream && stream && state.cameraDisplaySectionOpen) {
-            previewVideoStream.srcObject = stream;
-            previewVideoStream.style.display = 'block';
-            previewVideoStream.play().catch(() => {});
-            syncOperatorPreviewCameraOverlay();
-          }
+        bindSourceToMonitor(preferredId, 'preview').then(() => {
+          syncOperatorPreviewCameraOverlay();
         }).catch(() => {});
       }
-    } else if (!state.cameraEnabled && previewVideoStream) {
-      previewVideoStream.srcObject = null;
-      previewVideoStream.style.display = 'none';
+    } else if (!state.cameraEnabled) {
+      setMonitorWcamIframe(previewWcamIframe, '');
+      setMonitorVideoStream(previewVideoStream, null);
     }
     syncOperatorPreviewCameraOverlay();
 
     if (!grid) return;
     grid.innerHTML = '';
 
-    if (devices.length === 0) {
+    if (sources.length === 0) {
       grid.innerHTML = `
         <div class="camera-empty-state-card">
           <div style="font-size: 2.2rem; line-height: 1;">📱</div>
           <div style="font-size: 1rem; font-weight: 800; color: #f8fafc;">No Connected Cameras Detected</div>
-          <p style="font-size: 0.8rem; color: #94a3b8; max-width: 460px; margin: 0 auto; line-height: 1.5;">
-            Open <strong>Iriun Webcam</strong> or <strong>Camo Studio</strong> on your phone and computer, or plug in a USB camera. As soon as your phone connects, its live video feed will appear here automatically.
+          <p style="font-size: 0.8rem; color: #94a3b8; max-width: 520px; margin: 0 auto; line-height: 1.5;">
+            Turn any iPhone or Android phone on the same Wi-Fi into a live camera with <strong>zero apps needed</strong>, or connect via <strong>Iriun Webcam</strong>, <strong>Camo Studio</strong>, or USB.
           </p>
-          <button id="btn-empty-scan" class="btn-fast" style="padding: 8px 20px; background: #10b981; color: #fff; font-weight: 800; border-color: #059669; margin-top: 4px; font-size: 0.8rem;">
-            🔄 Scan for Connected Cameras
-          </button>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px;">
+            <button id="btn-empty-wifi-cam" class="btn-fast" style="padding: 8px 18px; background: #0284c7; color: #fff; font-weight: 800; border-color: #38bdf8; font-size: 0.8rem;">
+              📱 Add Wi-Fi Phone Cam (No App)
+            </button>
+            <button id="btn-empty-scan" class="btn-fast" style="padding: 8px 18px; background: #10b981; color: #fff; font-weight: 800; border-color: #059669; font-size: 0.8rem;">
+              🔄 Scan for Hardware/Iriun
+            </button>
+          </div>
         </div>
       `;
+      const btnEmptyWifi = document.getElementById('btn-empty-wifi-cam');
+      if (btnEmptyWifi) btnEmptyWifi.addEventListener('click', () => {
+        const drawer = document.getElementById('wcam-setup-drawer');
+        const btnToggle = document.getElementById('btn-wcam-toggle');
+        state.wcamDrawerOpen = true;
+        if (drawer) drawer.style.display = 'flex';
+        if (btnToggle) btnToggle.classList.add('active');
+        refreshWcamSetupDrawer();
+      });
       const btnEmptyScan = document.getElementById('btn-empty-scan');
       if (btnEmptyScan) btnEmptyScan.addEventListener('click', () => enumerateVideoDevices(true));
       return;
     }
 
-    devices.forEach((dev, index) => {
-      const info = parseCameraDeviceInfo(dev, index);
-      const isLiveOnTv = state.cameraEnabled && (state.cameraDeviceId === dev.deviceId || state.cameraDeviceLabel === dev.label);
+    sources.forEach((src) => {
+      const isLiveOnTv = state.cameraEnabled && (state.cameraDeviceId === src.id || (src.rawLabel && state.cameraDeviceLabel === src.rawLabel));
       const isPreacherMode = isLiveOnTv && state.cameraMode === 'preacher';
       const isWorshipMode = isLiveOnTv && state.cameraMode === 'background';
-      const isSelectedInVf = selectedViewfinderDeviceId === dev.deviceId;
-      const frameStat = cameraFrameStats.get(dev.deviceId) || { isDarkPhone: false, res: '1280×720 HD' };
+      const isSelectedInVf = selectedViewfinderDeviceId === src.id;
+      const frameStat = src.kind === 'hardware'
+        ? (cameraFrameStats.get(src.id) || { isDarkPhone: false, res: '1280×720 HD' })
+        : { isDarkPhone: false, res: src.kind === 'vdo' ? 'Wi-Fi Zero-Cert' : 'Offline HTTPS' };
 
       const card = document.createElement('div');
       card.className = 'camera-card';
-      card.dataset.deviceId = dev.deviceId;
+      card.dataset.deviceId = src.id;
       if (isSelectedInVf) card.classList.add('selected-source');
       if (isLiveOnTv) card.classList.add(isPreacherMode ? 'live-on-tv' : 'live-worship-bg');
 
@@ -4205,11 +4728,11 @@
 
       const nameWrap = document.createElement('div');
       nameWrap.className = 'camera-card-title-group';
-      const icon = info.isIriun ? '📱' : (info.typeBadge.includes('Camo') ? '✨' : '📹');
+      const badgeClass = src.kind === 'vdo' ? 'camera-type-badge vdo' : (src.kind === 'offline' ? 'camera-type-badge offline' : 'camera-card-res-pill');
       nameWrap.innerHTML = `
-        <span class="camera-card-icon">${icon}</span>
-        <span class="camera-card-name">${escapeHtml(info.cleanName)}</span>
-        <span class="camera-card-res-pill">${escapeHtml(frameStat.res)}</span>
+        <span class="camera-card-icon">${src.icon}</span>
+        <span class="camera-card-name">${escapeHtml(src.cleanName)}</span>
+        <span class="${badgeClass}">${escapeHtml(frameStat.res)}</span>
       `;
 
       const badge = document.createElement('span');
@@ -4225,7 +4748,7 @@
         badge.textContent = '👁️ PREVIEWING';
       } else {
         badge.classList.add('ready');
-        badge.textContent = '🟢 CONNECTED';
+        badge.textContent = src.kind === 'vdo' ? '📡 READY / WAITING' : '🟢 CONNECTED';
       }
 
       topRow.appendChild(nameWrap);
@@ -4236,18 +4759,47 @@
       const videoWrap = document.createElement('div');
       videoWrap.className = 'camera-card-body-preview';
 
-      const cardVideo = document.createElement('video');
-      cardVideo.autoplay = true;
-      cardVideo.playsInline = true;
-      cardVideo.muted = true;
-      cardVideo.className = 'camera-card-video-thumb';
-      videoWrap.appendChild(cardVideo);
+      if (src.kind === 'vdo') {
+        const cardIframe = document.createElement('iframe');
+        cardIframe.className = 'camera-card-iframe';
+        cardIframe.src = getVdoViewUrl(src.slot);
+        cardIframe.allow = 'camera; microphone; autoplay; fullscreen';
+        cardIframe.style.pointerEvents = 'none';
+        videoWrap.appendChild(cardIframe);
+      } else {
+        const cardVideo = document.createElement('video');
+        cardVideo.autoplay = true;
+        cardVideo.playsInline = true;
+        cardVideo.muted = true;
+        cardVideo.className = 'camera-card-video-thumb' + (src.kind === 'offline' ? ' wcam-offline-video' : '');
+        if (src.kind === 'offline') cardVideo.dataset.wcamSlot = src.slot;
+        videoWrap.appendChild(cardVideo);
 
-      if (frameStat.isDarkPhone) {
-        const darkHint = document.createElement('div');
-        darkHint.className = 'camera-card-dark-hint';
-        darkHint.innerHTML = '📱 <strong>Phone Connected</strong> • Unlock phone or lift camera from desk to see live picture';
-        videoWrap.appendChild(darkHint);
+        if (src.kind === 'hardware' && frameStat.isDarkPhone) {
+          const darkHint = document.createElement('div');
+          darkHint.className = 'camera-card-dark-hint';
+          darkHint.innerHTML = '📱 <strong>Phone Connected</strong> • Unlock phone or lift camera from desk to see live picture';
+          videoWrap.appendChild(darkHint);
+        }
+
+        if (src.kind === 'hardware') {
+          acquireSharedCameraStream(src.id).then(stream => {
+            if (stream) {
+              cardVideo.srcObject = stream;
+              cardVideo.play().catch(() => {});
+            }
+          }).catch(err => {
+            console.warn('Card stream attach error:', err);
+          });
+        } else if (src.kind === 'offline') {
+          const cachedStream = offlineControlWcamStreams.get(src.slot);
+          if (cachedStream) {
+            cardVideo.srcObject = cachedStream;
+            cardVideo.play().catch(() => {});
+          } else {
+            startControlOfflineWcamPeer(src.slot).catch(() => {});
+          }
+        }
       }
 
       // 3. Action Buttons Footer
@@ -4260,7 +4812,7 @@
       btnPreview.title = 'Preview this camera in the top-left Operator Preview monitor (does not show on TV)';
       btnPreview.onclick = (e) => {
         e.stopPropagation();
-        setViewfinderCamera(dev.deviceId, dev.label);
+        setViewfinderCamera(src.id, src.rawLabel || src.cleanName);
         renderCameraDisplaySection();
       };
 
@@ -4273,7 +4825,7 @@
         if (isPreacherMode) {
           updateCameraMode('none');
         } else {
-          switchCameraSource(dev.deviceId, dev.label, 'preacher');
+          switchCameraSource(src.id, src.rawLabel || src.cleanName, 'preacher');
         }
       };
 
@@ -4286,7 +4838,7 @@
         if (isWorshipMode) {
           updateCameraMode('none');
         } else {
-          switchCameraSource(dev.deviceId, dev.label, 'background');
+          switchCameraSource(src.id, src.rawLabel || src.cleanName, 'background');
         }
       };
 
@@ -4294,25 +4846,34 @@
       footer.appendChild(btnAddTv);
       footer.appendChild(btnWorshipBg);
 
+      if (src.kind === 'vdo') {
+        const btnRemoveSlot = document.createElement('button');
+        btnRemoveSlot.className = 'btn-cam-card-action remove';
+        btnRemoveSlot.textContent = '✕';
+        btnRemoveSlot.title = `Remove Cam ${src.slot} slot from studio grid`;
+        btnRemoveSlot.onclick = (e) => {
+          e.stopPropagation();
+          if (state.cameraEnabled && state.cameraDeviceId === src.id) {
+            updateCameraMode('none');
+          }
+          state.activeVdoCamSlots = (state.activeVdoCamSlots || []).filter(s => s !== src.slot);
+          saveVdoCamSlots();
+          renderSidebarCameraList();
+          renderCameraDisplaySection();
+          refreshWcamSetupDrawer();
+        };
+        footer.appendChild(btnRemoveSlot);
+      }
+
       card.appendChild(videoWrap);
       card.appendChild(footer);
 
       card.addEventListener('click', () => {
-        setViewfinderCamera(dev.deviceId, dev.label);
+        setViewfinderCamera(src.id, src.rawLabel || src.cleanName);
         renderCameraDisplaySection();
       });
 
       grid.appendChild(card);
-
-      // Attach shared 1280x720 stream immediately (0ms delay, no duplicate getUserMedia!)
-      acquireSharedCameraStream(dev.deviceId).then(stream => {
-        if (stream) {
-          cardVideo.srcObject = stream;
-          cardVideo.play().catch(() => {});
-        }
-      }).catch(err => {
-        console.warn('Card stream attach error:', err);
-      });
     });
   }
 
@@ -4379,17 +4940,19 @@
       };
     });
 
-    const mappedCameras = (state.videoDevices || []).map((dev, idx) => {
-      const info = parseCameraDeviceInfo(dev, idx);
-      return {
-        id: dev.deviceId,
-        name: info.cleanName,
-        rawLabel: dev.label,
-        type: info.typeBadge,
-        camNumber: idx + 1,
-        isLive: !!(state.cameraEnabled && state.cameraDeviceId === dev.deviceId)
-      };
-    });
+    const mappedCameras = getAllCameraSources().map((src, idx) => ({
+      id: src.id,
+      name: src.cleanName,
+      rawLabel: src.rawLabel || src.cleanName,
+      type: src.typeBadge,
+      camNumber: src.camNumber || (idx + 1),
+      isLive: !!(state.cameraEnabled && state.cameraDeviceId === src.id)
+    }));
+
+    let wcamLiveSlot = '';
+    if (state.cameraEnabled && state.cameraDeviceId && (String(state.cameraDeviceId).startsWith('wcam-offline:') || String(state.cameraDeviceId).startsWith('wcam-vdo:'))) {
+      wcamLiveSlot = String(state.cameraDeviceId).split(':')[1] || '';
+    }
 
     const statusPayload = {
       activeItemTitle: state.activeItem ? state.activeItem.title : 'ZionCast Broadcast',
@@ -4415,6 +4978,7 @@
       meetCode: state.meetCode || '',
       meetCueText: state.meetCueText || '',
       meetCueTime: state.meetCueTime || 0,
+      wcamLiveSlot,
       stageMessage: stageAlertMessageText || '',
       stageMessageActive: !!stageAlertMessageActive,
       countdownActive: !!countdownProjected,
@@ -4886,6 +5450,12 @@
         showToast('Stage screen note cleared');
       } else if (action === 'cue-ack') {
         showToast(`✅ Videographer acknowledged cue: ${(data && data.text) || ''}`);
+      } else if (action === 'wcam-offline-changed') {
+        state.offlineWirelessCams = Array.isArray(data) ? data : (data && Array.isArray(data.cams) ? data.cams : []);
+        ensureControlOfflineWcamSse();
+        renderSidebarCameraList();
+        if (state.cameraDisplaySectionOpen) renderCameraDisplaySection();
+        syncRemoteStatus();
       }
     });
   }
@@ -6105,9 +6675,10 @@
     if (btnVfAddPreacher) {
       btnVfAddPreacher.addEventListener('click', () => {
         const devId = selectedViewfinderDeviceId || state.cameraDeviceId;
-        const dev = (state.videoDevices || []).find(d => d.deviceId === devId) || state.videoDevices[0];
-        if (dev) {
-          switchCameraSource(dev.deviceId, dev.label, 'preacher');
+        const allSrc = getAllCameraSources();
+        const src = allSrc.find(s => s.id === devId) || allSrc[0];
+        if (src) {
+          switchCameraSource(src.id, src.rawLabel || src.cleanName, 'preacher');
         } else {
           updateCameraMode('preacher');
         }
@@ -6118,9 +6689,10 @@
     if (btnVfAddWorship) {
       btnVfAddWorship.addEventListener('click', () => {
         const devId = selectedViewfinderDeviceId || state.cameraDeviceId;
-        const dev = (state.videoDevices || []).find(d => d.deviceId === devId) || state.videoDevices[0];
-        if (dev) {
-          switchCameraSource(dev.deviceId, dev.label, 'background');
+        const allSrc = getAllCameraSources();
+        const src = allSrc.find(s => s.id === devId) || allSrc[0];
+        if (src) {
+          switchCameraSource(src.id, src.rawLabel || src.cleanName, 'background');
         } else {
           updateCameraMode('background');
         }
@@ -6178,8 +6750,10 @@
 
     const btnCamViewRefresh = document.getElementById('btn-cam-view-refresh');
     if (btnCamViewRefresh) {
-      btnCamViewRefresh.addEventListener('click', () => {
+      btnCamViewRefresh.addEventListener('click', async () => {
+        await fetchWcamServerInfo();
         enumerateVideoDevices(true);
+        if (state.cameraDisplaySectionOpen) renderCameraDisplaySection();
         showToast('🔄 Rescanning connected cameras...');
       });
     }
@@ -6661,7 +7235,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.6.2';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.7.0';
         }
       } catch (err) {
         console.warn('Update check warning:', err);

@@ -5,19 +5,29 @@
  */
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const dgram = require('dgram');
 const { exec } = require('child_process');
 const QRCode = require('qrcode');
+const forge = require('node-forge');
 
 class RemoteServer {
   constructor() {
     this.server = null;
+    this.httpsServer = null;
     this.port = 3000;
+    this.httpsPort = 3443;
+    this.certDir = null;
+    this.certPem = '';
+    this.keyPem = '';
+    this.certIpsKey = '';
     this.isRunning = false;
     this.clients = new Set();
+    this.camSignalClients = new Set();
+    this.offlineCams = new Map();
     this.qrCodeDataUrl = '';
     this.qrCache = new Map();
     this.localIps = [];
@@ -220,15 +230,117 @@ class RemoteServer {
     }
   }
 
-  async init(onAction) {
+  ensureSelfSignedCert(ips = []) {
+    const cleanIps = Array.from(new Set(['127.0.0.1', ...ips.filter(ip => ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip))])).sort();
+    const ipsKey = cleanIps.join(',');
+    if (this.certPem && this.keyPem && this.certIpsKey === ipsKey) {
+      return { cert: this.certPem, key: this.keyPem };
+    }
+
+    const cacheFile = this.certDir ? path.join(this.certDir, 'zioncast-https-cert.json') : null;
+    if (cacheFile && fs.existsSync(cacheFile)) {
+      try {
+        const cached = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+        const missingIp = cleanIps.some(ip => !(cached.ips || []).includes(ip));
+        if (!missingIp && cached.cert && cached.key && cached.expiresAt > Date.now()) {
+          this.certPem = cached.cert;
+          this.keyPem = cached.key;
+          this.certIpsKey = ipsKey;
+          return { cert: this.certPem, key: this.keyPem };
+        }
+      } catch (_) {}
+    }
+
+    const pki = forge.pki;
+    const keys = pki.rsa.generateKeyPair(2048);
+    const cert = pki.createCertificate();
+    cert.publicKey = keys.publicKey;
+    cert.serialNumber = '01' + forge.util.bytesToHex(forge.random.getBytesSync(8));
+    const now = new Date();
+    cert.validity.notBefore = new Date(now.getTime() - 60000);
+    cert.validity.notAfter = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000 * 3);
+
+    const attrs = [
+      { name: 'commonName', value: 'ZionCast Wireless Camera Studio' },
+      { name: 'organizationName', value: 'ZionCast Presentation' }
+    ];
+    cert.setSubject(attrs);
+    cert.setIssuer(attrs);
+    cert.setExtensions([
+      { name: 'basicConstraints', cA: true },
+      { name: 'keyUsage', keyCertSign: true, digitalSignature: true, keyEncipherment: true, dataEncipherment: true },
+      { name: 'extKeyUsage', serverAuth: true },
+      {
+        name: 'subjectAltName',
+        altNames: [
+          { type: 2, value: 'localhost' },
+          ...cleanIps.map(ip => ({ type: 7, ip }))
+        ]
+      }
+    ]);
+    cert.sign(keys.privateKey, forge.md.sha256.create());
+
+    this.certPem = pki.certificateToPem(cert);
+    this.keyPem = pki.privateKeyToPem(keys.privateKey);
+    this.certIpsKey = ipsKey;
+
+    if (cacheFile) {
+      try {
+        fs.writeFileSync(cacheFile, JSON.stringify({
+          ips: cleanIps,
+          cert: this.certPem,
+          key: this.keyPem,
+          expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000 * 2
+        }), 'utf8');
+      } catch (_) {}
+    }
+    return { cert: this.certPem, key: this.keyPem };
+  }
+
+  async init(onAction, userDataDir = null) {
     this.onActionCallback = onAction;
+    if (userDataDir) this.certDir = userDataDir;
     const [routeIp, wifiSsid] = await Promise.all([
       this.getPrimaryRouteIp(),
       this.getWifiSsid()
     ]);
     this.networkCandidates = this.buildNetworkCandidates(routeIp, wifiSsid);
     this.localIps = this.networkCandidates.map(c => c.ip);
-    return this.startWithPortRetry(3000, 3010);
+    const httpOk = await this.startWithPortRetry(3000, 3010);
+    await this.startHttpsWithPortRetry(3443, 3453).catch(e => console.warn('[Remote HTTPS]', e));
+    return httpOk;
+  }
+
+  startHttpsWithPortRetry(startPort, maxPort) {
+    return new Promise((resolve) => {
+      let currentPort = startPort;
+      let creds;
+      try {
+        creds = this.ensureSelfSignedCert(this.localIps);
+      } catch (e) {
+        console.warn('[Remote HTTPS] Cert generation warning:', e);
+        return resolve(false);
+      }
+
+      const tryListen = () => {
+        const srv = https.createServer({ key: creds.key, cert: creds.cert }, (req, res) => this.handleRequest(req, res));
+        srv.on('error', (err) => {
+          if (err.code === 'EADDRINUSE' && currentPort < maxPort) {
+            currentPort++;
+            tryListen();
+          } else {
+            resolve(false);
+          }
+        });
+        srv.listen(currentPort, '0.0.0.0', () => {
+          this.httpsServer = srv;
+          this.httpsPort = currentPort;
+          console.log(`[Remote HTTPS Camera Server] Running on port ${this.httpsPort}`);
+          resolve(true);
+        });
+      };
+      tryListen();
+    });
   }
 
   startWithPortRetry(startPort, maxPort) {
@@ -272,6 +384,13 @@ class RemoteServer {
                 this.clients.delete(client);
               }
             }
+            for (const sc of this.camSignalClients) {
+              try {
+                sc.res.write(': ping\n\n');
+              } catch (_) {
+                this.camSignalClients.delete(sc);
+              }
+            }
           }, 3000);
 
           console.log(`[Remote Server] Running at ${primaryUrl} (bound to 0.0.0.0:${this.port})`);
@@ -294,6 +413,28 @@ class RemoteServer {
       type: 'status',
       data: this.currentStatus
     });
+    this.broadcastCamSignal({
+      type: 'tally-status',
+      status: {
+        meetCueText: this.currentStatus.meetCueText || '',
+        meetCueTime: this.currentStatus.meetCueTime || 0,
+        wcamLiveSlot: this.currentStatus.wcamLiveSlot || ''
+      }
+    });
+  }
+
+  broadcastCamSignal(msg) {
+    const payload = `data: ${JSON.stringify(msg)}\n\n`;
+    for (const sc of this.camSignalClients) {
+      try {
+        if (msg.targetRole && sc.role !== msg.targetRole) continue;
+        if (msg.targetRole === 'publisher' && msg.slot && sc.slot !== String(msg.slot)) continue;
+        if (msg.targetRole === 'viewer' && msg.viewerId && sc.viewerId !== msg.viewerId) continue;
+        sc.res.write(payload);
+      } catch (_) {
+        this.camSignalClients.delete(sc);
+      }
+    }
   }
 
   broadcastSSE(data) {
@@ -335,12 +476,16 @@ class RemoteServer {
     return {
       isRunning: this.isRunning,
       port: this.port,
+      httpsPort: this.httpsPort,
       primaryIp: activeIp,
       selectedIp: activeIp,
       wifiSsid: wifiSsid || '',
       localIps: this.localIps,
       networkCandidates: this.networkCandidates,
       primaryUrl,
+      offlineCamBaseUrl: `https://${activeIp}:${this.httpsPort}/cam`,
+      caCertUrl: `http://${activeIp}:${this.port}/zioncast-ca.crt`,
+      offlineCams: Array.from(this.offlineCams.values()),
       stageUrl: `http://${activeIp}:${this.port}/stage`,
       lowerThirdsUrl: `http://${activeIp}:${this.port}/lower-thirds`,
       connectedCount: this.clients.size,
@@ -374,6 +519,105 @@ class RemoteServer {
     }
 
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+
+    // 0. Wireless Wi-Fi Phone Camera Page (/cam) + CA Certificate + Offline WebRTC Signaling
+    if (url.pathname === '/zioncast-ca.crt' || url.pathname === '/zioncast-ca.cer') {
+      const creds = this.ensureSelfSignedCert(this.localIps);
+      res.writeHead(200, {
+        'Content-Type': 'application/x-x509-ca-cert',
+        'Content-Disposition': 'attachment; filename="ZionCast-Camera-Cert.crt"'
+      });
+      res.end(creds.cert);
+      return;
+    }
+
+    if (url.pathname === '/cam' || url.pathname === '/camera') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(this.getOfflineCamHtml());
+      return;
+    }
+
+    if (url.pathname === '/api/wcam-list' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, cams: Array.from(this.offlineCams.values()) }));
+      return;
+    }
+
+    if (url.pathname === '/api/cam-events') {
+      const role = url.searchParams.get('role') || 'viewer';
+      const slot = String(url.searchParams.get('slot') || '');
+      const viewerId = url.searchParams.get('viewerId') || '';
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'
+      });
+
+      const clientObj = { res, role, slot, viewerId };
+      this.camSignalClients.add(clientObj);
+
+      // Send current active wireless cams & status immediately
+      res.write(`data: ${JSON.stringify({
+        type: 'wcam-sync',
+        cams: Array.from(this.offlineCams.values()),
+        status: {
+          meetCueText: this.currentStatus.meetCueText || '',
+          meetCueTime: this.currentStatus.meetCueTime || 0,
+          wcamLiveSlot: this.currentStatus.wcamLiveSlot || ''
+        }
+      })}\n\n`);
+
+      req.on('close', () => {
+        this.camSignalClients.delete(clientObj);
+        if (role === 'publisher' && slot && this.offlineCams.has(slot)) {
+          this.offlineCams.delete(slot);
+          this.broadcastCamSignal({ type: 'cam-left', slot, cams: Array.from(this.offlineCams.values()) });
+          if (this.onActionCallback) {
+            this.onActionCallback('wcam-offline-changed', { cams: Array.from(this.offlineCams.values()) });
+          }
+        }
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/cam-signal' && req.method === 'POST') {
+      let body = '';
+      req.on('data', chunk => { body += chunk; });
+      req.on('end', () => {
+        try {
+          const msg = JSON.parse(body || '{}');
+          const slot = String(msg.slot || '1');
+          if (msg.type === 'hello') {
+            const camInfo = {
+              slot,
+              label: msg.label || `Wi-Fi Phone Cam ${slot}`,
+              connectedAt: Date.now()
+            };
+            this.offlineCams.set(slot, camInfo);
+            this.broadcastCamSignal({ type: 'cam-joined', slot, cam: camInfo, cams: Array.from(this.offlineCams.values()) });
+            if (this.onActionCallback) {
+              this.onActionCallback('wcam-offline-changed', { cams: Array.from(this.offlineCams.values()) });
+            }
+          } else if (msg.type === 'bye') {
+            this.offlineCams.delete(slot);
+            this.broadcastCamSignal({ type: 'cam-left', slot, cams: Array.from(this.offlineCams.values()) });
+            if (this.onActionCallback) {
+              this.onActionCallback('wcam-offline-changed', { cams: Array.from(this.offlineCams.values()) });
+            }
+          } else {
+            this.broadcastCamSignal(msg);
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true }));
+        } catch (err) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: err.message }));
+        }
+      });
+      return;
+    }
 
     // 1. Server-Sent Events (SSE) Stream
     if (url.pathname === '/api/events') {
@@ -3390,10 +3634,287 @@ renderCamerasUI(state);
 </html>`;
   }
 
+  getOfflineCamHtml() {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ZionCast Wi-Fi Phone Camera</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    html, body { width: 100%; height: 100%; background: #070b12; color: #f8fafc; overflow: hidden; }
+    .cam-root { display: flex; flex-direction: column; height: 100%; position: relative; }
+    .cam-top-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 14px; background: rgba(13, 19, 32, 0.92);
+      border-bottom: 1px solid rgba(255,255,255,0.1); z-index: 20;
+    }
+    .slot-pill {
+      font-size: 0.78rem; font-weight: 800; padding: 4px 10px; border-radius: 999px;
+      background: rgba(56, 189, 248, 0.16); border: 1px solid rgba(56, 189, 248, 0.45); color: #38bdf8;
+    }
+    .tally-pill {
+      font-size: 0.78rem; font-weight: 900; padding: 4px 12px; border-radius: 999px;
+      background: rgba(148, 163, 184, 0.16); border: 1px solid rgba(148, 163, 184, 0.3); color: #cbd5e1;
+    }
+    .tally-pill.on-air {
+      background: #dc2626; border-color: #f87171; color: #ffffff;
+      box-shadow: 0 0 18px rgba(239, 68, 68, 0.75);
+      animation: pulse-tally 1.1s infinite;
+    }
+    @keyframes pulse-tally { 0%,100% { opacity: 1; } 50% { opacity: 0.75; } }
+    .cam-stage {
+      flex: 1; position: relative; background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden;
+    }
+    .cam-stage.on-air-frame { box-shadow: inset 0 0 0 6px #ef4444; }
+    video#local-cam-video { width: 100%; height: 100%; object-fit: cover; }
+    .cue-overlay {
+      position: absolute; top: 12px; left: 12px; right: 12px; display: none;
+      padding: 12px 14px; border-radius: 10px;
+      background: rgba(220, 38, 38, 0.9); border: 2px solid #fbbf24;
+      color: #fff; font-weight: 900; font-size: 0.95rem; text-align: center;
+      box-shadow: 0 8px 26px rgba(0,0,0,0.65); z-index: 30;
+    }
+    .setup-box {
+      position: absolute; inset: 16px; margin: auto; max-width: 380px; height: fit-content;
+      background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 14px; padding: 18px; text-align: center; z-index: 25;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .cam-controls {
+      display: flex; align-items: center; gap: 8px; padding: 12px 14px;
+      background: rgba(13, 19, 32, 0.95); border-top: 1px solid rgba(255,255,255,0.1); z-index: 20;
+    }
+    .c-btn {
+      padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);
+      background: #1e293b; color: #f8fafc; font-weight: 700; font-size: 0.8rem; cursor: pointer;
+    }
+    .c-btn.primary { flex: 1; background: #10b981; color: #052e16; border-color: #34d399; font-weight: 900; }
+    .c-btn.stop { flex: 1; background: #ef4444; color: #fff; border-color: #f87171; }
+    .c-select {
+      padding: 10px 8px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);
+      background: #0f172a; color: #f8fafc; font-size: 0.78rem; font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="cam-root">
+    <div class="cam-top-bar">
+      <span id="cam-slot-badge" class="slot-pill">WI-FI CAM 1</span>
+      <span id="cam-tally-badge" class="tally-pill">STANDBY</span>
+    </div>
+
+    <div id="cam-stage" class="cam-stage">
+      <video id="local-cam-video" autoplay playsinline muted></video>
+      <div id="cam-cue-overlay" class="cue-overlay"></div>
+      <div id="cam-setup-box" class="setup-box">
+        <div style="font-size: 1.8rem;">📹</div>
+        <div style="font-size: 1rem; font-weight: 800;">ZionCast Offline Wi-Fi Camera</div>
+        <p id="cam-setup-msg" style="font-size: 0.78rem; color: #94a3b8; line-height: 1.45;">
+          Tap below to turn your phone into a live ZionCast camera over church Wi-Fi (no Iriun or Camo app needed).
+        </p>
+        <button id="btn-start-cam-big" class="c-btn primary" style="padding: 12px;">▶ Start Camera Feed</button>
+      </div>
+    </div>
+
+    <div class="cam-controls">
+      <button id="btn-flip-lens" class="c-btn">🔄 Rear</button>
+      <select id="sel-cam-res" class="c-select">
+        <option value="720">720p HD</option>
+        <option value="1080">1080p FHD</option>
+        <option value="480">480p Fast</option>
+      </select>
+      <button id="btn-toggle-stream" class="c-btn primary">▶ Go Live</button>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      var slot = String(params.get('slot') || '1');
+      var facingMode = 'environment';
+      var localStream = null;
+      var peers = {};
+      var sse = null;
+      var isStreaming = false;
+
+      var slotBadge = document.getElementById('cam-slot-badge');
+      var tallyBadge = document.getElementById('cam-tally-badge');
+      var camStage = document.getElementById('cam-stage');
+      var videoEl = document.getElementById('local-cam-video');
+      var cueOverlay = document.getElementById('cam-cue-overlay');
+      var setupBox = document.getElementById('cam-setup-box');
+      var setupMsg = document.getElementById('cam-setup-msg');
+      var btnStartBig = document.getElementById('btn-start-cam-big');
+      var btnToggle = document.getElementById('btn-toggle-stream');
+      var btnFlip = document.getElementById('btn-flip-lens');
+      var selRes = document.getElementById('sel-cam-res');
+
+      slotBadge.textContent = 'WI-FI CAM ' + slot;
+
+      function sendSignal(payload) {
+        return fetch('/api/cam-signal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).catch(function() {});
+      }
+
+      function updateTallyUI(status) {
+        if (!status) return;
+        var isLive = String(status.wcamLiveSlot || '') === slot;
+        tallyBadge.textContent = isLive ? '🔴 ON AIR (TV)' : (isStreaming ? '🟢 READY ON ZIONCAST' : 'STANDBY');
+        tallyBadge.className = 'tally-pill' + (isLive ? ' on-air' : '');
+        if (isLive) {
+          camStage.classList.add('on-air-frame');
+        } else {
+          camStage.classList.remove('on-air-frame');
+        }
+        if (status.meetCueText) {
+          cueOverlay.style.display = 'block';
+          cueOverlay.textContent = '📣 DIRECTOR CUE: ' + status.meetCueText;
+        } else {
+          cueOverlay.style.display = 'none';
+        }
+      }
+
+      async function handleOffer(msg) {
+        var viewerId = msg.viewerId;
+        if (!viewerId || !localStream) return;
+        if (peers[viewerId]) {
+          try { peers[viewerId].close(); } catch (_) {}
+        }
+        var pc = new RTCPeerConnection({ iceServers: [] });
+        peers[viewerId] = pc;
+        localStream.getTracks().forEach(function(track) {
+          pc.addTrack(track, localStream);
+        });
+        pc.onicecandidate = function(ev) {
+          if (ev.candidate) {
+            sendSignal({
+              type: 'ice',
+              targetRole: 'viewer',
+              viewerId: viewerId,
+              slot: slot,
+              candidate: ev.candidate
+            });
+          }
+        };
+        await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        var answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        await sendSignal({
+          type: 'answer',
+          targetRole: 'viewer',
+          viewerId: viewerId,
+          slot: slot,
+          sdp: pc.localDescription
+        });
+      }
+
+      function connectSignalSSE() {
+        if (sse) { try { sse.close(); } catch (_) {} }
+        sse = new EventSource('/api/cam-events?role=publisher&slot=' + encodeURIComponent(slot));
+        sse.onmessage = function(ev) {
+          try {
+            var msg = JSON.parse(ev.data);
+            if (msg.type === 'wcam-sync' || msg.type === 'tally-status') {
+              updateTallyUI(msg.status);
+            } else if (msg.type === 'offer') {
+              handleOffer(msg);
+            } else if (msg.type === 'ice' && msg.viewerId && peers[msg.viewerId] && msg.candidate) {
+              peers[msg.viewerId].addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(function() {});
+            }
+          } catch (_) {}
+        };
+        sse.onerror = function() {
+          try { sse.close(); } catch (_) {}
+          if (isStreaming) setTimeout(connectSignalSSE, 2000);
+        };
+      }
+
+      async function startCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setupBox.style.display = 'flex';
+          setupMsg.innerHTML = 'Camera blocked because this browser requires HTTPS.<br>On iPhone, download the 1-time certificate from ZionCast -> Trust in Settings -> Certificate Trust Settings.';
+          return;
+        }
+        var targetH = parseInt(selRes.value, 10) || 720;
+        var targetW = Math.round(targetH * 16 / 9);
+        if (localStream) {
+          localStream.getTracks().forEach(function(t) { t.stop(); });
+        }
+        try {
+          localStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: facingMode }, width: { ideal: targetW }, height: { ideal: targetH } },
+            audio: false
+          });
+          videoEl.srcObject = localStream;
+          await videoEl.play().catch(function() {});
+          isStreaming = true;
+          setupBox.style.display = 'none';
+          btnToggle.textContent = '⏹ Stop';
+          btnToggle.className = 'c-btn stop';
+          connectSignalSSE();
+          sendSignal({ type: 'hello', slot: slot, label: 'Wi-Fi Phone Cam ' + slot });
+          tallyBadge.textContent = '🟢 READY ON ZIONCAST';
+        } catch (err) {
+          setupBox.style.display = 'flex';
+          setupMsg.textContent = 'Camera error: ' + (err.message || err.name) + '. Make sure Chrome/Safari has Camera permission enabled.';
+        }
+      }
+
+      function stopCamera() {
+        isStreaming = false;
+        Object.keys(peers).forEach(function(k) {
+          try { peers[k].close(); } catch (_) {}
+        });
+        peers = {};
+        if (sse) { try { sse.close(); } catch (_) {} sse = null; }
+        if (localStream) {
+          localStream.getTracks().forEach(function(t) { t.stop(); });
+          localStream = null;
+        }
+        videoEl.srcObject = null;
+        setupBox.style.display = 'flex';
+        btnToggle.textContent = '▶ Go Live';
+        btnToggle.className = 'c-btn primary';
+        tallyBadge.textContent = 'STANDBY';
+        tallyBadge.className = 'tally-pill';
+        camStage.classList.remove('on-air-frame');
+        sendSignal({ type: 'bye', slot: slot });
+      }
+
+      btnStartBig.addEventListener('click', startCamera);
+      btnToggle.addEventListener('click', function() {
+        if (isStreaming) stopCamera(); else startCamera();
+      });
+      btnFlip.addEventListener('click', function() {
+        facingMode = facingMode === 'environment' ? 'user' : 'environment';
+        btnFlip.textContent = facingMode === 'environment' ? '🔄 Rear' : '🤳 Front';
+        if (isStreaming) startCamera();
+      });
+      selRes.addEventListener('change', function() {
+        if (isStreaming) startCamera();
+      });
+      window.addEventListener('beforeunload', function() {
+        if (isStreaming) sendSignal({ type: 'bye', slot: slot });
+      });
+    })();
+  </script>
+</body>
+</html>`;
+  }
+
   stop() {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
+    }
+    if (this.httpsServer) {
+      this.httpsServer.close();
+      this.httpsServer = null;
     }
     if (this.server) {
       this.server.close();

@@ -54,6 +54,7 @@ let currentDisplayState = {
   cameraMode: 'none',
   cameraDeviceId: '',
   cameraOpacity: 0.85,
+  wirelessCamViewUrl: '',
   bannerText: '',
   bannerActive: false,
   brightness: 100
@@ -431,12 +432,21 @@ app.whenReady().then(async () => {
     callback({ cancel: false });
   });
 
+  // Allow local Electron requests to ZionCast's local offline HTTPS camera port without prompt
+  app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+    if (url && (url.startsWith('https://127.0.0.1:') || url.startsWith('https://localhost:'))) {
+      event.preventDefault();
+      return callback(true);
+    }
+    callback(false);
+  });
+
   // Initialize Mobile Remote & Local YouTube Embed Server BEFORE opening windows so port is ready
   await remoteServer.init((action, data) => {
     if (controlWindow && !controlWindow.isDestroyed()) {
       controlWindow.webContents.send('remote-action', { action, data });
     }
-  });
+  }, app.getPath('userData'));
   currentDisplayState.remotePort = remoteServer.port || 3000;
 
   createControlWindow();
@@ -561,10 +571,12 @@ ipcMain.handle('fix-windows-firewall', async () => {
     // 4. Adds inbound Program Allow rule for ZionCast.exe on ALL profiles (profile=any)
     const cmdArgs = [
       'netsh advfirewall firewall delete rule name="ZionCast Remote"',
+      'netsh advfirewall firewall delete rule name="ZionCast Wireless Cam HTTPS"',
       'netsh advfirewall firewall delete rule name="ZionCast Remote App"',
       'netsh advfirewall firewall set rule name="ZionCast" new action=allow profile=any enable=yes',
       'netsh advfirewall firewall set rule name="zioncast.exe" new action=allow profile=any enable=yes',
       'netsh advfirewall firewall add rule name="ZionCast Remote" dir=in action=allow protocol=TCP localport=3000-3020 profile=any',
+      'netsh advfirewall firewall add rule name="ZionCast Wireless Cam HTTPS" dir=in action=allow protocol=TCP localport=3443-3453 profile=any',
       `netsh advfirewall firewall add rule name="ZionCast Remote App" dir=in action=allow program="${exePath}" profile=any`
     ].join(' & ');
 

@@ -70,7 +70,7 @@
         </button>
         <button id="btn-check-updates" class="btn-header-neutral btn-version-pill" title="Check GitHub for latest ZionCast updates">
           <span id="update-badge-icon">🔄</span>
-          <span id="update-badge-text">v1.6.2</span>
+          <span id="update-badge-text">v1.7.0</span>
         </button>
       </div>
     </div>
@@ -341,6 +341,7 @@
           <div class="monitor-screen-area" id="preview-screen-box">
             <canvas id="preview-canvas" class="monitor-bg-canvas"></canvas>
             <video id="preview-video-stream" class="monitor-video-stream" autoplay playsinline muted></video>
+            <iframe id="preview-wcam-iframe" class="monitor-wcam-iframe" src="" allow="camera; microphone; autoplay; fullscreen"></iframe>
             <div id="preview-youtube-overlay" class="monitor-youtube-overlay">
               <img id="preview-youtube-thumb" class="monitor-youtube-thumb" alt="YouTube Stream Preview">
               <div class="monitor-youtube-badge"><span class="live-pulse-dot"></span> YOUTUBE STREAM</div>
@@ -368,6 +369,7 @@
             <canvas id="live-canvas" class="monitor-bg-canvas"></canvas>
             <video id="live-media-video" class="monitor-video-stream" playsinline loop preload="metadata" style="display: none;"></video>
             <video id="live-video-stream" class="monitor-video-stream" autoplay playsinline muted></video>
+            <iframe id="live-wcam-iframe" class="monitor-wcam-iframe" src="" allow="camera; microphone; autoplay; fullscreen"></iframe>
             <div id="live-youtube-overlay" class="monitor-youtube-overlay">
               <img id="live-youtube-thumb" class="monitor-youtube-thumb" alt="YouTube Live Stream">
               <div class="monitor-youtube-badge"><span class="live-pulse-dot"></span> LIVE ON TV</div>
@@ -451,12 +453,59 @@
             <button id="btn-vf-remove-tv" class="btn-fast" style="display: none; padding: 5px 12px; font-size: 0.75rem; background: #ef4444; color: #fff; border-color: #f87171; font-weight: 800;" title="Take camera off the TV immediately">
               ⏹️ Take Camera Off TV
             </button>
+            <button id="btn-wcam-toggle" class="btn-fast btn-wcam-toggle" style="padding: 5px 12px; font-size: 0.75rem;" title="Connect iPhone/Android phone cameras over Wi-Fi without Iriun or Camo">
+              📱 Add Wi-Fi Phone Cam
+            </button>
             <button id="btn-cam-view-refresh" class="btn-fast" style="padding: 5px 12px; font-size: 0.75rem; font-weight: 700;" title="Rescan for Connected Cameras">
               🔄 Rescan Cameras
             </button>
             <button id="btn-cam-view-close" class="btn-fast" style="padding: 5px 12px; font-size: 0.75rem;" title="Switch back to Presentation Slides">
               🖥️ Presentation Mode
             </button>
+          </div>
+        </div>
+
+        <!-- Collapsible Wireless Wi-Fi Phone Camera Setup Drawer (Dual-Mode Option B + Option A) -->
+        <div id="wcam-setup-drawer" class="wcam-setup-drawer" style="display: none;">
+          <div class="wcam-qr-panel">
+            <div id="wcam-qr-box" class="wcam-qr-box"></div>
+            <div id="wcam-qr-caption" class="wcam-qr-caption">Scan with Phone Camera</div>
+          </div>
+          <div class="wcam-config-panel">
+            <div class="wcam-header-row">
+              <span class="wcam-title">📱 Wireless Wi-Fi Phone Camera (No Iriun / No Camo)</span>
+              <div class="wcam-mode-pills">
+                <button id="btn-wcam-mode-vdo" class="wcam-mode-pill active" type="button" title="Zero certificates, works instantly in Safari/Chrome and switches to direct local Wi-Fi P2P">Zero-Cert Wi-Fi (Default)</button>
+                <button id="btn-wcam-mode-offline" class="wcam-mode-pill" type="button" title="100% offline local Wi-Fi server — zero internet required">100% Offline Local HTTPS</button>
+              </div>
+            </div>
+            <div id="wcam-mode-desc" class="wcam-mode-desc">
+              <strong>Zero-Cert Mode:</strong> Phone only needs brief internet to start, then video streams direct over your church Wi-Fi. No app, no cables, no certificate prompt.
+            </div>
+            <div class="wcam-controls-row">
+              <span style="font-size: 0.72rem; font-weight: 700; color: #94a3b8;">Camera Slot:</span>
+              <div class="wcam-slot-pills">
+                <button class="wcam-slot-pill active" type="button" data-wcam-slot="1">Cam 1</button>
+                <button class="wcam-slot-pill" type="button" data-wcam-slot="2">Cam 2</button>
+                <button class="wcam-slot-pill" type="button" data-wcam-slot="3">Cam 3</button>
+                <button class="wcam-slot-pill" type="button" data-wcam-slot="4">Cam 4</button>
+              </div>
+              <button id="btn-wcam-activate-slot" class="btn-fast" type="button" style="padding: 4px 11px; font-size: 0.72rem; background: #10b981; color: #fff; border-color: #059669; font-weight: 800;">
+                + Activate Slot in Grid
+              </button>
+            </div>
+            <div class="wcam-url-row">
+              <input id="wcam-url-input" class="wcam-url-input" type="text" readonly value="">
+              <button id="btn-wcam-copy-url" class="btn-fast" type="button" style="padding: 5px 10px; font-size: 0.72rem; font-weight: 700;">📋 Copy Link</button>
+              <button id="btn-wcam-open-tab" class="btn-fast" type="button" style="padding: 5px 10px; font-size: 0.72rem;">🔗 Open Test</button>
+            </div>
+            <div id="wcam-offline-box" class="wcam-offline-box" style="display: none;">
+              <span>🔒 <strong>Offline Mode (Zero Internet):</strong> If Safari/Chrome shows a privacy warning, tap <em>Advanced → Proceed</em>, or install this 1-time certificate on iPhone/Android:</span>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <button id="btn-wcam-copy-cert" class="btn-fast" type="button" style="padding: 4px 9px; font-size: 0.68rem; font-weight: 700;">📄 Copy Cert URL</button>
+                <button id="btn-wcam-open-cert" class="btn-fast" type="button" style="padding: 4px 9px; font-size: 0.68rem; background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.45); color: #fde68a; font-weight: 700;">⬇️ Open Cert Link</button>
+              </div>
+            </div>
           </div>
         </div>
 

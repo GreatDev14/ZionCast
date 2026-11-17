@@ -1924,6 +1924,25 @@ body.studio-mode .studio-comms-panel {
   opacity: 1;
 }
 
+.display-wcam-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000;
+  z-index: 3;
+  display: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease-in-out, filter 0.05s linear;
+}
+
+.display-wcam-layer.camera-active {
+  opacity: 1;
+}
+
 /* Legibility Dimmer Overlay */
 .display-scrim-layer {
   position: absolute;
@@ -4258,4 +4277,242 @@ body.studio-mode .studio-comms-panel {
   padding: 2px 8px;
   border-radius: 999px;
   white-space: nowrap;
+}
+
+.monitor-wcam-iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000;
+  pointer-events: none;
+  display: none;
+}
+
+/* =========================================================================
+   V1.7.0 WIRELESS WI-FI PHONE CAMERA SETUP DRAWER & HYBRID CARDS
+   ========================================================================= */
+.btn-wcam-toggle {
+  background: rgba(14, 165, 233, 0.14) !important;
+  color: #38bdf8 !important;
+  border-color: rgba(56, 189, 248, 0.38) !important;
+  font-weight: 800 !important;
+}
+
+.btn-wcam-toggle.active,
+.btn-wcam-toggle:hover {
+  background: rgba(14, 165, 233, 0.25) !important;
+  border-color: #38bdf8 !important;
+  color: #ffffff !important;
+}
+
+.wcam-setup-drawer {
+  background: #0d1322;
+  border: 1px solid rgba(56, 189, 248, 0.26);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.wcam-qr-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.wcam-qr-box {
+  width: 118px;
+  height: 118px;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.wcam-qr-box canvas,
+.wcam-qr-box img {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+.wcam-qr-caption {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.wcam-config-panel {
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wcam-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wcam-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wcam-mode-pills {
+  display: inline-flex;
+  background: #080c16;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.wcam-mode-pill {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.wcam-mode-pill.active {
+  background: #0ea5e9;
+  color: #ffffff;
+}
+
+.wcam-mode-desc {
+  font-size: 0.72rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.wcam-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wcam-slot-pills {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.wcam-slot-pill {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #141c2f;
+  color: #cbd5e1;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.wcam-slot-pill.active {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: #10b981;
+  color: #34d399;
+}
+
+.wcam-url-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.wcam-url-input {
+  flex: 1;
+  min-width: 210px;
+  background: #080c16;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #38bdf8;
+  font-size: 0.72rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  padding: 5px 9px;
+  border-radius: 6px;
+}
+
+.wcam-offline-box {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.7rem;
+  color: #fde68a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.camera-card-iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000;
+  display: block;
+}
+
+.camera-type-badge {
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.camera-type-badge.vdo {
+  background: rgba(14, 165, 233, 0.22);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+}
+
+.camera-type-badge.offline {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+}
+
+.btn-cam-card-action.remove {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  background: rgba(239, 68, 68, 0.14);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.btn-cam-card-action.remove:hover {
+  background: #ef4444;
+  color: #ffffff;
 }
