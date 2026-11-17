@@ -1002,6 +1002,21 @@ ipcMain.handle('check-for-updates', async () => {
 // GOOGLE MEET CREW COMMS SESSION & QR GENERATOR
 // ============================================================================
 const CHROME_MEET_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+const FIREFOX_AUTH_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0';
+
+function isGoogleAuthUrl(rawUrl) {
+  if (!rawUrl) return false;
+  try {
+    const u = new URL(rawUrl);
+    return (
+      u.hostname === 'accounts.google.com' ||
+      u.hostname.endsWith('.accounts.google.com') ||
+      u.hostname === 'accounts.youtube.com'
+    );
+  } catch (_) {
+    return false;
+  }
+}
 
 function isTrustedMeetUrl(rawUrl) {
   if (!rawUrl) return false;
@@ -1023,7 +1038,17 @@ function setupGoogleMeetSession() {
   meetSession.setUserAgent(CHROME_MEET_UA);
 
   meetSession.webRequest.onBeforeSendHeaders((details, callback) => {
-    details.requestHeaders['User-Agent'] = CHROME_MEET_UA;
+    if (isGoogleAuthUrl(details.url)) {
+      // Use Firefox Desktop UA + strip Chromium Client Hints so Google OAuth does not flag Electron
+      details.requestHeaders['User-Agent'] = FIREFOX_AUTH_UA;
+      Object.keys(details.requestHeaders).forEach((k) => {
+        if (k.toLowerCase().startsWith('sec-ch-ua')) {
+          delete details.requestHeaders[k];
+        }
+      });
+    } else {
+      details.requestHeaders['User-Agent'] = CHROME_MEET_UA;
+    }
     callback({ cancel: false, requestHeaders: details.requestHeaders });
   });
 
@@ -1087,8 +1112,27 @@ ipcMain.handle('open-meet-auth-window', () => {
       nodeIntegration: false
     }
   });
-  authWin.webContents.setUserAgent(CHROME_MEET_UA);
-  authWin.loadURL('https://accounts.google.com/ServiceLogin?continue=https://meet.google.com/');
+  authWin.webContents.setUserAgent(FIREFOX_AUTH_UA);
+  authWin.webContents.on('dom-ready', () => {
+    authWin.webContents.executeJavaScript(`
+      try {
+        Object.defineProperty(navigator, 'userAgentData', { get: () => undefined, configurable: true });
+      } catch (_) {}
+    `).catch(() => {});
+  });
+  authWin.webContents.on('did-navigate', (event, navUrl) => {
+    if (navUrl && navUrl.startsWith('https://meet.google.com')) {
+      if (controlWindow && !controlWindow.isDestroyed()) {
+        controlWindow.webContents.send('meet-auth-complete', navUrl);
+      }
+      setTimeout(() => {
+        if (!authWin.isDestroyed()) authWin.close();
+      }, 400);
+    }
+  });
+  authWin.loadURL('https://accounts.google.com/ServiceLogin?continue=https://meet.google.com/landing', {
+    userAgent: FIREFOX_AUTH_UA
+  });
   return { success: true };
 });
 

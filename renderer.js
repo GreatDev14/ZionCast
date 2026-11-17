@@ -6650,7 +6650,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.5.1';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.5.2';
         }
       } catch (err) {
         console.warn('Update check warning:', err);
@@ -6857,6 +6857,27 @@
       btnShowRawMeet.addEventListener('click', () => {
         hideWelcomeOverlay();
         try { webview.loadURL('https://meet.google.com/landing'); } catch (_) {}
+      });
+    }
+
+    const btnOpenBrowser = document.getElementById('btn-meet-open-browser');
+    if (btnOpenBrowser) {
+      btnOpenBrowser.addEventListener('click', () => {
+        const target = state.meetUrl || 'https://meet.google.com/new';
+        if (window.zionApi && window.zionApi.openExternalUrl) {
+          window.zionApi.openExternalUrl(target);
+        } else {
+          window.open(target, '_blank');
+        }
+        showToast('🌐 Opened Google Meet in your browser (laptop only, off Church TV)');
+      });
+    }
+
+    if (window.zionApi && window.zionApi.onMeetAuthComplete) {
+      window.zionApi.onMeetAuthComplete((navUrl) => {
+        hideWelcomeOverlay();
+        try { webview.loadURL(navUrl || 'https://meet.google.com/landing'); } catch (_) {}
+        showToast('✅ Google Account signed in! You can now click + New Room.');
       });
     }
 
