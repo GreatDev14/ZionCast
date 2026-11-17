@@ -4884,6 +4884,8 @@
         stageAlertMessageActive = false;
         syncRemoteStatus();
         showToast('Stage screen note cleared');
+      } else if (action === 'cue-ack') {
+        showToast(`✅ Videographer acknowledged cue: ${(data && data.text) || ''}`);
       }
     });
   }
@@ -6659,7 +6661,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.6.1';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.6.2';
         }
       } catch (err) {
         console.warn('Update check warning:', err);
@@ -6902,9 +6904,19 @@
         state.meetCueTime = Date.now();
         syncRemoteStatus();
         try { navigator.clipboard.writeText(cue); } catch (_) {}
-        showToast(`📣 Sent cue to Videographers: ${cue}`);
+        showToast(`📣 Flashed cue to Crew Phone Remotes: ${cue}`);
       });
     });
+
+    const btnClearCue = document.getElementById('btn-meet-clear-cue');
+    if (btnClearCue) {
+      btnClearCue.addEventListener('click', () => {
+        state.meetCueText = '';
+        state.meetCueTime = 0;
+        syncRemoteStatus();
+        showToast('Cleared active director cue from phone remotes');
+      });
+    }
   }
 
   // Utility escape HTML

@@ -1307,6 +1307,30 @@ class RemoteServer {
       opacity: 1;
       transform: translateX(-50%) translateY(0);
     }
+
+    #remote-director-cue-banner {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 8px 12px 2px 12px;
+      padding: 11px 13px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(220, 38, 38, 0.28), rgba(245, 158, 11, 0.25));
+      border: 2px solid #fbbf24;
+      color: #ffffff;
+      box-shadow: 0 0 22px rgba(245, 158, 11, 0.45);
+      animation: cue-flash-pulse 1.1s ease-in-out infinite;
+    }
+
+    #remote-director-cue-banner.visible {
+      display: flex;
+    }
+
+    @keyframes cue-flash-pulse {
+      0%, 100% { border-color: #fbbf24; box-shadow: 0 0 18px rgba(245, 158, 11, 0.4); }
+      50% { border-color: #f87171; box-shadow: 0 0 26px rgba(239, 68, 68, 0.65); }
+    }
   </style>
 </head>
 <body>
@@ -1337,6 +1361,15 @@ class RemoteServer {
     <button class="remote-tab-btn" data-tab="bible">📖 Bible</button>
     <button class="remote-tab-btn" data-tab="tools">🛠️ Tools</button>
   </nav>
+
+  <!-- High-Visibility Flashing Director Cue Banner (Visible on ALL Tabs) -->
+  <div id="remote-director-cue-banner" role="alert">
+    <div style="flex: 1; min-width: 0;">
+      <div style="font-size: 0.62rem; font-weight: 900; letter-spacing: 0.08em; color: #fde68a; text-transform: uppercase;">📣 LIVE DIRECTOR CUE</div>
+      <div id="remote-director-cue-text" style="font-size: 0.9rem; font-weight: 800; color: #ffffff; margin-top: 2px; line-height: 1.3;"></div>
+    </div>
+    <button id="btn-ack-director-cue" style="flex-shrink: 0; padding: 7px 11px; border-radius: 7px; border: 1px solid #34d399; background: #10b981; color: #052e16; font-size: 0.74rem; font-weight: 900; cursor: pointer;">✓ Got It</button>
+  </div>
 
   <main class="remote-content">
 
@@ -2525,6 +2558,8 @@ renderCamerasUI(state);
         var meetCodeEl = document.getElementById('remote-meet-code');
         var meetJoinBtn = document.getElementById('btn-remote-join-meet');
         var meetCueBox = document.getElementById('remote-meet-cue-box');
+        var directorBanner = document.getElementById('remote-director-cue-banner');
+        var directorCueText = document.getElementById('remote-director-cue-text');
         if (meetCard) {
           if (state.meetUrl) {
             meetCard.style.display = 'flex';
@@ -2534,13 +2569,41 @@ renderCamerasUI(state);
             meetCard.style.display = 'none';
           }
         }
-        if (meetCueBox && state.meetCueText) {
-          meetCueBox.style.display = 'block';
-          meetCueBox.textContent = state.meetCueText;
+        if (state.meetCueText) {
+          if (meetCueBox) {
+            meetCueBox.style.display = 'block';
+            meetCueBox.textContent = state.meetCueText;
+          }
+          var isAcked = state.meetCueTime && window.__ackedCueTime === state.meetCueTime;
+          if (directorBanner && directorCueText && !isAcked) {
+            directorCueText.textContent = state.meetCueText;
+            directorBanner.classList.add('visible');
+          } else if (directorBanner && isAcked) {
+            directorBanner.classList.remove('visible');
+          }
           if (state.meetCueTime && window.__lastMeetCueTime !== state.meetCueTime) {
             window.__lastMeetCueTime = state.meetCueTime;
+            try {
+              if (navigator.vibrate && navigator.userActivation && navigator.userActivation.hasBeenActive) {
+                navigator.vibrate([120, 60, 120]);
+              }
+            } catch (_) {}
             showToast(state.meetCueText);
           }
+        } else {
+          if (meetCueBox) meetCueBox.style.display = 'none';
+          if (directorBanner) directorBanner.classList.remove('visible');
+        }
+
+        var btnAckCue = document.getElementById('btn-ack-director-cue');
+        if (btnAckCue && !btnAckCue.__bound) {
+          btnAckCue.__bound = true;
+          btnAckCue.addEventListener('click', function() {
+            window.__ackedCueTime = (currentAppState && currentAppState.meetCueTime) || window.__lastMeetCueTime || Date.now();
+            if (directorBanner) directorBanner.classList.remove('visible');
+            sendAction('cue-ack', { text: (currentAppState && currentAppState.meetCueText) || '' });
+            showToast('✓ Acknowledged to ZionCast operator');
+          });
         }
       }
 
