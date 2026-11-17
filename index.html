@@ -155,7 +155,7 @@
 
 <button id="btn-check-updates" class="btn-fast" style="padding: 5px 9px; font-size: 0.74rem; display: flex; align-items: center; gap: 5px; color: var(--accent-gold); border-color: rgba(245, 158, 11, 0.35);" title="Check GitHub for latest ZionCast updates">
         <span id="update-badge-icon">🔄</span>
-        <span id="update-badge-text">v1.5.0</span>
+        <span id="update-badge-text">v1.5.1</span>
       </button>
     </div>
   </header>
@@ -1381,82 +1381,125 @@ My chains are gone, I've been set free..."></textarea>
 
   <!-- ================= 12. GOOGLE MEET CREW COMMS STUDIO DRAWER (LAPTOP ONLY) ================= -->
   <div id="crew-meet-drawer" class="crew-meet-drawer">
+    <!-- Clean Single-Line Header -->
     <div class="crew-meet-header">
       <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
         <span class="remote-pulse-dot"></span>
-        <span style="font-weight: 800; font-size: 0.88rem; color: #f8fafc; white-space: nowrap;">📞 Crew Comms (Google Meet)</span>
-        <span id="meet-status-pill" class="meet-status-pill">Laptop Headset Only • Off TV</span>
+        <span style="font-weight: 800; font-size: 0.9rem; color: #f8fafc; white-space: nowrap;">📞 Crew Meet</span>
+        <span id="meet-code-badge" class="meet-status-pill">Ready</span>
       </div>
-      <div style="display: flex; align-items: center; gap: 6px;">
-        <button id="btn-meet-signin" class="btn-fast" style="padding: 4px 9px; font-size: 0.72rem; color: #38bdf8; border-color: rgba(56, 189, 248, 0.35);" title="Sign into your Google Account (saved permanently)">
-          🔑 Google Sign-In
+      <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+        <button id="btn-meet-mini" class="btn-fast" style="padding: 4px 10px; font-size: 0.72rem; color: #fbbf24; border-color: rgba(245, 158, 11, 0.38); white-space: nowrap;" title="Collapse into a small floating bar while keeping your voice call live">
+          🗕 Mini
         </button>
-        <button id="btn-meet-mini" class="btn-fast" style="padding: 4px 9px; font-size: 0.72rem; color: #fbbf24; border-color: rgba(245, 158, 11, 0.35);" title="Minimize to floating bar while keeping voice call active">
-          🗕 Mini Mode
-        </button>
-        <button id="btn-meet-close" class="modal-close-btn" style="font-size: 1.25rem; padding: 0 6px;" title="Hide Crew Meet Panel (Call stays connected)">&times;</button>
+        <button id="btn-meet-close" class="modal-close-btn" style="font-size: 1.25rem; padding: 0 6px;" title="Hide Panel (Voice call stays connected)">&times;</button>
       </div>
     </div>
 
-    <!-- Meeting Link & Videographer Join Bar -->
+    <!-- Clean 2-Row Action Bar -->
     <div class="crew-meet-toolbar">
+      <!-- Row 1: Join or Create Room -->
       <div style="display: flex; gap: 6px; align-items: center; width: 100%;">
-        <input type="text" id="meet-link-input" class="form-input" style="flex: 1; font-size: 0.76rem; padding: 6px 10px;" placeholder="Paste Meet link or code (e.g. abc-defg-hij) or click + New Meet...">
-        <button id="btn-meet-join-link" class="btn-primary" style="padding: 6px 11px; font-size: 0.74rem; font-weight: 800; white-space: nowrap;">Join / Save</button>
-        <button id="btn-meet-new" class="btn-fast" style="padding: 6px 10px; font-size: 0.74rem; font-weight: 700; color: #34d399; border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.14); white-space: nowrap;" title="Start a brand-new Google Meet room">+ New Meet</button>
+        <input type="text" id="meet-link-input" class="form-input" style="flex: 1; font-size: 0.78rem; padding: 7px 10px;" placeholder="Paste Meet code or link (e.g. abc-defg-hij)...">
+        <button id="btn-meet-join-link" class="btn-primary" style="padding: 7px 13px; font-size: 0.76rem; font-weight: 800; white-space: nowrap;">Join</button>
+        <button id="btn-meet-new" class="btn-fast" style="padding: 7px 11px; font-size: 0.76rem; font-weight: 700; color: #34d399; border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.14); white-space: nowrap;" title="Start a new Google Meet room">+ New Room</button>
       </div>
 
-      <!-- Videographer Invite + Headset Routing + Cam Safety Row -->
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; width: 100%;">
-        <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
-          <span id="meet-code-badge" style="font-family: monospace; font-size: 0.74rem; font-weight: 800; color: var(--accent-gold); background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.35); padding: 3px 8px; border-radius: 5px;">No Active Room</span>
-          <button id="btn-meet-show-qr" class="btn-fast" style="padding: 4px 8px; font-size: 0.71rem; font-weight: 700; color: #f8fafc;" title="Show QR Code for Videographers to scan with phone">📷 QR</button>
-          <button id="btn-meet-copy-link" class="btn-fast" style="padding: 4px 8px; font-size: 0.71rem; font-weight: 700;" title="Copy Meet link">📋 Copy</button>
-          <button id="btn-meet-whatsapp" class="btn-fast" style="padding: 4px 8px; font-size: 0.71rem; font-weight: 700; color: #4ade80; border-color: rgba(74, 222, 128, 0.35);" title="Share link to Videographers WhatsApp group">💬 WhatsApp</button>
-        </div>
+      <!-- Row 2: 4 Clean Controls -->
+      <div class="crew-meet-pill-row">
+        <button id="btn-meet-signin" class="btn-fast meet-pill-btn" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.35);" title="Sign in once with your free Gmail account">
+          🔑 Sign In
+        </button>
+        <button id="btn-meet-show-qr" class="btn-fast meet-pill-btn" style="color: #fbbf24; border-color: rgba(245, 158, 11, 0.4);" title="Show QR Code, Copy Link, or Share on WhatsApp to Videographers">
+          📤 Invite Crew
+        </button>
+        <button id="btn-meet-mute-speaker" class="btn-fast meet-pill-btn" style="color: #34d399; border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.14);" title="Mute/Unmute videographer voices in your headset">
+          🔊 Voice: ON
+        </button>
+        <button id="btn-meet-toggle-options" class="btn-fast meet-pill-btn" style="color: #cbd5e1;" title="Headset audio selector, TV Camera Protection & Silent Cues">
+          ⚙️ Audio &amp; Cues
+        </button>
+      </div>
 
-        <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
-          <select id="select-meet-audio-sink" class="select-custom" style="padding: 3px 6px; font-size: 0.7rem; max-width: 155px;" title="Send Google Meet crew voice ONLY to your Headset">
-            <option value="">🎧 Headset: Default</option>
+      <!-- Collapsible Advanced Options (Headset, Cam Safety & Quick Cues) -->
+      <div id="meet-options-panel" class="meet-options-panel" style="display: none;">
+        <div style="display: flex; align-items: center; gap: 6px; width: 100%;">
+          <select id="select-meet-audio-sink" class="select-custom" style="flex: 1; padding: 4px 8px; font-size: 0.72rem;" title="Send Google Meet crew voice ONLY to your Headset">
+            <option value="">🎧 Headset: System Default</option>
           </select>
-          <button id="btn-meet-mute-speaker" class="btn-fast" style="padding: 4px 8px; font-size: 0.71rem; font-weight: 800; color: #34d399; border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.15);" title="Mute/Unmute incoming videographer voice on laptop (PA Safe)">
-            🔊 Crew Voice: ON
-          </button>
-          <button id="btn-meet-cam-lock" class="btn-fast" style="padding: 4px 8px; font-size: 0.71rem; font-weight: 700; color: #38bdf8; border-color: rgba(56, 189, 248, 0.45); background: rgba(56, 189, 248, 0.12);" title="Protects Iriun/Camo TV cameras so Google Meet uses Microphone Only">
+          <button id="btn-meet-cam-lock" class="btn-fast" style="padding: 4px 9px; font-size: 0.71rem; font-weight: 700; color: #38bdf8; border-color: rgba(56, 189, 248, 0.45); background: rgba(56, 189, 248, 0.12); white-space: nowrap;" title="Blocks Google Meet from stealing Iriun/Camo TV cameras">
             🛡️ TV Cams Safe
           </button>
         </div>
-      </div>
-
-      <!-- Silent Visual Camera Cues for Loud Praise -->
-      <div class="meet-cues-bar">
-        <span style="font-size: 0.68rem; font-weight: 800; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em;">Quick Cue:</span>
-        <button class="btn-fast meet-cue-btn" data-cue="🔴 HOLD STEADY — YOU ARE LIVE ON TV">🔴 Hold Steady</button>
-        <button class="btn-fast meet-cue-btn" data-cue="🔍 ZOOM IN ON PREACHER">🔍 Zoom In</button>
-        <button class="btn-fast meet-cue-btn" data-cue="↔️ WIDE SANCTUARY SHOT">↔️ Wide Shot</button>
-        <button class="btn-fast meet-cue-btn" data-cue="🎤 FOCUS ON CHOIR">🎤 Choir</button>
-        <button class="btn-fast meet-cue-btn" data-cue="📷 KEEP MEET CAMERA OFF (USE IRIUN/CAMO)">📵 Voice Only Tip</button>
+        <div class="meet-cues-bar">
+          <span style="font-size: 0.67rem; font-weight: 800; color: var(--text-dim); text-transform: uppercase;">Quick Cue:</span>
+          <button class="btn-fast meet-cue-btn" data-cue="🔴 HOLD STEADY — YOU ARE LIVE ON TV">🔴 Hold Steady</button>
+          <button class="btn-fast meet-cue-btn" data-cue="🔍 ZOOM IN ON PREACHER">🔍 Zoom In</button>
+          <button class="btn-fast meet-cue-btn" data-cue="↔️ WIDE SANCTUARY SHOT">↔️ Wide Shot</button>
+          <button class="btn-fast meet-cue-btn" data-cue="🎤 FOCUS ON CHOIR">🎤 Choir</button>
+        </div>
       </div>
     </div>
 
-    <!-- QR Popover for Videographers to Scan -->
+    <!-- Invite Crew Popover (QR + Copy + WhatsApp) -->
     <div id="meet-qr-popover" class="meet-qr-popover" style="display: none;">
       <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 8px;">
-        <span style="font-weight: 800; font-size: 0.82rem; color: #fbbf24;">📷 Videographers: Scan to Join Crew Meet</span>
+        <span style="font-weight: 800; font-size: 0.82rem; color: #fbbf24;">📤 Invite Videographers to Voice Call</span>
         <button id="btn-meet-close-qr" class="modal-close-btn" style="font-size: 1.1rem;">&times;</button>
       </div>
-      <div style="background: #ffffff; padding: 10px; border-radius: 10px; display: inline-block; margin-bottom: 8px;">
-        <img id="meet-qr-img" style="width: 170px; height: 170px; display: block;" alt="Google Meet QR Code">
+      <div style="background: #ffffff; padding: 9px; border-radius: 10px; display: inline-block; margin-bottom: 8px;">
+        <img id="meet-qr-img" style="width: 155px; height: 155px; display: block;" alt="Google Meet QR Code">
       </div>
-      <div id="meet-qr-url-label" style="font-family: monospace; font-size: 0.74rem; color: #38bdf8; word-break: break-all; margin-bottom: 6px;"></div>
-      <div style="font-size: 0.7rem; color: var(--text-dim); line-height: 1.35;">
-        Tip for phone camera operators: Keep <strong>Camera OFF</strong> in Google Meet so Iriun/Camo keeps streaming to the Church TV while you hear the operator in your earpiece!
+      <div id="meet-qr-url-label" style="font-family: monospace; font-size: 0.73rem; color: #38bdf8; word-break: break-all; margin-bottom: 8px;"></div>
+      <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 8px;">
+        <button id="btn-meet-copy-link" class="btn-primary" style="padding: 5px 12px; font-size: 0.74rem; font-weight: 700;">📋 Copy Link</button>
+        <button id="btn-meet-whatsapp" class="btn-fast" style="padding: 5px 12px; font-size: 0.74rem; font-weight: 700; color: #4ade80; border-color: rgba(74, 222, 128, 0.45); background: rgba(74, 222, 128, 0.12);">💬 Send on WhatsApp</button>
+      </div>
+      <div style="font-size: 0.69rem; color: var(--text-dim); line-height: 1.35;">
+        Videographers using Iriun/Camo on the same phone should keep <strong>Camera OFF</strong> in Google Meet (Voice Only).
       </div>
     </div>
 
-    <!-- Embedded Google Meet Browser View -->
+    <!-- Clean Embedded Meet Area + Setup Welcome Card (Hides Google's Marketing Page) -->
     <div class="crew-meet-webview-wrap">
-      <webview id="crew-meet-webview" src="https://meet.google.com/" partition="persist:zioncast-meet" preload="./meet-preload.js" allowpopups style="width: 100%; height: 100%; border: none; background: #111827;"></webview>
+      <div id="meet-welcome-overlay" class="meet-welcome-overlay">
+        <div class="meet-welcome-card">
+          <div style="font-size: 2rem; line-height: 1; margin-bottom: 6px;">🎧</div>
+          <div style="font-size: 1.02rem; font-weight: 800; color: #f8fafc; margin-bottom: 4px;">Crew Voice Comms (Headset Only)</div>
+          <div style="font-size: 0.76rem; color: #94a3b8; line-height: 1.45; margin-bottom: 14px;">
+            Talk privately with your videographers through your headset — <strong>never heard on the Church TV</strong>.
+          </div>
+
+          <div class="meet-steps-list">
+            <div class="meet-step-item">
+              <span class="meet-step-num">1</span>
+              <span><strong>Sign in once</strong> with any free Gmail account (so Google Meet doesn't show "Start a trial").</span>
+            </div>
+            <div class="meet-step-item">
+              <span class="meet-step-num">2</span>
+              <span>Click <strong>+ New Room</strong> (or paste a Meet link created on your phone).</span>
+            </div>
+            <div class="meet-step-item">
+              <span class="meet-step-num">3</span>
+              <span>Click <strong>📤 Invite Crew</strong> so cameramen scan the QR code or join on WhatsApp.</span>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; width: 100%; margin-top: 14px;">
+            <button id="btn-meet-welcome-signin" class="btn-fast" style="flex: 1; padding: 9px 10px; font-size: 0.78rem; font-weight: 700; color: #38bdf8; border-color: rgba(56, 189, 248, 0.45); background: rgba(56, 189, 248, 0.12); justify-content: center;">
+              🔑 1. Sign In (Free)
+            </button>
+            <button id="btn-meet-welcome-new" class="btn-primary" style="flex: 1; padding: 9px 10px; font-size: 0.78rem; font-weight: 800; background: linear-gradient(135deg, #059669, #10b981); border-color: #34d399; justify-content: center;">
+              📞 2. Start Crew Call
+            </button>
+          </div>
+          <button id="btn-meet-show-raw" style="margin-top: 10px; background: none; border: none; color: #64748b; font-size: 0.71rem; cursor: pointer; text-decoration: underline;">
+            Already signed in? Show Google Meet page
+          </button>
+        </div>
+      </div>
+
+      <webview id="crew-meet-webview" src="https://meet.google.com/landing" partition="persist:zioncast-meet" preload="./meet-preload.js" allowpopups style="width: 100%; height: 100%; border: none; background: #0d1322;"></webview>
     </div>
   </div>
 

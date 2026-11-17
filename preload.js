@@ -55,7 +55,7 @@ contextBridge.exposeInMainWorld('zionApi', {
   // In-app Updates & External Links
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
-  getVersion: () => '1.5.0',
+  getVersion: () => '1.5.1',
 
   // Google Meet Crew Comms & QR Helper APIs
   openMeetAuthWindow: () => ipcRenderer.invoke('open-meet-auth-window'),

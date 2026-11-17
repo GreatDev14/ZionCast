@@ -3961,9 +3961,90 @@ body {
 }
 
 .crew-meet-drawer.open.mini-mode .crew-meet-webview-wrap,
-.crew-meet-drawer.open.mini-mode .meet-cues-bar,
+.crew-meet-drawer.open.mini-mode .meet-options-panel,
 .crew-meet-drawer.open.mini-mode .meet-qr-popover {
   display: none !important;
+}
+
+.crew-meet-pill-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  width: 100%;
+}
+
+.meet-pill-btn {
+  padding: 5px 6px !important;
+  font-size: 0.7rem !important;
+  font-weight: 700 !important;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.meet-options-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.meet-welcome-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top, #131c31 0%, #090d16 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 10;
+}
+
+.meet-welcome-card {
+  width: 100%;
+  max-width: 400px;
+  background: rgba(17, 24, 39, 0.9);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 14px;
+  padding: 20px 18px;
+  text-align: center;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.55);
+}
+
+.meet-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  text-align: left;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  padding: 11px 12px;
+}
+
+.meet-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+.meet-step-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  color: #34d399;
+  font-weight: 800;
+  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .crew-meet-header {

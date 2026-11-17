@@ -6650,7 +6650,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.5.0';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.5.1';
         }
       } catch (err) {
         console.warn('Update check warning:', err);
@@ -6779,6 +6779,12 @@
     const selectMeetSink = document.getElementById('select-meet-audio-sink');
     const btnMuteSpeaker = document.getElementById('btn-meet-mute-speaker');
     const btnCamLock = document.getElementById('btn-meet-cam-lock');
+    const btnToggleOptions = document.getElementById('btn-meet-toggle-options');
+    const optionsPanel = document.getElementById('meet-options-panel');
+    const welcomeOverlay = document.getElementById('meet-welcome-overlay');
+    const btnWelcomeSignIn = document.getElementById('btn-meet-welcome-signin');
+    const btnWelcomeNew = document.getElementById('btn-meet-welcome-new');
+    const btnShowRawMeet = document.getElementById('btn-meet-show-raw');
     const webview = document.getElementById('crew-meet-webview');
 
     if (!drawer || !webview) return;
@@ -6786,6 +6792,10 @@
     let isCrewAudioMuted = false;
     let isTvCamsProtected = true;
     let webviewReady = false;
+
+    function hideWelcomeOverlay() {
+      if (welcomeOverlay) welcomeOverlay.style.display = 'none';
+    }
 
     function updateMeetRoomUI(url, code) {
       state.meetUrl = url || '';
@@ -6795,13 +6805,16 @@
       } catch (_) {}
 
       if (codeBadge) {
-        codeBadge.textContent = state.meetCode ? `Room: ${state.meetCode}` : (state.meetUrl ? 'Meet Ready' : 'No Active Room');
+        codeBadge.textContent = state.meetCode ? `${state.meetCode}` : (state.meetUrl ? 'Active' : 'Ready');
       }
       if (linkInput && state.meetUrl && document.activeElement !== linkInput) {
         linkInput.value = state.meetUrl;
       }
       if (headerDot) {
         headerDot.style.display = state.meetUrl ? 'inline-block' : 'none';
+      }
+      if (state.meetUrl) {
+        hideWelcomeOverlay();
       }
       syncRemoteStatus();
     }
@@ -6818,11 +6831,33 @@
     function openDrawer() {
       drawer.classList.add('open');
       drawer.classList.remove('mini-mode');
-      if (btnMini) btnMini.textContent = '🗕 Mini Mode';
+      if (btnMini) btnMini.textContent = '🗕 Mini';
       refreshAudioOutputSelectors();
       if (state.meetUrl && webview.getURL && !webview.getURL().includes(state.meetCode || state.meetUrl)) {
         try { webview.loadURL(state.meetUrl); } catch (_) {}
       }
+    }
+
+    if (btnToggleOptions && optionsPanel) {
+      btnToggleOptions.addEventListener('click', () => {
+        const isOpen = optionsPanel.style.display === 'flex';
+        optionsPanel.style.display = isOpen ? 'none' : 'flex';
+      });
+    }
+
+    if (btnWelcomeSignIn && btnSignIn) {
+      btnWelcomeSignIn.addEventListener('click', () => btnSignIn.click());
+    }
+
+    if (btnWelcomeNew && btnNewMeet) {
+      btnWelcomeNew.addEventListener('click', () => btnNewMeet.click());
+    }
+
+    if (btnShowRawMeet) {
+      btnShowRawMeet.addEventListener('click', () => {
+        hideWelcomeOverlay();
+        try { webview.loadURL('https://meet.google.com/landing'); } catch (_) {}
+      });
     }
 
     if (btnOpenHeader) {
@@ -6848,7 +6883,7 @@
     if (btnMini) {
       btnMini.addEventListener('click', () => {
         const nowMini = drawer.classList.toggle('mini-mode');
-        btnMini.textContent = nowMini ? '🔼 Expand Meet' : '🗕 Mini Mode';
+        btnMini.textContent = nowMini ? '🔼 Expand' : '🗕 Mini';
       });
     }
 
@@ -6898,6 +6933,7 @@
           return;
         }
         updateMeetRoomUI(url, code);
+        hideWelcomeOverlay();
         try { webview.loadURL(url); } catch (_) { webview.src = url; }
         showToast(`📞 Opening Crew Meet (${code || url})...`);
       };
@@ -6912,6 +6948,7 @@
 
     if (btnNewMeet) {
       btnNewMeet.addEventListener('click', () => {
+        hideWelcomeOverlay();
         try { webview.loadURL('https://meet.google.com/new'); } catch (_) { webview.src = 'https://meet.google.com/new'; }
         showToast('📞 Creating a new Google Meet room...');
       });
@@ -6989,12 +7026,12 @@
       btnMuteSpeaker.addEventListener('click', () => {
         isCrewAudioMuted = !isCrewAudioMuted;
         if (isCrewAudioMuted) {
-          btnMuteSpeaker.textContent = '🔇 Crew Voice: MUTED';
+          btnMuteSpeaker.textContent = '🔇 Voice: MUTED';
           btnMuteSpeaker.style.color = '#f87171';
           btnMuteSpeaker.style.borderColor = 'rgba(239, 68, 68, 0.5)';
           btnMuteSpeaker.style.background = 'rgba(239, 68, 68, 0.16)';
         } else {
-          btnMuteSpeaker.textContent = '🔊 Crew Voice: ON';
+          btnMuteSpeaker.textContent = '🔊 Voice: ON';
           btnMuteSpeaker.style.color = '#34d399';
           btnMuteSpeaker.style.borderColor = 'rgba(16, 185, 129, 0.45)';
           btnMuteSpeaker.style.background = 'rgba(16, 185, 129, 0.15)';
