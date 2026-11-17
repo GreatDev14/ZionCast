@@ -6659,7 +6659,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.6.0';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.6.1';
         }
       } catch (err) {
         console.warn('Update check warning:', err);
