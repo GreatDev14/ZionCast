@@ -28,6 +28,7 @@ class RemoteServer {
     this.clients = new Set();
     this.camSignalClients = new Set();
     this.offlineCams = new Map();
+    this.crewMicSlots = new Set();
     this.qrCodeDataUrl = '';
     this.qrCache = new Map();
     this.localIps = [];
@@ -306,6 +307,17 @@ class RemoteServer {
     ]);
     this.networkCandidates = this.buildNetworkCandidates(routeIp, wifiSsid);
     this.localIps = this.networkCandidates.map(c => c.ip);
+
+    // Refresh self-signed HTTPS cert SANs if Wi-Fi/hotspot switched to a new IP after startup
+    const cleanCheckKey = Array.from(new Set(['127.0.0.1', ...this.localIps.filter(ip => ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip))])).sort().join(',');
+    if (this.httpsServer && cleanCheckKey !== this.certIpsKey) {
+      try {
+        const creds = this.ensureSelfSignedCert(this.localIps);
+        if (typeof this.httpsServer.setSecureContext === 'function') {
+          this.httpsServer.setSecureContext({ key: creds.key, cert: creds.cert });
+        }
+      } catch (_) {}
+    }
     const httpOk = await this.startWithPortRetry(3000, 3010);
     await this.startHttpsWithPortRetry(3443, 3453).catch(e => console.warn('[Remote HTTPS]', e));
     return httpOk;
@@ -418,7 +430,8 @@ class RemoteServer {
       status: {
         meetCueText: this.currentStatus.meetCueText || '',
         meetCueTime: this.currentStatus.meetCueTime || 0,
-        wcamLiveSlot: this.currentStatus.wcamLiveSlot || ''
+        wcamLiveSlot: this.currentStatus.wcamLiveSlot || '',
+        talkbackActive: !!this.currentStatus.talkbackActive
       }
     });
   }
@@ -462,6 +475,17 @@ class RemoteServer {
 
     this.networkCandidates = this.buildNetworkCandidates(routeIp, wifiSsid);
     this.localIps = this.networkCandidates.map(c => c.ip);
+
+    // Refresh self-signed HTTPS cert SANs if Wi-Fi/hotspot switched to a new IP after startup
+    const cleanCheckKey = Array.from(new Set(['127.0.0.1', ...this.localIps.filter(ip => ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip))])).sort().join(',');
+    if (this.httpsServer && cleanCheckKey !== this.certIpsKey) {
+      try {
+        const creds = this.ensureSelfSignedCert(this.localIps);
+        if (typeof this.httpsServer.setSecureContext === 'function') {
+          this.httpsServer.setSecureContext({ key: creds.key, cert: creds.cert });
+        }
+      } catch (_) {}
+    }
 
     let activeIp = this.localIps[0] || '127.0.0.1';
     if (this.selectedIp && this.localIps.includes(this.selectedIp)) {
@@ -562,15 +586,21 @@ class RemoteServer {
       res.write(`data: ${JSON.stringify({
         type: 'wcam-sync',
         cams: Array.from(this.offlineCams.values()),
+        crewMicSlots: Array.from(this.crewMicSlots),
         status: {
           meetCueText: this.currentStatus.meetCueText || '',
           meetCueTime: this.currentStatus.meetCueTime || 0,
-          wcamLiveSlot: this.currentStatus.wcamLiveSlot || ''
+          wcamLiveSlot: this.currentStatus.wcamLiveSlot || '',
+          talkbackActive: !!this.currentStatus.talkbackActive
         }
       })}\n\n`);
 
       req.on('close', () => {
         this.camSignalClients.delete(clientObj);
+        if (role === 'publisher' && slot && this.crewMicSlots.has(slot)) {
+          this.crewMicSlots.delete(slot);
+          this.broadcastCamSignal({ type: 'crew-mic-stop', targetRole: 'viewer', slot });
+        }
         if (role === 'publisher' && slot && this.offlineCams.has(slot)) {
           this.offlineCams.delete(slot);
           this.broadcastCamSignal({ type: 'cam-left', slot, cams: Array.from(this.offlineCams.values()) });
@@ -602,11 +632,16 @@ class RemoteServer {
             }
           } else if (msg.type === 'bye') {
             this.offlineCams.delete(slot);
+            if (this.crewMicSlots.delete(slot)) {
+              this.broadcastCamSignal({ type: 'crew-mic-stop', targetRole: 'viewer', slot });
+            }
             this.broadcastCamSignal({ type: 'cam-left', slot, cams: Array.from(this.offlineCams.values()) });
             if (this.onActionCallback) {
               this.onActionCallback('wcam-offline-changed', { cams: Array.from(this.offlineCams.values()) });
             }
           } else {
+            if (msg.type === 'crew-mic-start') this.crewMicSlots.add(slot);
+            else if (msg.type === 'crew-mic-stop') this.crewMicSlots.delete(slot);
             this.broadcastCamSignal(msg);
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1822,18 +1857,18 @@ class RemoteServer {
       </div>
 
       <!-- Crew Google Meet Voice Comms Card -->
-      <div id="remote-meet-card" class="r-card" style="display: none; flex-direction: column; gap: 8px; border-color: rgba(16, 185, 129, 0.45); background: rgba(16, 185, 129, 0.08);">
+      <div id="remote-meet-card" class="r-card" style="display: none; flex-direction: column; gap: 8px;">
         <div class="r-card-header" style="margin-bottom: 0;">
-          <span class="r-card-title" style="color: #34d399;">📞 Crew Comms (Google Meet)</span>
-          <span id="remote-meet-code" class="slide-counter-pill" style="background: rgba(16,185,129,0.2); color: #34d399;">LIVE</span>
+          <span class="r-card-title">Crew Voice Intercom (Meet)</span>
+          <span id="remote-meet-code" class="slide-counter-pill">LIVE</span>
         </div>
-        <div style="font-size: 0.72rem; color: #cbd5e1; line-height: 1.4;">
-          Tap below to talk with the ZionCast operator via earpiece. <strong>Keep Camera OFF</strong> in Meet if using Iriun/Camo on this phone!
+        <div style="font-size: 0.72rem; color: #94a3b8; line-height: 1.4;">
+          Join on a <strong>2nd / earpiece device</strong> if another phone is streaming camera video (mobile OS pauses background cameras).
         </div>
-        <a id="btn-remote-join-meet" href="#" target="_blank" rel="noopener noreferrer" class="btn-sm-action" style="display: block; text-align: center; text-decoration: none; background: #10b981; color: #052e16; border-color: #34d399; font-weight: 800; padding: 10px;">
-          📞 Join Crew Google Meet
+        <a id="btn-remote-join-meet" href="#" target="_blank" rel="noopener noreferrer" class="btn-sm-action" style="display: block; text-align: center; text-decoration: none; background: #1e293b; color: #f8fafc; border-color: rgba(56, 189, 248, 0.35); font-weight: 700; padding: 9px;">
+          Open Crew Google Meet
         </a>
-        <div id="remote-meet-cue-box" style="display: none; padding: 8px 10px; border-radius: 8px; background: rgba(245, 158, 11, 0.18); border: 1px solid rgba(245, 158, 11, 0.5); color: #fbbf24; font-size: 0.78rem; font-weight: 800; text-align: center;"></div>
+        <div id="remote-meet-cue-box" style="display: none; padding: 7px 10px; border-radius: 6px; background: #161d2b; border: 1px solid rgba(255, 255, 255, 0.14); color: #f8fafc; font-size: 0.76rem; font-weight: 700; text-align: center;"></div>
       </div>
 
       <!-- Audience TV Alert Banner -->
@@ -3669,12 +3704,36 @@ renderCamerasUI(state);
     }
     .cam-stage.on-air-frame { box-shadow: inset 0 0 0 6px #ef4444; }
     video#local-cam-video { width: 100%; height: 100%; object-fit: cover; }
+    .top-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .audio-pill {
+      font-size: 0.72rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+      background: #161d2b; border: 1px solid rgba(255,255,255,0.16); color: #cbd5e1;
+    }
+    .audio-pill.live {
+      background: rgba(56, 189, 248, 0.22); border-color: #38bdf8; color: #e0f2fe;
+    }
+    .audio-pill.muted {
+      background: rgba(239, 68, 68, 0.16); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5;
+    }
     .cue-overlay {
       position: absolute; top: 12px; left: 12px; right: 12px; display: none;
+      align-items: center; justify-content: space-between; gap: 10px;
+      padding: 10px 12px; border-radius: 10px;
+      background: rgba(15, 23, 42, 0.94); border: 2px solid #ef4444;
+      color: #f8fafc; font-weight: 800; font-size: 0.88rem;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.72); z-index: 30;
+    }
+    .cue-ack-btn {
+      padding: 6px 12px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.2);
+      background: #1e293b; color: #f8fafc; font-size: 0.75rem; font-weight: 800;
+      cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    }
+    .talkback-banner {
+      position: absolute; bottom: 14px; left: 12px; right: 12px; display: none;
       padding: 12px 14px; border-radius: 10px;
-      background: rgba(220, 38, 38, 0.9); border: 2px solid #fbbf24;
-      color: #fff; font-weight: 900; font-size: 0.95rem; text-align: center;
-      box-shadow: 0 8px 26px rgba(0,0,0,0.65); z-index: 30;
+      background: rgba(14, 165, 233, 0.96); border: 2px solid #7dd3fc;
+      color: #ffffff; font-weight: 900; font-size: 0.88rem; text-align: center;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.72); z-index: 32; cursor: pointer;
     }
     .setup-box {
       position: absolute; inset: 16px; margin: auto; max-width: 380px; height: fit-content;
@@ -3690,6 +3749,10 @@ renderCamerasUI(state);
       padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15);
       background: #1e293b; color: #f8fafc; font-weight: 700; font-size: 0.8rem; cursor: pointer;
     }
+    .c-btn.mic-live {
+      background: #dc2626; border-color: #f87171; color: #ffffff;
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.55);
+    }
     .c-btn.primary { flex: 1; background: #10b981; color: #052e16; border-color: #34d399; font-weight: 900; }
     .c-btn.stop { flex: 1; background: #ef4444; color: #fff; border-color: #f87171; }
     .c-select {
@@ -3701,18 +3764,28 @@ renderCamerasUI(state);
 <body>
   <div class="cam-root">
     <div class="cam-top-bar">
-      <span id="cam-slot-badge" class="slot-pill">WI-FI CAM 1</span>
+      <div class="top-badges">
+        <span id="cam-slot-badge" class="slot-pill">WI-FI CAM 1</span>
+        <span id="cam-res-badge" style="font-size: 0.66rem; color: #94a3b8; font-weight: 700;"></span>
+        <button id="btn-cam-talkback-mute" type="button" class="audio-pill">🔊 Earpiece</button>
+      </div>
       <span id="cam-tally-badge" class="tally-pill">STANDBY</span>
     </div>
 
     <div id="cam-stage" class="cam-stage">
       <video id="local-cam-video" autoplay playsinline muted></video>
-      <div id="cam-cue-overlay" class="cue-overlay"></div>
+      <audio id="cam-talkback-audio" autoplay playsinline></audio>
+      <audio id="cam-audio-unlock" playsinline style="display:none;"></audio>
+      <div id="cam-cue-overlay" class="cue-overlay">
+        <span id="cam-cue-text" style="flex: 1; text-align: left;"></span>
+        <button id="btn-cam-cue-ack" type="button" class="cue-ack-btn">✓ Got It</button>
+      </div>
+      <button id="cam-talkback-banner" type="button" class="talkback-banner">🔊 TAP HERE TO HEAR DIRECTOR IN EARPIECE</button>
       <div id="cam-setup-box" class="setup-box">
         <div style="font-size: 1.8rem;">📹</div>
         <div style="font-size: 1rem; font-weight: 800;">ZionCast Offline Wi-Fi Camera</div>
         <p id="cam-setup-msg" style="font-size: 0.78rem; color: #94a3b8; line-height: 1.45;">
-          Tap below to turn your phone into a live ZionCast camera over church Wi-Fi (no Iriun or Camo app needed).
+          Tap below to turn your phone into a live ZionCast camera over church Wi-Fi (keeps live Director Cues &amp; Earpiece Intercom on screen).
         </p>
         <button id="btn-start-cam-big" class="c-btn primary" style="padding: 12px;">▶ Start Camera Feed</button>
       </div>
@@ -3720,11 +3793,16 @@ renderCamerasUI(state);
 
     <div class="cam-controls">
       <button id="btn-flip-lens" class="c-btn">🔄 Rear</button>
-      <select id="sel-cam-res" class="c-select">
-        <option value="720">720p HD</option>
-        <option value="1080">1080p FHD</option>
-        <option value="480">480p Fast</option>
+      <select id="sel-cam-device" class="c-select" style="max-width: 118px; display: none;" title="Choose exact phone camera lens">
+        <option value="">Auto Lens</option>
       </select>
+      <select id="sel-cam-res" class="c-select">
+        <option value="2160">4K</option>
+        <option value="1080" selected>1080p</option>
+        <option value="720">720p</option>
+        <option value="480">480p</option>
+      </select>
+      <button id="btn-crew-mic" class="c-btn" type="button" title="Talk to ZionCast desk operator (private — never goes to TV)">🎙️ Mic</button>
       <button id="btn-toggle-stream" class="c-btn primary">▶ Go Live</button>
     </div>
   </div>
@@ -3733,25 +3811,251 @@ renderCamerasUI(state);
     (function() {
       var params = new URLSearchParams(window.location.search);
       var slot = String(params.get('slot') || '1');
-      var facingMode = 'environment';
+      var facingMode = params.get('lens') === 'user' ? 'user' : 'environment';
       var localStream = null;
+      var crewMicStream = null;
+      var crewMicPc = null;
+      var crewMicActive = false;
+      var crewMicRetryTimer = null;
+      var pendingCrewIceByViewer = {};
       var peers = {};
+      var pendingIce = {};
+      var talkbackPc = null;
+      var pendingTalkIceByViewer = {};
+      var talkbackMuted = false;
       var sse = null;
+      var sseOpenCallbacks = [];
       var isStreaming = false;
+      var userStopped = true;
+      var resumeTimer = null;
+      var ackedCueTime = 0;
+      var activeCueText = '';
+      var activeCueTime = 0;
 
       var slotBadge = document.getElementById('cam-slot-badge');
+      var resBadge = document.getElementById('cam-res-badge');
       var tallyBadge = document.getElementById('cam-tally-badge');
+      var btnTalkbackAudio = document.getElementById('btn-cam-talkback-mute');
+      var talkbackAudioEl = document.getElementById('cam-talkback-audio');
+      var audioUnlockEl = document.getElementById('cam-audio-unlock');
+      var talkbackBannerEl = document.getElementById('cam-talkback-banner');
       var camStage = document.getElementById('cam-stage');
       var videoEl = document.getElementById('local-cam-video');
       var cueOverlay = document.getElementById('cam-cue-overlay');
+      var cueTextEl = document.getElementById('cam-cue-text');
+      var btnCueAck = document.getElementById('btn-cam-cue-ack');
       var setupBox = document.getElementById('cam-setup-box');
       var setupMsg = document.getElementById('cam-setup-msg');
       var btnStartBig = document.getElementById('btn-start-cam-big');
+      var btnCrewMic = document.getElementById('btn-crew-mic');
       var btnToggle = document.getElementById('btn-toggle-stream');
       var btnFlip = document.getElementById('btn-flip-lens');
+      var selDevice = document.getElementById('sel-cam-device');
       var selRes = document.getElementById('sel-cam-res');
+      var selectedDeviceId = '';
+      var autoPickedMainBack = false;
+      var talkbackIsActiveOnServer = false;
+      var audioGestureConfirmed = false;
 
       slotBadge.textContent = 'WI-FI CAM ' + slot;
+
+      function boostVideoSdp(sdpStr, kbps) {
+        try {
+          if (!sdpStr) return sdpStr;
+          var lines = sdpStr.split(/\\r?\\n/);
+          var h264Pts = [];
+          for (var i = 0; i < lines.length; i++) {
+            var m = lines[i].match(/^a=rtpmap:(\\d+)\\s+H264\\//i);
+            if (m) h264Pts.push(m[1]);
+          }
+          var out = [];
+          var inVideo = false;
+          var hasBandwidth = false;
+          var hasTias = false;
+          for (var j = 0; j < lines.length; j++) {
+            var line = lines[j];
+            if (line.indexOf('m=video ') === 0) {
+              inVideo = true;
+              hasBandwidth = false;
+              hasTias = false;
+              if (h264Pts.length > 0) {
+                var parts = line.split(' ');
+                var head = parts.slice(0, 3);
+                var pts = parts.slice(3);
+                var reordered = [];
+                h264Pts.forEach(function(pt) { if (pts.indexOf(pt) !== -1) reordered.push(pt); });
+                pts.forEach(function(pt) { if (reordered.indexOf(pt) === -1) reordered.push(pt); });
+                line = head.concat(reordered).join(' ');
+              }
+              out.push(line);
+              continue;
+            }
+            if (line.indexOf('m=') === 0) inVideo = false;
+            if (inVideo && line.indexOf('b=AS:') === 0) {
+              out.push('b=AS:' + kbps);
+              hasBandwidth = true;
+              continue;
+            }
+            if (inVideo && line.indexOf('b=TIAS:') === 0) {
+              out.push('b=TIAS:' + (kbps * 1000));
+              hasTias = true;
+              continue;
+            }
+            if (inVideo && line.indexOf('a=fmtp:') === 0 && h264Pts.length > 0) {
+              var fMatch = line.match(/^a=fmtp:(\\d+)\\s+(.*)$/);
+              if (fMatch && h264Pts.indexOf(fMatch[1]) !== -1 && line.indexOf('x-google-max-bitrate') === -1) {
+                line = line + ';x-google-min-bitrate=3000;x-google-start-bitrate=8000;x-google-max-bitrate=' + kbps;
+              }
+            }
+            out.push(line);
+            if (inVideo && line.indexOf('c=IN ') === 0) {
+              if (!hasBandwidth) { out.push('b=AS:' + kbps); hasBandwidth = true; }
+              if (!hasTias) { out.push('b=TIAS:' + (kbps * 1000)); hasTias = true; }
+            }
+          }
+          return out.join('\\r\\n');
+        } catch (_) {
+          return sdpStr;
+        }
+      }
+
+      function refreshTalkbackPrompt() {
+        if (!talkbackBannerEl) return;
+        var hasAudio = !!(talkbackAudioEl && talkbackAudioEl.srcObject);
+        var needsTap = talkbackIsActiveOnServer && !talkbackMuted && (!audioGestureConfirmed || !hasAudio || (talkbackAudioEl && talkbackAudioEl.paused));
+        talkbackBannerEl.style.display = needsTap ? 'block' : 'none';
+        if (needsTap) {
+          talkbackBannerEl.textContent = hasAudio
+            ? '🔊 TAP HERE TO HEAR DIRECTOR IN EARPIECE'
+            : '🎙️ DIRECTOR TALKING — TAP HERE TO CONNECT EARPIECE';
+        }
+      }
+
+      function unlockTalkbackAudio() {
+        audioGestureConfirmed = true;
+        try {
+          if (audioUnlockEl) {
+            // Play tiny valid silent WAV on a separate unlock element so WebRTC srcObject stays untouched on iOS Safari
+            audioUnlockEl.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+            audioUnlockEl.play().catch(function() {});
+          }
+          if (talkbackAudioEl) {
+            talkbackAudioEl.muted = talkbackMuted;
+            talkbackAudioEl.volume = 1.0;
+            if (talkbackAudioEl.srcObject) {
+              talkbackAudioEl.play().then(function() {
+                updateAudioPillUI(talkbackIsActiveOnServer);
+                refreshTalkbackPrompt();
+              }).catch(function() {});
+            }
+          }
+        } catch (_) {}
+        refreshTalkbackPrompt();
+      }
+
+      async function populateCameraLenses() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+        try {
+          var devs = await navigator.mediaDevices.enumerateDevices();
+          var cams = devs.filter(function(d) { return d.kind === 'videoinput'; });
+          var activeTrack = localStream && localStream.getVideoTracks()[0];
+          var activeId = activeTrack && activeTrack.getSettings ? (activeTrack.getSettings().deviceId || '') : '';
+          var activeLabel = (activeTrack && activeTrack.label) || '';
+          if (resBadge && activeTrack && activeTrack.getSettings) {
+            var st = activeTrack.getSettings();
+            if (st.width && st.height) {
+              resBadge.textContent = st.width + '×' + st.height;
+            }
+          }
+          if (facingMode === 'environment' && !selectedDeviceId && !autoPickedMainBack && /ultra\\s*wide|0\\.5|dual\\s*wide|triple|telephoto|macro/i.test(activeLabel)) {
+            var mainRear = cams.find(function(c) {
+              var lbl = c.label || '';
+              return (/\\bback\\b|rear/i.test(lbl)) && !/ultra|wide\\s*angle|0\\.5|dual|triple|telephoto|macro|front/i.test(lbl);
+            });
+            if (mainRear && mainRear.deviceId && mainRear.deviceId !== activeId) {
+              autoPickedMainBack = true;
+              selectedDeviceId = mainRear.deviceId;
+              setTimeout(function() { if (!userStopped) startCamera(true); }, 60);
+              return;
+            }
+          }
+          if (!selDevice) return;
+          if (cams.length <= 1) {
+            selDevice.style.display = 'none';
+            return;
+          }
+          selDevice.innerHTML = '<option value="">Auto Lens</option>';
+          cams.forEach(function(c, idx) {
+            var opt = document.createElement('option');
+            opt.value = c.deviceId;
+            opt.textContent = c.label || ('Lens ' + (idx + 1));
+            if (selectedDeviceId ? (c.deviceId === selectedDeviceId) : (activeId && c.deviceId === activeId)) {
+              opt.selected = true;
+            }
+            selDevice.appendChild(opt);
+          });
+          selDevice.style.display = 'inline-block';
+        } catch (_) {}
+      }
+
+      function updateAudioPillUI(talkbackActive) {
+        if (!btnTalkbackAudio) return;
+        if (talkbackMuted) {
+          btnTalkbackAudio.textContent = '🔇 Earpiece Muted';
+          btnTalkbackAudio.className = 'audio-pill muted';
+        } else if (talkbackActive) {
+          btnTalkbackAudio.textContent = '🎙️ Director Live';
+          btnTalkbackAudio.className = 'audio-pill live';
+        } else {
+          btnTalkbackAudio.textContent = '🔊 Earpiece';
+          btnTalkbackAudio.className = 'audio-pill';
+        }
+      }
+
+      if (btnTalkbackAudio) {
+        btnTalkbackAudio.addEventListener('click', function() {
+          talkbackMuted = !talkbackMuted;
+          if (talkbackAudioEl) {
+            talkbackAudioEl.muted = talkbackMuted;
+            if (!talkbackMuted && talkbackAudioEl.srcObject) talkbackAudioEl.play().catch(function() {});
+          }
+          unlockTalkbackAudio();
+          updateAudioPillUI(talkbackIsActiveOnServer);
+          refreshTalkbackPrompt();
+          if (!talkbackMuted && talkbackIsActiveOnServer && !talkbackPc) {
+            sendSignal({ type: 'talkback-request', targetRole: 'viewer', slot: slot });
+          }
+        });
+      }
+
+      if (talkbackBannerEl) {
+        talkbackBannerEl.addEventListener('click', function() {
+          talkbackMuted = false;
+          unlockTalkbackAudio();
+          if (talkbackAudioEl && talkbackAudioEl.srcObject) {
+            talkbackAudioEl.muted = false;
+            talkbackAudioEl.play().then(function() {
+              updateAudioPillUI(true);
+              refreshTalkbackPrompt();
+            }).catch(function() {});
+          }
+          if (talkbackIsActiveOnServer && !talkbackPc) {
+            sendSignal({ type: 'talkback-request', targetRole: 'viewer', slot: slot });
+          }
+        });
+      }
+
+      if (btnCueAck) {
+        btnCueAck.addEventListener('click', function() {
+          ackedCueTime = activeCueTime || Date.now();
+          cueOverlay.style.display = 'none';
+          fetch('/api/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'cue-ack', data: { text: activeCueText, slot: slot } })
+          }).catch(function() {});
+        });
+      }
 
       function sendSignal(payload) {
         return fetch('/api/cam-signal', {
@@ -3771,11 +4075,234 @@ renderCamerasUI(state);
         } else {
           camStage.classList.remove('on-air-frame');
         }
-        if (status.meetCueText) {
-          cueOverlay.style.display = 'block';
-          cueOverlay.textContent = '📣 DIRECTOR CUE: ' + status.meetCueText;
+        talkbackIsActiveOnServer = !!status.talkbackActive;
+        updateAudioPillUI(talkbackIsActiveOnServer);
+        refreshTalkbackPrompt();
+        activeCueText = status.meetCueText || '';
+        activeCueTime = status.meetCueTime || 0;
+        if (activeCueText && activeCueTime !== ackedCueTime) {
+          cueOverlay.style.display = 'flex';
+          if (cueTextEl) cueTextEl.textContent = 'DIRECTOR CUE: ' + activeCueText;
         } else {
           cueOverlay.style.display = 'none';
+        }
+      }
+
+      async function handleTalkbackOffer(msg) {
+        var senderId = msg.viewerId || 'default';
+        if (talkbackPc) {
+          try { talkbackPc.close(); } catch (_) {}
+          talkbackPc = null;
+        }
+        if (!pendingTalkIceByViewer[senderId]) pendingTalkIceByViewer[senderId] = [];
+        var pc = new RTCPeerConnection({ iceServers: [] });
+        talkbackPc = pc;
+        pc.ontrack = function(ev) {
+          var stream = (ev.streams && ev.streams[0]) ? ev.streams[0] : new MediaStream([ev.track]);
+          if (talkbackAudioEl) {
+            talkbackAudioEl.srcObject = stream;
+            talkbackAudioEl.muted = talkbackMuted;
+            talkbackAudioEl.volume = 1.0;
+            talkbackAudioEl.play().then(function() {
+              updateAudioPillUI(true);
+              refreshTalkbackPrompt();
+            }).catch(function() {
+              if (btnTalkbackAudio) {
+                btnTalkbackAudio.textContent = '🔊 Tap to Hear Director';
+                btnTalkbackAudio.className = 'audio-pill live';
+              }
+              if (talkbackBannerEl && !talkbackMuted) {
+                talkbackBannerEl.textContent = '🔊 TAP HERE TO HEAR DIRECTOR IN EARPIECE';
+                talkbackBannerEl.style.display = 'block';
+              }
+            });
+          }
+        };
+        pc.oniceconnectionstatechange = function() {
+          if (talkbackPc !== pc) return;
+          var st = pc.iceConnectionState;
+          if ((st === 'connected' || st === 'completed') && talkbackAudioEl && !talkbackMuted && talkbackAudioEl.srcObject) {
+            talkbackAudioEl.play().then(function() {
+              updateAudioPillUI(true);
+              refreshTalkbackPrompt();
+            }).catch(function() {
+              refreshTalkbackPrompt();
+            });
+          } else if (st === 'failed') {
+            if (talkbackBannerEl && !talkbackMuted) {
+              talkbackBannerEl.textContent = '🔄 AUDIO RECONNECTING — TAP TO RETRY';
+              talkbackBannerEl.style.display = 'block';
+            }
+            sendSignal({ type: 'talkback-request', targetRole: 'viewer', slot: slot });
+          }
+        };
+        pc.onicecandidate = function(ev) {
+          if (ev.candidate) {
+            sendSignal({
+              type: 'talkback-ice',
+              targetRole: 'viewer',
+              viewerId: senderId,
+              slot: slot,
+              candidate: ev.candidate
+            });
+          }
+        };
+        await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        var q = pendingTalkIceByViewer[senderId] || [];
+        if (q.length) {
+          pendingTalkIceByViewer[senderId] = [];
+          for (var i = 0; i < q.length; i++) {
+            await pc.addIceCandidate(new RTCIceCandidate(q[i])).catch(function() {});
+          }
+        }
+        var ans = await pc.createAnswer();
+        await pc.setLocalDescription(ans);
+        await sendSignal({
+          type: 'talkback-answer',
+          targetRole: 'viewer',
+          viewerId: senderId,
+          slot: slot,
+          sdp: pc.localDescription
+        });
+      }
+
+      function applySenderHdParams(pc) {
+        if (!pc || !pc.getSenders) return;
+        var hVal = parseInt(selRes.value, 10) || 1080;
+        var maxBps = hVal >= 2160 ? 20000000 : (hVal >= 1080 ? 12000000 : (hVal >= 720 ? 6000000 : 2500000));
+        pc.getSenders().forEach(function(sender) {
+          if (sender.track && sender.track.kind === 'video' && sender.getParameters && sender.setParameters) {
+            try {
+              var p = sender.getParameters() || {};
+              if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+              p.encodings[0].maxBitrate = maxBps;
+              p.encodings[0].scaleResolutionDownBy = 1.0;
+              sender.setParameters(p).catch(function() {});
+              try {
+                p.degradationPreference = 'maintain-resolution';
+                sender.setParameters(p).catch(function() {});
+              } catch (_) {}
+            } catch (_) {}
+          }
+        });
+      }
+
+      async function handleCrewMicOffer(msg) {
+        var viewerId = msg.viewerId || 'default';
+        if (!crewMicStream || !crewMicActive) return;
+        if (crewMicRetryTimer) {
+          clearTimeout(crewMicRetryTimer);
+          crewMicRetryTimer = null;
+        }
+        if (crewMicPc) {
+          try { crewMicPc.close(); } catch (_) {}
+          crewMicPc = null;
+        }
+        if (!pendingCrewIceByViewer[viewerId]) pendingCrewIceByViewer[viewerId] = [];
+        var pc = new RTCPeerConnection({ iceServers: [] });
+        crewMicPc = pc;
+        crewMicStream.getAudioTracks().forEach(function(track) {
+          pc.addTrack(track, crewMicStream);
+        });
+        pc.onicecandidate = function(ev) {
+          if (ev.candidate) {
+            sendSignal({
+              type: 'crew-mic-ice',
+              targetRole: 'viewer',
+              viewerId: viewerId,
+              slot: slot,
+              candidate: ev.candidate
+            });
+          }
+        };
+        await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        var q = pendingCrewIceByViewer[viewerId] || [];
+        if (q.length) {
+          pendingCrewIceByViewer[viewerId] = [];
+          for (var i = 0; i < q.length; i++) {
+            await pc.addIceCandidate(new RTCIceCandidate(q[i])).catch(function() {});
+          }
+        }
+        var ans = await pc.createAnswer();
+        await pc.setLocalDescription(ans);
+        await sendSignal({
+          type: 'crew-mic-answer',
+          targetRole: 'viewer',
+          viewerId: viewerId,
+          slot: slot,
+          sdp: pc.localDescription
+        });
+      }
+
+      function stopCrewMic(notifyDesk) {
+        crewMicActive = false;
+        if (crewMicRetryTimer) {
+          clearTimeout(crewMicRetryTimer);
+          crewMicRetryTimer = null;
+        }
+        if (crewMicPc) {
+          try { crewMicPc.close(); } catch (_) {}
+          crewMicPc = null;
+        }
+        if (crewMicStream) {
+          crewMicStream.getTracks().forEach(function(t) { t.stop(); });
+          crewMicStream = null;
+        }
+        if (btnCrewMic) {
+          btnCrewMic.textContent = '🎙️ Mic';
+          btnCrewMic.className = 'c-btn';
+        }
+        if (notifyDesk) {
+          sendSignal({ type: 'crew-mic-stop', targetRole: 'viewer', slot: slot });
+        }
+      }
+
+      function scheduleCrewMicRetry(attempt) {
+        if (crewMicRetryTimer) {
+          clearTimeout(crewMicRetryTimer);
+          crewMicRetryTimer = null;
+        }
+        if (!crewMicActive || crewMicPc || attempt >= 4) return;
+        crewMicRetryTimer = setTimeout(function() {
+          crewMicRetryTimer = null;
+          if (!crewMicActive || crewMicPc) return;
+          connectSignalSSE(function() {
+            if (!crewMicActive || crewMicPc) return;
+            sendSignal({ type: 'crew-mic-start', targetRole: 'viewer', slot: slot });
+            scheduleCrewMicRetry(attempt + 1);
+          });
+        }, 1100);
+      }
+
+      async function toggleCrewMic() {
+        unlockTalkbackAudio();
+        if (crewMicActive) {
+          stopCrewMic(true);
+          return;
+        }
+        try {
+          crewMicStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            video: false
+          });
+          crewMicActive = true;
+          if (btnCrewMic) {
+            btnCrewMic.textContent = '🔴 Talk LIVE';
+            btnCrewMic.className = 'c-btn mic-live';
+          }
+          // Wait until publisher SSE is OPEN before signaling crew-mic-start so Desk's crew-mic-offer cannot be dropped
+          connectSignalSSE(async function() {
+            if (!crewMicActive) return;
+            await sendSignal({ type: 'crew-mic-start', targetRole: 'viewer', slot: slot });
+            scheduleCrewMicRetry(0);
+          });
+          if (videoEl && localStream && videoEl.paused) {
+            videoEl.play().catch(function() {});
+          }
+        } catch (err) {
+          stopCrewMic(false);
+          tallyBadge.textContent = '⚠️ MIC DENIED';
+          setTimeout(function() { updateTallyUI({ wcamLiveSlot: '' }); }, 2000);
         }
       }
 
@@ -3785,11 +4312,20 @@ renderCamerasUI(state);
         if (peers[viewerId]) {
           try { peers[viewerId].close(); } catch (_) {}
         }
+        if (!pendingIce[viewerId]) pendingIce[viewerId] = [];
         var pc = new RTCPeerConnection({ iceServers: [] });
         peers[viewerId] = pc;
         localStream.getTracks().forEach(function(track) {
+          if (track.kind === 'video') {
+            try { track.contentHint = 'motion'; } catch (_) {}
+          }
           pc.addTrack(track, localStream);
         });
+        pc.onconnectionstatechange = function() {
+          if (peers[viewerId] === pc && pc.connectionState === 'connected') {
+            applySenderHdParams(pc);
+          }
+        };
         pc.onicecandidate = function(ev) {
           if (ev.candidate) {
             sendSignal({
@@ -3802,8 +4338,19 @@ renderCamerasUI(state);
           }
         };
         await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        if (pendingIce[viewerId] && pendingIce[viewerId].length) {
+          var queued = pendingIce[viewerId].slice();
+          pendingIce[viewerId] = [];
+          for (var i = 0; i < queued.length; i++) {
+            await pc.addIceCandidate(new RTCIceCandidate(queued[i])).catch(function() {});
+          }
+        }
         var answer = await pc.createAnswer();
+        var hVal = parseInt(selRes.value, 10) || 1080;
+        var sdpKbps = hVal >= 2160 ? 20000 : (hVal >= 1080 ? 12000 : (hVal >= 720 ? 6000 : 2500));
+        answer = new RTCSessionDescription({ type: answer.type, sdp: boostVideoSdp(answer.sdp, sdpKbps) });
         await pc.setLocalDescription(answer);
+        applySenderHdParams(pc);
         await sendSignal({
           type: 'answer',
           targetRole: 'viewer',
@@ -3813,9 +4360,28 @@ renderCamerasUI(state);
         });
       }
 
-      function connectSignalSSE() {
+      function connectSignalSSE(onReadyHello) {
+        if (sse && sse.readyState === 1) {
+          if (onReadyHello) onReadyHello();
+          return;
+        }
+        if (onReadyHello) {
+          sseOpenCallbacks.push(onReadyHello);
+        }
+        if (sse && sse.readyState === 0) {
+          return;
+        }
         if (sse) { try { sse.close(); } catch (_) {} }
         sse = new EventSource('/api/cam-events?role=publisher&slot=' + encodeURIComponent(slot));
+        sse.onopen = function() {
+          var cbs = sseOpenCallbacks.splice(0, sseOpenCallbacks.length);
+          for (var i = 0; i < cbs.length; i++) {
+            try { cbs[i](); } catch (_) {}
+          }
+          if (cbs.length === 0 && isStreaming) {
+            sendSignal({ type: 'hello', slot: slot, label: 'Wi-Fi Phone Cam ' + slot });
+          }
+        };
         sse.onmessage = function(ev) {
           try {
             var msg = JSON.parse(ev.data);
@@ -3823,34 +4389,140 @@ renderCamerasUI(state);
               updateTallyUI(msg.status);
             } else if (msg.type === 'offer') {
               handleOffer(msg);
-            } else if (msg.type === 'ice' && msg.viewerId && peers[msg.viewerId] && msg.candidate) {
-              peers[msg.viewerId].addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(function() {});
+            } else if (msg.type === 'talkback-offer') {
+              handleTalkbackOffer(msg);
+            } else if (msg.type === 'crew-mic-offer') {
+              handleCrewMicOffer(msg);
+            } else if (msg.type === 'crew-mic-ice' && msg.candidate) {
+              var cmSenderId = msg.viewerId || 'default';
+              if (crewMicPc && crewMicPc.remoteDescription && crewMicPc.remoteDescription.type) {
+                crewMicPc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(function() {});
+              } else {
+                if (!pendingCrewIceByViewer[cmSenderId]) pendingCrewIceByViewer[cmSenderId] = [];
+                pendingCrewIceByViewer[cmSenderId].push(msg.candidate);
+              }
+            } else if (msg.type === 'talkback-ice' && msg.candidate) {
+              var tbSenderId = msg.viewerId || 'default';
+              if (talkbackPc && talkbackPc.remoteDescription && talkbackPc.remoteDescription.type) {
+                talkbackPc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(function() {});
+              } else {
+                if (!pendingTalkIceByViewer[tbSenderId]) pendingTalkIceByViewer[tbSenderId] = [];
+                pendingTalkIceByViewer[tbSenderId].push(msg.candidate);
+              }
+            } else if (msg.type === 'talkback-bye') {
+              if (talkbackPc) { try { talkbackPc.close(); } catch (_) {} talkbackPc = null; }
+              if (talkbackAudioEl) talkbackAudioEl.srcObject = null;
+              talkbackIsActiveOnServer = false;
+              updateAudioPillUI(false);
+              refreshTalkbackPrompt();
+            } else if (msg.type === 'viewer-bye' && msg.viewerId) {
+              if (peers[msg.viewerId]) {
+                try { peers[msg.viewerId].close(); } catch (_) {}
+                delete peers[msg.viewerId];
+              }
+              delete pendingIce[msg.viewerId];
+            } else if (msg.type === 'ice' && msg.viewerId && msg.candidate) {
+              var targetPc = peers[msg.viewerId];
+              if (targetPc && targetPc.remoteDescription && targetPc.remoteDescription.type) {
+                targetPc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(function() {});
+              } else {
+                if (!pendingIce[msg.viewerId]) pendingIce[msg.viewerId] = [];
+                pendingIce[msg.viewerId].push(msg.candidate);
+              }
             }
           } catch (_) {}
         };
         sse.onerror = function() {
           try { sse.close(); } catch (_) {}
-          if (isStreaming) setTimeout(connectSignalSSE, 2000);
+          sse = null;
+          setTimeout(function() { connectSignalSSE(); }, 2000);
         };
       }
 
-      async function startCamera() {
+      function pollCamStatus() {
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var tid = controller ? setTimeout(function() { controller.abort(); }, 2500) : null;
+        fetch('/api/status?_t=' + Date.now(), {
+          cache: 'no-store',
+          signal: controller ? controller.signal : undefined
+        })
+          .then(function(r) {
+            if (tid) clearTimeout(tid);
+            return r.json();
+          })
+          .then(function(res) {
+            if (res && res.status) updateTallyUI(res.status);
+          })
+          .catch(function() {
+            if (tid) clearTimeout(tid);
+          });
+      }
+
+      function scheduleAutoResume() {
+        if (userStopped || document.visibilityState !== 'visible') return;
+        var hasLiveTrack = localStream && localStream.getVideoTracks().some(function(t) { return t.readyState === 'live'; });
+        if (hasLiveTrack) return;
+        if (resumeTimer) clearTimeout(resumeTimer);
+        tallyBadge.textContent = '🔄 RECONNECTING...';
+        resumeTimer = setTimeout(function() {
+          if (!userStopped && document.visibilityState === 'visible') {
+            startCamera(true);
+          }
+        }, 400);
+      }
+
+      async function startCamera(isAutoResume) {
+        if (!isAutoResume) unlockTalkbackAudio();
+        userStopped = false;
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           setupBox.style.display = 'flex';
           setupMsg.innerHTML = 'Camera blocked because this browser requires HTTPS.<br>On iPhone, download the 1-time certificate from ZionCast -> Trust in Settings -> Certificate Trust Settings.';
           return;
         }
-        var targetH = parseInt(selRes.value, 10) || 720;
+        var targetH = parseInt(selRes.value, 10) || 1080;
         var targetW = Math.round(targetH * 16 / 9);
         if (localStream) {
           localStream.getTracks().forEach(function(t) { t.stop(); });
         }
         try {
-          localStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: facingMode }, width: { ideal: targetW }, height: { ideal: targetH } },
-            audio: false
+          var attempts = [];
+          if (selectedDeviceId) {
+            if (targetH >= 720) {
+              attempts.push({ video: { deviceId: { exact: selectedDeviceId }, width: { min: 1280, ideal: targetW }, height: { min: 720, ideal: targetH }, frameRate: { ideal: 30 } }, audio: false });
+            }
+            attempts.push({ video: { deviceId: { exact: selectedDeviceId }, width: { ideal: targetW }, height: { ideal: targetH }, frameRate: { ideal: 30 } }, audio: false });
+          }
+          if (targetH >= 720) {
+            attempts.push({ video: { facingMode: { exact: facingMode }, width: { min: 1280, ideal: targetW }, height: { min: 720, ideal: targetH }, frameRate: { ideal: 30 } }, audio: false });
+          }
+          attempts.push({ video: { facingMode: { exact: facingMode }, width: { ideal: targetW }, height: { ideal: targetH }, frameRate: { ideal: 30 } }, audio: false });
+          attempts.push({ video: { facingMode: { ideal: facingMode }, width: { ideal: targetW }, height: { ideal: targetH }, frameRate: { ideal: 30 } }, audio: false });
+          attempts.push({ video: true, audio: false });
+          var stream = null;
+          var lastCamErr = null;
+          for (var i = 0; i < attempts.length; i++) {
+            try {
+              stream = await navigator.mediaDevices.getUserMedia(attempts[i]);
+              if (stream) break;
+            } catch (e) {
+              lastCamErr = e;
+            }
+          }
+          if (!stream) throw lastCamErr || new Error('Could not open camera');
+          localStream = stream;
+          populateCameraLenses();
+          localStream.getVideoTracks().forEach(function(track) {
+            track.addEventListener('ended', function() {
+              scheduleAutoResume();
+            });
           });
+          btnFlip.textContent = facingMode === 'environment' ? '🔄 Rear' : '🤳 Front';
           videoEl.srcObject = localStream;
+          videoEl.onloadedmetadata = function() {
+            if (resBadge && videoEl.videoWidth && videoEl.videoHeight) {
+              resBadge.textContent = videoEl.videoWidth + '×' + videoEl.videoHeight;
+            }
+          };
           await videoEl.play().catch(function() {});
           isStreaming = true;
           setupBox.style.display = 'none';
@@ -3860,24 +4532,33 @@ renderCamerasUI(state);
           sendSignal({ type: 'hello', slot: slot, label: 'Wi-Fi Phone Cam ' + slot });
           tallyBadge.textContent = '🟢 READY ON ZIONCAST';
         } catch (err) {
+          isStreaming = false;
           setupBox.style.display = 'flex';
-          setupMsg.textContent = 'Camera error: ' + (err.message || err.name) + '. Make sure Chrome/Safari has Camera permission enabled.';
+          setupMsg.textContent = isAutoResume
+            ? 'Phone paused camera while you switched apps. Tap Start below to resume feed (no QR re-scan needed).'
+            : 'Camera error: ' + (err.message || err.name) + '. Make sure Chrome/Safari has Camera permission enabled.';
+          btnStartBig.textContent = isAutoResume ? '▶ Resume Camera Feed' : '▶ Start Camera Feed';
         }
       }
 
       function stopCamera() {
+        userStopped = true;
+        if (resumeTimer) { clearTimeout(resumeTimer); resumeTimer = null; }
         isStreaming = false;
         Object.keys(peers).forEach(function(k) {
           try { peers[k].close(); } catch (_) {}
         });
         peers = {};
-        if (sse) { try { sse.close(); } catch (_) {} sse = null; }
+        if (talkbackPc) { try { talkbackPc.close(); } catch (_) {} talkbackPc = null; }
+        if (talkbackAudioEl) talkbackAudioEl.srcObject = null;
+        stopCrewMic(true);
         if (localStream) {
           localStream.getTracks().forEach(function(t) { t.stop(); });
           localStream = null;
         }
         videoEl.srcObject = null;
         setupBox.style.display = 'flex';
+        btnStartBig.textContent = '▶ Start Camera Feed';
         btnToggle.textContent = '▶ Go Live';
         btnToggle.className = 'c-btn primary';
         tallyBadge.textContent = 'STANDBY';
@@ -3886,21 +4567,72 @@ renderCamerasUI(state);
         sendSignal({ type: 'bye', slot: slot });
       }
 
-      btnStartBig.addEventListener('click', startCamera);
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+          if (talkbackAudioEl && !talkbackMuted && talkbackAudioEl.srcObject) {
+            talkbackAudioEl.play().catch(function() {});
+          }
+          scheduleAutoResume();
+        }
+      });
+      window.addEventListener('pageshow', scheduleAutoResume);
+
+      btnStartBig.addEventListener('click', function() { startCamera(false); });
+      if (btnCrewMic) {
+        btnCrewMic.addEventListener('click', function() { toggleCrewMic(); });
+      }
       btnToggle.addEventListener('click', function() {
-        if (isStreaming) stopCamera(); else startCamera();
+        if (isStreaming) stopCamera(); else startCamera(false);
       });
       btnFlip.addEventListener('click', function() {
+        selectedDeviceId = '';
+        if (selDevice) selDevice.value = '';
         facingMode = facingMode === 'environment' ? 'user' : 'environment';
         btnFlip.textContent = facingMode === 'environment' ? '🔄 Rear' : '🤳 Front';
-        if (isStreaming) startCamera();
+        if (isStreaming) startCamera(false);
       });
+      if (selDevice) {
+        selDevice.addEventListener('change', function() {
+          selectedDeviceId = selDevice.value || '';
+          if (isStreaming) startCamera(false);
+        });
+      }
       selRes.addEventListener('change', function() {
-        if (isStreaming) startCamera();
+        if (isStreaming) startCamera(false);
       });
       window.addEventListener('beforeunload', function() {
+        if (crewMicActive) sendSignal({ type: 'crew-mic-stop', targetRole: 'viewer', slot: slot });
         if (isStreaming) sendSignal({ type: 'bye', slot: slot });
       });
+
+      setInterval(async function() {
+        if (!isStreaming || !resBadge) return;
+        var vIds = Object.keys(peers);
+        if (!vIds.length) return;
+        var pc = peers[vIds[0]];
+        if (!pc || !pc.getStats) return;
+        try {
+          var stats = await pc.getStats();
+          var fw = 0, fh = 0, sentBytes = 0;
+          stats.forEach(function(r) {
+            if (r.type === 'outbound-rtp' && (r.kind === 'video' || r.mediaType === 'video')) {
+              fw = r.frameWidth || fw;
+              fh = r.frameHeight || fh;
+              sentBytes = r.bytesSent || sentBytes;
+            }
+          });
+          var prev = pc.__lastTx || { bytes: 0, ts: Date.now() };
+          var dt = Math.max(0.5, (Date.now() - prev.ts) / 1000);
+          var mbps = sentBytes > prev.bytes ? (((sentBytes - prev.bytes) * 8) / dt / 1000000).toFixed(1) : '';
+          pc.__lastTx = { bytes: sentBytes, ts: Date.now() };
+          var rw = (fw && fh) ? (fw + '×' + fh) : (videoEl.videoWidth ? (videoEl.videoWidth + '×' + videoEl.videoHeight) : '');
+          if (rw) resBadge.textContent = rw + (mbps ? (' • ' + mbps + 'M') : '');
+        } catch (_) {}
+      }, 2000);
+
+      connectSignalSSE();
+      pollCamStatus();
+      setInterval(pollCamStatus, 1500);
     })();
   </script>
 </body>

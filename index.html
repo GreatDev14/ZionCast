@@ -70,7 +70,7 @@
         </button>
         <button id="btn-check-updates" class="btn-header-neutral btn-version-pill" title="Check GitHub for latest ZionCast updates">
           <span id="update-badge-icon">🔄</span>
-          <span id="update-badge-text">v1.7.0</span>
+          <span id="update-badge-text">v1.7.1</span>
         </button>
       </div>
     </div>
@@ -475,20 +475,26 @@
             <div class="wcam-header-row">
               <span class="wcam-title">📱 Wireless Wi-Fi Phone Camera (No Iriun / No Camo)</span>
               <div class="wcam-mode-pills">
-                <button id="btn-wcam-mode-vdo" class="wcam-mode-pill active" type="button" title="Zero certificates, works instantly in Safari/Chrome and switches to direct local Wi-Fi P2P">Zero-Cert Wi-Fi (Default)</button>
-                <button id="btn-wcam-mode-offline" class="wcam-mode-pill" type="button" title="100% offline local Wi-Fi server — zero internet required">100% Offline Local HTTPS</button>
+                <button id="btn-wcam-mode-offline" class="wcam-mode-pill active" type="button" title="ZionCast /cam page on church Wi-Fi — supports Hold/Zoom cues, Director Talkback Earpiece, and 1080p HD with zero internet">100% Offline HTTPS (Cues + Talkback)</button>
+                <button id="btn-wcam-mode-vdo" class="wcam-mode-pill" type="button" title="Zero certificates via VDO.Ninja — video only (cannot show ZionCast cues or play Director Talkback)">Zero-Cert (Video Only)</button>
               </div>
             </div>
             <div id="wcam-mode-desc" class="wcam-mode-desc">
-              <strong>Zero-Cert Mode:</strong> Phone only needs brief internet to start, then video streams direct over your church Wi-Fi. No app, no cables, no certificate prompt.
+              <strong>Offline /cam Mode (Cues + Talkback + 1080p):</strong> Streams directly to ZionCast over church Wi-Fi with zero internet, showing <strong>Hold Steady / Zoom cues</strong> and <strong>Director Talkback audio</strong> right on the camera phone.
             </div>
             <div class="wcam-controls-row">
-              <span style="font-size: 0.72rem; font-weight: 700; color: #94a3b8;">Camera Slot:</span>
+              <span style="font-size: 0.72rem; font-weight: 700; color: #94a3b8;">Slot:</span>
               <div class="wcam-slot-pills">
                 <button class="wcam-slot-pill active" type="button" data-wcam-slot="1">Cam 1</button>
                 <button class="wcam-slot-pill" type="button" data-wcam-slot="2">Cam 2</button>
                 <button class="wcam-slot-pill" type="button" data-wcam-slot="3">Cam 3</button>
                 <button class="wcam-slot-pill" type="button" data-wcam-slot="4">Cam 4</button>
+              </div>
+              <span style="font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-left: 4px;">Phone Lens:</span>
+              <div class="wcam-slot-pills">
+                <button id="btn-wcam-lens-back" class="wcam-slot-pill active" type="button" data-wcam-lens="environment" title="Open the normal back/rear camera automatically">📷 Back</button>
+                <button id="btn-wcam-lens-front" class="wcam-slot-pill" type="button" data-wcam-lens="user" title="Open front/selfie camera">🤳 Front</button>
+                <button id="btn-wcam-lens-ask" class="wcam-slot-pill" type="button" data-wcam-lens="prompt" title="Let you pick the exact camera lens on the phone screen">⚙️ Choose</button>
               </div>
               <button id="btn-wcam-activate-slot" class="btn-fast" type="button" style="padding: 4px 11px; font-size: 0.72rem; background: #10b981; color: #fff; border-color: #059669; font-weight: 800;">
                 + Activate Slot in Grid
@@ -499,9 +505,10 @@
               <button id="btn-wcam-copy-url" class="btn-fast" type="button" style="padding: 5px 10px; font-size: 0.72rem; font-weight: 700;">📋 Copy Link</button>
               <button id="btn-wcam-open-tab" class="btn-fast" type="button" style="padding: 5px 10px; font-size: 0.72rem;">🔗 Open Test</button>
             </div>
-            <div id="wcam-offline-box" class="wcam-offline-box" style="display: none;">
-              <span>🔒 <strong>Offline Mode (Zero Internet):</strong> If Safari/Chrome shows a privacy warning, tap <em>Advanced → Proceed</em>, or install this 1-time certificate on iPhone/Android:</span>
-              <div style="display: flex; gap: 6px; align-items: center;">
+            <div id="wcam-offline-box" class="wcam-offline-box" style="display: flex;">
+              <span id="wcam-firewall-note">🔒 <strong>On iPhone Safari:</strong> If <em>"Not Private"</em> shows, tap <em>Show Details → visit this website</em> (or install the 1-time certificate).</span>
+              <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                <button id="btn-wcam-fix-firewall" class="btn-fast" type="button" style="display: none; padding: 4px 9px; font-size: 0.68rem; background: rgba(239, 68, 68, 0.2); border-color: rgba(248, 113, 113, 0.55); color: #fecaca; font-weight: 800;">🛡️ Unblock Cam Port 3443</button>
                 <button id="btn-wcam-copy-cert" class="btn-fast" type="button" style="padding: 4px 9px; font-size: 0.68rem; font-weight: 700;">📄 Copy Cert URL</button>
                 <button id="btn-wcam-open-cert" class="btn-fast" type="button" style="padding: 4px 9px; font-size: 0.68rem; background: rgba(245, 158, 11, 0.2); border-color: rgba(245, 158, 11, 0.45); color: #fde68a; font-weight: 700;">⬇️ Open Cert Link</button>
               </div>
@@ -590,80 +597,93 @@
     <aside id="studio-comms-panel" class="panel studio-comms-panel">
       <div class="panel-header">
         <div class="panel-title">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-          Crew Comms (Google Meet)
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+          Crew Comms
         </div>
-        <span id="meet-code-badge" class="meet-status-pill">Ready</span>
+        <span id="meet-code-badge" class="meet-status-pill">STANDBY</span>
       </div>
 
       <div class="studio-comms-scroll">
-        <!-- Card 1: Error-Free Google Meet App Window -->
+        <!-- Card 1: Director Talkback & Visual Cues (Works live while filming) -->
         <div class="studio-card">
           <div class="studio-card-title">
-            <span>1. Operator Voice Call (Laptop Headset)</span>
-            <span class="studio-badge-safe">Off Church TV</span>
+            <span>Director Intercom &amp; Cues</span>
+            <button id="btn-meet-clear-cue" class="btn-studio-mini" title="Clear active cue from crew phones">Clear</button>
           </div>
+          <div class="studio-mic-row">
+            <button id="btn-talkback-mic" class="btn-talkback-mic" title="Stream operator microphone straight into Offline /cam phone earpieces without leaving the camera tab">
+              <span class="mic-dot"></span>
+              <span id="label-talkback-mic">Talk to Cams: OFF</span>
+            </button>
+            <select id="select-talkback-mic" class="select-custom studio-mic-select" title="Operator Headset Microphone Input">
+              <option value="">Default Mic</option>
+            </select>
+          </div>
+          <div id="talkback-mic-meter-wrap" class="talkback-mic-meter-wrap" style="display: none;" title="Live Earpiece Mic Input Level">
+            <span class="talkback-meter-label">MIC LEVEL</span>
+            <div class="talkback-mic-meter-track">
+              <div id="talkback-mic-meter-fill" class="talkback-mic-meter-fill"></div>
+            </div>
+          </div>
+          <div id="crew-incoming-bar" class="crew-incoming-bar" style="display: none;">
+            <span id="crew-incoming-label" class="crew-incoming-label">🎙️ Crew Cam Speaking...</span>
+            <button id="btn-crew-incoming-mute" class="btn-studio-mini" type="button" title="Mute/Unmute incoming camera crew mic in your laptop earpiece">🔊 Hear</button>
+          </div>
+          <div id="crew-incoming-audio-sink" style="display: none;"></div>
           <p class="studio-card-desc">
-            Opens Google Meet cleanly in Chrome / Edge using your existing Google login — zero "browser not secure" errors.
+            Talkback &amp; visual cues deliver directly inside Offline <strong>/cam</strong> tabs over Wi-Fi with zero video pause.
           </p>
-          <button id="btn-meet-launch-browser" class="btn-studio-primary">
-            📞 Start / Open Google Meet (Chrome / Edge)
-          </button>
-
+          <div class="studio-cues-grid">
+            <button class="btn-studio-cue meet-cue-btn" data-cue="HOLD STEADY — YOU ARE LIVE ON TV"><span class="cue-dot live"></span>Hold Steady</button>
+            <button class="btn-studio-cue meet-cue-btn" data-cue="ZOOM IN ON PREACHER"><span class="cue-dot"></span>Zoom In</button>
+            <button class="btn-studio-cue meet-cue-btn" data-cue="WIDE SANCTUARY SHOT"><span class="cue-dot"></span>Wide Shot</button>
+            <button class="btn-studio-cue meet-cue-btn" data-cue="FOCUS ON CHOIR"><span class="cue-dot"></span>Focus Choir</button>
+          </div>
           <div class="studio-room-row">
-            <input type="text" id="meet-link-input" class="input-search" style="font-size: 0.76rem;" placeholder="Paste Meet code (e.g. abc-defg-hij) &amp; Save">
-            <button id="btn-meet-join-link" class="btn-header-neutral" style="padding: 6px 12px; font-weight: 700;">Save &amp; Join</button>
+            <input type="text" id="meet-custom-cue-input" class="input-search studio-input" placeholder="Custom cue note for camera crew...">
+            <button id="btn-meet-send-cue" class="btn-studio-secondary">Flash</button>
           </div>
         </div>
 
-        <!-- Card 2: Invite Videographers (Embedded Live QR + WhatsApp) -->
+        <!-- Card 2: External Google Meet Voice Call (2nd Device / Headset) -->
         <div class="studio-card">
           <div class="studio-card-title">
-            <span>2. Invite Videographers</span>
-            <span class="studio-hint-muted">QR • WhatsApp • Remote</span>
+            <span>Voice Call (Google Meet)</span>
+            <span class="studio-badge-safe">Headset Only</span>
+          </div>
+          <p class="studio-tip-note">
+            <strong>Single-phone limit:</strong> Cameramen should join voice on a <strong>2nd / earpiece device</strong> — iOS &amp; Android pause background cameras if Meet runs on the filming phone.
+          </p>
+
+          <input type="text" id="meet-link-input" class="input-search studio-input" placeholder="Paste Meet link or code (abc-defg-hij)">
+
+          <div class="studio-action-row">
+            <button id="btn-meet-launch-browser" class="btn-studio-primary" title="Launch Google Meet in isolated Chrome / Edge app window (off Church TV)">Open Meet</button>
+            <button id="btn-meet-join-link" class="btn-studio-secondary" style="flex: 1;" title="Save code and launch Google Meet">Save &amp; Join</button>
+          </div>
+          <div class="studio-action-row">
+            <button id="btn-meet-toggle-qr" class="btn-studio-mini" style="flex: 1;" title="Show/Hide Scannable QR Code">QR Code</button>
+            <button id="btn-meet-copy-link" class="btn-studio-mini" style="flex: 1;" title="Copy Meet link">Copy Link</button>
+            <button id="btn-meet-whatsapp" class="btn-studio-mini" style="flex: 1;" title="Send link to WhatsApp">WhatsApp</button>
           </div>
 
           <div id="studio-qr-container" class="studio-qr-container" style="display: none;">
             <div class="studio-qr-frame">
-              <img id="meet-qr-img" style="width: 145px; height: 145px; display: block;" alt="Scan QR to join Crew Google Meet">
+              <img id="meet-qr-img" style="width: 120px; height: 120px; display: block;" alt="Scan QR to join Crew Google Meet">
             </div>
             <div id="meet-qr-url-label" class="studio-qr-url"></div>
           </div>
-          <div id="studio-qr-empty" class="studio-qr-empty">
-            Start a Google Meet above and paste your room code (e.g. <code>abc-defg-hij</code>) to show a scannable QR code for your cameramen.
-          </div>
-
-          <div class="studio-invite-actions">
-            <button id="btn-meet-copy-link" class="btn-header-neutral" style="flex: 1; justify-content: center;">📋 Copy Link</button>
-            <button id="btn-meet-whatsapp" class="btn-header-neutral" style="flex: 1; justify-content: center;">💬 WhatsApp</button>
-          </div>
-          <p class="studio-tip-box">
-            <strong>Cameraman Tip:</strong> When joining Meet on the same phone running <strong>Iriun / Camo</strong>, keep <strong>Camera OFF</strong> inside Google Meet so your earpiece works while video streams to TV.
-          </p>
         </div>
 
-        <!-- Card 3: Silent Camera Cues & Split Headset/TV Audio -->
+        <!-- Card 3: Split Output Audio Routing -->
         <div class="studio-card">
           <div class="studio-card-title">
-            <span>3. Silent Camera Cues &amp; Audio Routing</span>
-            <button id="btn-meet-clear-cue" class="btn-header-neutral" style="padding: 2px 8px; font-size: 0.67rem;" title="Clear flashing cue banner on videographers' phones">Clear Cue</button>
+            <span>TV / Video Audio Output</span>
+            <span class="studio-hint-muted">Separate from Headset</span>
           </div>
-          <p class="studio-card-desc">
-            During loud praise, send instant visual cues to videographers' Phone Remotes:
-          </p>
-          <div class="studio-cues-grid">
-            <button class="btn-header-neutral meet-cue-btn" data-cue="🔴 HOLD STEADY — YOU ARE LIVE ON TV">🔴 Hold Steady</button>
-            <button class="btn-header-neutral meet-cue-btn" data-cue="🔍 ZOOM IN ON PREACHER">🔍 Zoom In</button>
-            <button class="btn-header-neutral meet-cue-btn" data-cue="↔️ WIDE SANCTUARY SHOT">↔️ Wide Shot</button>
-            <button class="btn-header-neutral meet-cue-btn" data-cue="🎤 FOCUS ON CHOIR">🎤 Focus Choir</button>
-          </div>
-
-          <div class="studio-audio-split">
-            <label class="studio-audio-label" for="studio-video-audio-sink">TV / Video Sound Output (Separate from Headset):</label>
-            <select id="studio-video-audio-sink" class="select-custom" style="width: 100%; font-size: 0.74rem;">
-              <option value="">🔊 TV / Video Audio: System Default</option>
-            </select>
-          </div>
+          <select id="studio-video-audio-sink" class="select-custom" style="width: 100%; font-size: 0.73rem;">
+            <option value="">TV / Video Audio: System Default</option>
+          </select>
         </div>
       </div>
     </aside>

@@ -8,7 +8,13 @@
   // DOM Elements
   const canvas = document.getElementById('display-canvas');
   const ctx = canvas.getContext('2d');
-  const cameraVideo = document.getElementById('display-camera-layer');
+  const camLayerA = document.getElementById('display-camera-layer');
+  const camLayerB = document.getElementById('display-camera-layer-alt');
+  let activeCamLayerIdx = 0;
+  let cameraVideo = camLayerA;
+  let camFadeOutTimer = null;
+  function getActiveCameraVideoEl() { return activeCamLayerIdx === 0 ? camLayerA : camLayerB; }
+  function getStandbyCameraVideoEl() { return activeCamLayerIdx === 0 ? camLayerB : camLayerA; }
   const wcamIframe = document.getElementById('display-wcam-iframe');
   const mediaVideo = document.getElementById('display-video-bg');
   const mediaImg = document.getElementById('display-img-bg');
@@ -62,6 +68,8 @@
     cameraDeviceId: '',
     cameraDeviceLabel: '',
     wirelessCamViewUrl: '',
+    prewarmCamDeviceId: '',
+    prewarmWcamUrl: '',
     cameraOpacity: 0.75,
     remotePort: 3000,
     bannerText: '',
@@ -84,6 +92,7 @@
   let offlineWcamSlot = null;
   let offlineWcamPc = null;
   let offlineWcamSse = null;
+  let offlineWcamPendingIce = [];
   const offlineWcamViewerId = 'tv-' + Math.random().toString(36).slice(2, 8);
   let activeBannerTimer = null;
   let lastSlideSignature = '';
@@ -766,7 +775,9 @@
   }
 
   function stopOfflineWirelessCamFeed() {
+    const prevSlot = offlineWcamSlot;
     offlineWcamSlot = null;
+    offlineWcamPendingIce = [];
     if (offlineWcamPc) {
       try { offlineWcamPc.close(); } catch (_) {}
       offlineWcamPc = null;
@@ -775,10 +786,221 @@
       try { offlineWcamSse.close(); } catch (_) {}
       offlineWcamSse = null;
     }
+    if (prevSlot) {
+      const basePort = state.remotePort || window.__zcPort || 3000;
+      fetch(`http://127.0.0.1:${basePort}/api/cam-signal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'viewer-bye',
+          targetRole: 'publisher',
+          slot: prevSlot,
+          viewerId: offlineWcamViewerId
+        })
+      }).catch(() => {});
+    }
   }
 
-  function clearVdoNinjaCamFeed() {
+  function fadeInCameraElement(el, targetZIndex) {
+    if (!el) return;
+    el.style.zIndex = targetZIndex || '3';
+    el.style.pointerEvents = 'none';
+    const wasHidden = el.style.display === 'none' || !el.style.display;
+    if (wasHidden) {
+      el.style.opacity = '0';
+      el.style.display = 'block';
+      void el.offsetWidth;
+    }
+    el.classList.add('camera-active');
+    requestAnimationFrame(() => {
+      el.style.opacity = '1';
+    });
+  }
+
+  const relayChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('zioncast-wcam-relay') : null;
+  const pendingRelayWaiters = new Map();
+  const relayPcMap = new Map();
+  let activeRelayId = '';
+  let activeRelayDeviceId = '';
+
+  if (relayChannel) {
+    relayChannel.onmessage = async (ev) => {
+      const msg = ev && ev.data;
+      if (!msg || !msg.type || !msg.relayId) return;
+      const waiter = pendingRelayWaiters.get(msg.relayId);
+      if (msg.type === 'relay-unavailable') {
+        if (waiter) {
+          pendingRelayWaiters.delete(msg.relayId);
+          waiter.finish(null);
+        }
+        return;
+      }
+      if (msg.type === 'relay-offer' && msg.sdp && waiter) {
+        try {
+          const pc = new RTCPeerConnection({ iceServers: [] });
+          relayPcMap.set(msg.relayId, { pc, pendingIce: [] });
+          pc.ontrack = (trkEv) => {
+            const stream = (trkEv.streams && trkEv.streams[0]) ? trkEv.streams[0] : new MediaStream([trkEv.track]);
+            if (pendingRelayWaiters.has(msg.relayId)) {
+              pendingRelayWaiters.delete(msg.relayId);
+              waiter.finish(stream);
+            }
+          };
+          pc.onicecandidate = (iceEv) => {
+            if (iceEv.candidate) {
+              relayChannel.postMessage({
+                type: 'relay-ice',
+                relayId: msg.relayId,
+                candidate: iceEv.candidate.toJSON ? iceEv.candidate.toJSON() : { candidate: iceEv.candidate.candidate, sdpMid: iceEv.candidate.sdpMid, sdpMLineIndex: iceEv.candidate.sdpMLineIndex }
+              });
+            }
+          };
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+          const entry = relayPcMap.get(msg.relayId);
+          if (entry && entry.pendingIce.length) {
+            const q = entry.pendingIce.splice(0);
+            for (const c of q) await pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
+          }
+          const ans = await pc.createAnswer();
+          await pc.setLocalDescription(ans);
+          relayChannel.postMessage({
+            type: 'relay-answer',
+            relayId: msg.relayId,
+            sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp }
+          });
+        } catch (_) {
+          if (pendingRelayWaiters.has(msg.relayId)) {
+            pendingRelayWaiters.delete(msg.relayId);
+            waiter.finish(null);
+          }
+        }
+        return;
+      }
+      if (msg.type === 'relay-ice' && msg.candidate) {
+        const entry = relayPcMap.get(msg.relayId);
+        if (entry && entry.pc) {
+          if (entry.pc.remoteDescription && entry.pc.remoteDescription.type) {
+            entry.pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
+          } else {
+            entry.pendingIce.push(msg.candidate);
+          }
+        }
+      }
+    };
+  }
+
+  function closeRelayById(rid) {
+    if (!rid) return;
+    pendingRelayWaiters.delete(rid);
+    const entry = relayPcMap.get(rid);
+    if (entry && entry.pc) { try { entry.pc.close(); } catch (_) {} }
+    relayPcMap.delete(rid);
+    if (relayChannel) relayChannel.postMessage({ type: 'relay-close', relayId: rid });
+  }
+
+  function requestRelayStreamFromControl(deviceId, timeoutMs = 550) {
+    if (!relayChannel || !deviceId) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const relayId = 'rel-' + Math.random().toString(36).slice(2, 9);
+      let settled = false;
+      const finish = (stream) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (!stream) closeRelayById(relayId);
+        resolve(stream ? { stream, relayId } : null);
+      };
+      const timer = setTimeout(() => {
+        pendingRelayWaiters.delete(relayId);
+        finish(null);
+      }, timeoutMs);
+      pendingRelayWaiters.set(relayId, { finish });
+      relayChannel.postMessage({ type: 'relay-request', relayId, deviceId });
+    });
+  }
+
+  function crossfadeToCameraLayer(newEl, mode, stream, opts = {}) {
+    if (!newEl) return;
+    const prevEl = newEl === camLayerA ? camLayerB : camLayerA;
+    if (camFadeOutTimer) {
+      clearTimeout(camFadeOutTimer);
+      camFadeOutTimer = null;
+    }
+    if (stream && newEl.srcObject !== stream) {
+      newEl.srcObject = stream;
+    }
+    newEl.muted = true;
+    newEl.playsInline = true;
+    newEl.play().catch(() => {});
+    const targetZ = (mode === 'preacher') ? '6' : '3';
+    // Layer incoming camera directly over outgoing camera so 0.28s fade shows zero flicker
+    const overPrevZ = prevEl && prevEl.style.display !== 'none' && prevEl.style.opacity !== '0'
+      ? String(Math.max(Number(targetZ), Number(prevEl.style.zIndex || targetZ) + 1))
+      : targetZ;
+    fadeInCameraElement(newEl, overPrevZ);
+    activeCamLayerIdx = newEl === camLayerA ? 0 : 1;
+    cameraVideo = newEl;
+
+    const oldRelay = opts.oldRelayId || '';
+    const oldHwStream = opts.oldHwStream || null;
+    const oldWcamStop = !!opts.stopOfflineWcam;
+    const oldClearVdo = !!opts.clearVdo;
+
+    camFadeOutTimer = setTimeout(() => {
+      camFadeOutTimer = null;
+      newEl.style.zIndex = targetZ;
+      if (prevEl && prevEl !== newEl) {
+        prevEl.classList.remove('camera-active');
+        prevEl.style.opacity = '0';
+        prevEl.style.display = 'none';
+        prevEl.style.pointerEvents = 'none';
+        prevEl.srcObject = null;
+      }
+      if (oldRelay && oldRelay !== activeRelayId) closeRelayById(oldRelay);
+      if (oldHwStream && oldHwStream !== activeCameraStream) {
+        oldHwStream.getTracks().forEach(t => t.stop());
+      }
+      if (oldWcamStop) stopOfflineWirelessCamFeed();
+      if (oldClearVdo) clearVdoNinjaCamFeed(state.prewarmWcamUrl || '');
+    }, 320);
+  }
+
+  function fadeOutAllCameraVideoLayers(delayCleanupCb) {
+    if (camFadeOutTimer) {
+      clearTimeout(camFadeOutTimer);
+      camFadeOutTimer = null;
+    }
+    [camLayerA, camLayerB].forEach(el => {
+      if (!el) return;
+      el.classList.remove('camera-active');
+      el.style.opacity = '0';
+      el.style.pointerEvents = 'none';
+    });
+    camFadeOutTimer = setTimeout(() => {
+      camFadeOutTimer = null;
+      [camLayerA, camLayerB].forEach(el => {
+        if (!el) return;
+        el.style.display = 'none';
+        el.srcObject = null;
+      });
+      if (typeof delayCleanupCb === 'function') delayCleanupCb();
+    }, 300);
+  }
+
+  function clearVdoNinjaCamFeed(keepPrewarmUrl = '') {
     if (!wcamIframe) return;
+    if (keepPrewarmUrl) {
+      if (wcamIframe.dataset.loadedUrl !== keepPrewarmUrl) {
+        wcamIframe.dataset.loadedUrl = keepPrewarmUrl;
+        wcamIframe.src = keepPrewarmUrl;
+      }
+      wcamIframe.classList.remove('camera-active');
+      wcamIframe.style.opacity = '0';
+      wcamIframe.style.zIndex = '2';
+      wcamIframe.style.display = 'block';
+      wcamIframe.style.pointerEvents = 'none';
+      return;
+    }
     if (wcamIframe.dataset.loadedUrl) {
       wcamIframe.dataset.loadedUrl = '';
       wcamIframe.src = 'about:blank';
@@ -791,26 +1013,38 @@
 
   function setupVdoNinjaCamFeed(viewUrl, mode) {
     if (!wcamIframe || !viewUrl) {
-      clearVdoNinjaCamFeed();
+      clearVdoNinjaCamFeed('');
       return;
     }
     if (wcamIframe.dataset.loadedUrl !== viewUrl) {
       wcamIframe.dataset.loadedUrl = viewUrl;
       wcamIframe.src = viewUrl;
     }
-    wcamIframe.style.display = 'block';
-    wcamIframe.classList.add('camera-active');
-    wcamIframe.style.opacity = '1';
-    wcamIframe.style.zIndex = (mode === 'preacher') ? '6' : '3';
-    wcamIframe.style.pointerEvents = 'none';
+    fadeInCameraElement(wcamIframe, (mode === 'preacher') ? '6' : '3');
+    fadeOutAllCameraVideoLayers(() => {
+      if (activeRelayId) { closeRelayById(activeRelayId); activeRelayId = ''; activeRelayDeviceId = ''; }
+      if (activeCameraStream) { activeCameraStream.getTracks().forEach(t => t.stop()); activeCameraStream = null; }
+      stopOfflineWirelessCamFeed();
+    });
   }
 
-  async function setupOfflineWirelessCamFeed(slot, mode) {
+  async function setupOfflineWirelessCamFeed(slot, mode, isStandbyPrewarm = false) {
     const cleanSlot = String(slot || '1');
+    const shouldShowLive = !isStandbyPrewarm && state.cameraEnabled && mode && mode !== 'none';
+    const curEl = getActiveCameraVideoEl();
     if (offlineWcamSlot === cleanSlot && offlineWcamSse && offlineWcamPc && offlineWcamPc.connectionState !== 'failed' && offlineWcamPc.connectionState !== 'closed') {
-      cameraVideo.style.display = 'block';
-      cameraVideo.classList.add('camera-active');
-      cameraVideo.style.opacity = '1';
+      if (shouldShowLive) {
+        if (curEl.srcObject) {
+          fadeInCameraElement(curEl, (mode === 'preacher') ? '6' : '3');
+        } else {
+          crossfadeToCameraLayer(getStandbyCameraVideoEl(), mode, curEl.srcObject);
+        }
+      } else {
+        curEl.classList.remove('camera-active');
+        curEl.style.opacity = '0';
+        curEl.style.zIndex = '2';
+        curEl.style.display = 'block';
+      }
       return;
     }
     stopOfflineWirelessCamFeed();
@@ -836,17 +1070,41 @@
       }
       const pc = new RTCPeerConnection({ iceServers: [] });
       offlineWcamPc = pc;
-      try { pc.addTransceiver('video', { direction: 'recvonly' }); } catch (_) {}
+      try {
+        const tr = pc.addTransceiver('video', { direction: 'recvonly' });
+        if (tr && typeof tr.setCodecPreferences === 'function' && RTCRtpReceiver.getCapabilities) {
+          const caps = RTCRtpReceiver.getCapabilities('video');
+          if (caps && caps.codecs) {
+            const h264 = caps.codecs.filter(c => /h264/i.test(c.mimeType));
+            const rest = caps.codecs.filter(c => !/h264/i.test(c.mimeType));
+            if (h264.length) tr.setCodecPreferences([...h264, ...rest]);
+          }
+        }
+      } catch (_) {}
 
       pc.ontrack = (ev) => {
         if (offlineWcamSlot !== cleanSlot) return;
         const stream = (ev.streams && ev.streams[0]) ? ev.streams[0] : new MediaStream([ev.track]);
-        cameraVideo.srcObject = stream;
-        cameraVideo.style.display = 'block';
-        cameraVideo.classList.add('camera-active');
-        cameraVideo.style.opacity = '1';
-        cameraVideo.style.pointerEvents = 'none';
-        cameraVideo.play().catch(() => {});
+        const isLiveRightNow = state.cameraEnabled && state.cameraMode !== 'none' && String(state.cameraDeviceId || '') === `wcam-offline:${cleanSlot}`;
+        if (isLiveRightNow) {
+          crossfadeToCameraLayer(getStandbyCameraVideoEl(), state.cameraMode, stream, {
+            oldRelayId: activeRelayId,
+            oldHwStream: activeCameraStream,
+            clearVdo: true
+          });
+          activeRelayId = '';
+          activeRelayDeviceId = '';
+          activeCameraStream = null;
+        } else {
+          const preEl = getActiveCameraVideoEl();
+          preEl.srcObject = stream;
+          preEl.play().catch(() => {});
+          preEl.classList.remove('camera-active');
+          preEl.style.display = 'block';
+          preEl.style.opacity = '0';
+          preEl.style.zIndex = '2';
+          preEl.style.pointerEvents = 'none';
+        }
       };
 
       pc.onicecandidate = (ev) => {
@@ -893,11 +1151,23 @@
             try { offlineWcamPc.close(); } catch (_) {}
             offlineWcamPc = null;
           }
-          cameraVideo.srcObject = null;
+          const cur = getActiveCameraVideoEl();
+          if (cur) cur.srcObject = null;
         } else if (msg.type === 'answer' && String(msg.slot) === cleanSlot && offlineWcamPc && msg.sdp) {
           await offlineWcamPc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+          if (offlineWcamPendingIce.length > 0) {
+            const queued = offlineWcamPendingIce.slice();
+            offlineWcamPendingIce = [];
+            for (const cand of queued) {
+              await offlineWcamPc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+            }
+          }
         } else if (msg.type === 'ice' && String(msg.slot) === cleanSlot && offlineWcamPc && msg.candidate) {
-          await offlineWcamPc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
+          if (offlineWcamPc.remoteDescription && offlineWcamPc.remoteDescription.type) {
+            await offlineWcamPc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
+          } else {
+            offlineWcamPendingIce.push(msg.candidate);
+          }
         }
       } catch (_) {}
     };
@@ -907,82 +1177,99 @@
     if (!state.cameraEnabled || mode === 'none' || !mode) {
       cameraSetupSeq++;
       cameraOpeningKey = null;
-      stopOfflineWirelessCamFeed();
-      clearVdoNinjaCamFeed();
-      if (activeCameraStream) {
-        activeCameraStream.getTracks().forEach(track => track.stop());
-        activeCameraStream = null;
+
+      // Standby background pre-warming for zero-lag instant crossfade when Add to TV is clicked
+      if (state.prewarmWcamUrl) {
+        fadeOutAllCameraVideoLayers(() => {
+          stopOfflineWirelessCamFeed();
+          if (activeRelayId) { closeRelayById(activeRelayId); activeRelayId = ''; activeRelayDeviceId = ''; }
+          if (activeCameraStream) { activeCameraStream.getTracks().forEach(t => t.stop()); activeCameraStream = null; }
+          activeCameraDeviceId = null;
+        });
+        clearVdoNinjaCamFeed(state.prewarmWcamUrl);
+        return;
       }
-      cameraVideo.srcObject = null;
-      cameraVideo.classList.remove('camera-active');
-      cameraVideo.style.opacity = '0';
-      cameraVideo.style.display = 'none';
-      cameraVideo.style.pointerEvents = 'none';
-      activeCameraDeviceId = null;
+      if (state.prewarmCamDeviceId && String(state.prewarmCamDeviceId).startsWith('wcam-offline:')) {
+        clearVdoNinjaCamFeed('');
+        fadeOutAllCameraVideoLayers(() => {
+          if (activeCameraStream) { activeCameraStream.getTracks().forEach(t => t.stop()); activeCameraStream = null; }
+          activeCameraDeviceId = null;
+          const warmSlot = String(state.prewarmCamDeviceId).replace('wcam-offline:', '');
+          if (!activeRelayId || activeRelayDeviceId !== state.prewarmCamDeviceId) {
+            setupOfflineWirelessCamFeed(warmSlot, 'none', true);
+          }
+        });
+        return;
+      }
+
+      clearVdoNinjaCamFeed('');
+      fadeOutAllCameraVideoLayers(() => {
+        stopOfflineWirelessCamFeed();
+        if (activeRelayId) { closeRelayById(activeRelayId); activeRelayId = ''; activeRelayDeviceId = ''; }
+        if (activeCameraStream) { activeCameraStream.getTracks().forEach(t => t.stop()); activeCameraStream = null; }
+        activeCameraDeviceId = null;
+      });
       return;
     }
 
     if (deviceId && String(deviceId).startsWith('wcam-vdo:')) {
       cameraSetupSeq++;
       cameraOpeningKey = null;
-      stopOfflineWirelessCamFeed();
-      if (activeCameraStream) {
-        activeCameraStream.getTracks().forEach(track => track.stop());
-        activeCameraStream = null;
-      }
-      cameraVideo.srcObject = null;
-      cameraVideo.classList.remove('camera-active');
-      cameraVideo.style.opacity = '0';
-      cameraVideo.style.display = 'none';
       activeCameraDeviceId = deviceId;
       setupVdoNinjaCamFeed(state.wirelessCamViewUrl || '', mode);
       return;
     }
 
-    if (deviceId && String(deviceId).startsWith('wcam-offline:')) {
-      cameraSetupSeq++;
-      cameraOpeningKey = null;
-      clearVdoNinjaCamFeed();
-      if (activeCameraStream) {
-        activeCameraStream.getTracks().forEach(track => track.stop());
-        activeCameraStream = null;
-      }
-      activeCameraDeviceId = deviceId;
-      const slot = String(deviceId).replace('wcam-offline:', '');
-      setupOfflineWirelessCamFeed(slot, mode);
-      return;
-    }
-
-    stopOfflineWirelessCamFeed();
-    clearVdoNinjaCamFeed();
-
-    const requestKey = (deviceId || '') + '::' + (deviceLabel || '');
-    const isStreamAlive = activeCameraStream && activeCameraStream.getVideoTracks().some(t => t.readyState === 'live');
-
-    if (isStreamAlive && activeCameraDeviceId === requestKey) {
-      cameraVideo.style.display = 'block';
-      cameraVideo.classList.add('camera-active');
-      cameraVideo.style.opacity = '1';
-      if (cameraVideo.paused) {
-        cameraVideo.play().catch(e => console.warn('Camera video play error:', e));
-      }
-      return;
-    }
-
-    if (cameraOpeningKey === requestKey) {
-      return;
-    }
-
-    cameraOpeningKey = requestKey;
     const mySeq = ++cameraSetupSeq;
+    const isOfflineCam = deviceId && String(deviceId).startsWith('wcam-offline:');
+    const requestKey = isOfflineCam ? String(deviceId) : ((deviceId || '') + '::' + (deviceLabel || ''));
+
+    // If same camera stream is already loaded on active layer, just fade smoothly in/update z-index
+    const activeEl = getActiveCameraVideoEl();
+    const activeElTrack = activeEl && activeEl.srcObject && activeEl.srcObject.getVideoTracks ? activeEl.srcObject.getVideoTracks().find(t => t.readyState === 'live') : null;
+    if (activeCameraDeviceId === requestKey && activeElTrack) {
+      clearVdoNinjaCamFeed('');
+      fadeInCameraElement(activeEl, (mode === 'preacher') ? '6' : '3');
+      if (activeEl.paused) activeEl.play().catch(() => {});
+      return;
+    }
+
+    if (cameraOpeningKey === requestKey) return;
+    cameraOpeningKey = requestKey;
 
     try {
-      // Stop previous stream before acquiring new device
-      if (activeCameraStream) {
-        activeCameraStream.getTracks().forEach(track => track.stop());
+      // 1. Try instant <20ms BroadcastChannel localhost relay from Control Desk first!
+      //    (Zero duplicate iPhone encoding, zero Windows DirectShow lock errors!)
+      const relayed = await requestRelayStreamFromControl(deviceId || '');
+      if (mySeq !== cameraSetupSeq || !state.cameraEnabled || state.cameraMode === 'none') {
+        if (relayed && relayed.relayId) closeRelayById(relayed.relayId);
+        return;
+      }
+      if (relayed && relayed.stream) {
+        const prevRelay = activeRelayId;
+        const prevHw = activeCameraStream;
+        activeRelayId = relayed.relayId;
+        activeRelayDeviceId = deviceId || '';
         activeCameraStream = null;
+        activeCameraDeviceId = requestKey;
+        crossfadeToCameraLayer(getStandbyCameraVideoEl(), mode, relayed.stream, {
+          oldRelayId: prevRelay,
+          oldHwStream: prevHw,
+          stopOfflineWcam: true,
+          clearVdo: true
+        });
+        return;
       }
 
+      // 2. Fallback: Direct Offline /cam WebRTC peer
+      if (isOfflineCam) {
+        const slot = String(deviceId).replace('wcam-offline:', '');
+        activeCameraDeviceId = requestKey;
+        setupOfflineWirelessCamFeed(slot, mode, false);
+        return;
+      }
+
+      // 3. Fallback: Direct Hardware Camera (only if Control Desk didn't already hold stream)
       let stream = null;
       for (let attempt = 1; attempt <= 4; attempt++) {
         try {
@@ -994,7 +1281,7 @@
           if (window.zionApi && window.zionApi.requestCameraRelease) {
             window.zionApi.requestCameraRelease();
           }
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 450));
         }
       }
 
@@ -1002,17 +1289,22 @@
         if (stream) stream.getTracks().forEach(t => t.stop());
         return;
       }
+      if (!stream) return;
 
+      const prevRelay = activeRelayId;
+      const prevHw = activeCameraStream;
+      activeRelayId = '';
+      activeRelayDeviceId = '';
       activeCameraStream = stream;
       activeCameraDeviceId = requestKey;
-      cameraVideo.srcObject = stream;
-      cameraVideo.muted = true;
-      cameraVideo.style.display = 'block';
-      cameraVideo.classList.add('camera-active');
-      cameraVideo.style.opacity = '1';
-      await cameraVideo.play().catch(e => console.warn('Camera play error:', e));
+      crossfadeToCameraLayer(getStandbyCameraVideoEl(), mode, stream, {
+        oldRelayId: prevRelay,
+        oldHwStream: prevHw,
+        stopOfflineWcam: true,
+        clearVdo: true
+      });
     } catch (err) {
-      console.error('[Display Camera] All camera initialization attempts failed:', err);
+      console.error('[Display Camera] Camera switch warning:', err);
     } finally {
       if (cameraOpeningKey === requestKey) {
         cameraOpeningKey = null;
@@ -1061,7 +1353,8 @@
       }
       if (mediaImg) mediaImg.style.filter = 'none';
       if (mediaVideo) mediaVideo.style.filter = 'none';
-      if (cameraVideo) cameraVideo.style.filter = 'none';
+      if (camLayerA) camLayerA.style.filter = 'none';
+      if (camLayerB) camLayerB.style.filter = 'none';
       if (wcamIframe) wcamIframe.style.filter = 'none';
       if (canvas) canvas.style.filter = 'none';
       if (scrim) scrim.style.opacity = '1';
@@ -1076,7 +1369,8 @@
       if (mediaImg) mediaImg.style.filter = boostFilter;
       // Keep zero-copy hardware video overlay active unless user significantly boosts brightness (>115%)
       if (mediaVideo) mediaVideo.style.filter = bVal > 115 ? `brightness(${boostFactor})` : 'none';
-      if (cameraVideo) cameraVideo.style.filter = bVal > 115 ? `brightness(${boostFactor})` : 'none';
+      if (camLayerA) camLayerA.style.filter = bVal > 115 ? `brightness(${boostFactor})` : 'none';
+      if (camLayerB) camLayerB.style.filter = bVal > 115 ? `brightness(${boostFactor})` : 'none';
       if (wcamIframe) wcamIframe.style.filter = bVal > 115 ? `brightness(${boostFactor})` : 'none';
       if (canvas) canvas.style.filter = boostFilter;
 
@@ -1111,10 +1405,10 @@
       cameraVideo.style.zIndex = '3';
       if (wcamIframe) wcamIframe.style.zIndex = '3';
     } else {
-      // Normal procedural / media background: gentle ambient scrim
+      // Normal procedural / media background: gentle ambient scrim; keep off-air/prewarmed camera beneath canvas
       scrim.style.background = 'rgba(0, 0, 0, 0.4)';
-      cameraVideo.style.zIndex = '3';
-      if (wcamIframe) wcamIframe.style.zIndex = '3';
+      cameraVideo.style.zIndex = state.prewarmCamDeviceId ? '2' : '3';
+      if (wcamIframe) wcamIframe.style.zIndex = state.prewarmWcamUrl ? '2' : '3';
     }
 
     function formatMediaUrl(url) {

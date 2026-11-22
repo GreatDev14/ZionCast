@@ -52,8 +52,9 @@
     vdoRoomId: '',
     activeVdoCamSlots: [],
     offlineWirelessCams: [],
-    wcamSetupMode: 'vdo',
+    wcamSetupMode: 'offline',
     wcamSelectedSlot: '1',
+    wcamFacing: 'environment',
     wcamDrawerOpen: false,
     wcamServerInfo: null,
     bannerText: '',
@@ -688,7 +689,9 @@
         if (s.backgroundId) state.backgroundId = s.backgroundId;
         if (s.customBgUrl) state.customBgUrl = s.customBgUrl;
         if (s.cameraDeviceId) state.cameraDeviceId = s.cameraDeviceId;
-        if (s.cameraMode) state.cameraMode = s.cameraMode;
+        // Always start in standby ('none') on fresh launch so ZionCast never accidentally projects a laptop webcam live
+        state.cameraMode = 'none';
+        state.cameraEnabled = false;
         if (s.cameraOpacity !== undefined) {
           state.cameraOpacity = s.cameraOpacity;
           if (cameraDimmerSlider) cameraDimmerSlider.value = s.cameraOpacity;
@@ -1002,9 +1005,11 @@
   if (window.zionApi && window.zionApi.onReleaseControlCamera) {
     window.zionApi.onReleaseControlCamera(() => {
       stopAllCameraCardStreams(false);
-      if (previewVideoStream) previewVideoStream.srcObject = null;
-      if (liveVideoStream) liveVideoStream.srcObject = null;
-      activeControlCameraId = null;
+      const isWireVf = selectedViewfinderDeviceId && String(selectedViewfinderDeviceId).startsWith('wcam-');
+      const isWireLive = state.cameraDeviceId && String(state.cameraDeviceId).startsWith('wcam-');
+      if (!isWireVf && previewVideoStream) previewVideoStream.srcObject = null;
+      if (!isWireLive && liveVideoStream) liveVideoStream.srcObject = null;
+      if (!isWireLive) activeControlCameraId = null;
       if (state.cameraEnabled && labelCameraStatus) {
         labelCameraStatus.textContent = `Camera: ${state.cameraMode.toUpperCase()} LIVE ON TV`;
       }
@@ -1048,22 +1053,28 @@
   function getVdoPushUrl(slot = '1') {
     const room = getOrCreateVdoRoomId();
     const s = String(slot || '1');
-    return `https://vdo.ninja/?push=${room}_cam${s}&room=${room}&webcam&facingmode=environment&cleanoutput&autostart&noaudio`;
+    const lens = state.wcamFacing || 'environment';
+    if (lens === 'prompt') {
+      return `https://vdo.ninja/?push=${room}_cam${s}&quality=0&codec=h264&maxframerate=30&noaudio`;
+    }
+    const facingParam = lens === 'user' ? 'user' : 'environment';
+    return `https://vdo.ninja/?push=${room}_cam${s}&webcam&facing=${facingParam}&quality=0&codec=h264&maxframerate=30&noaudio&autostart`;
   }
 
-  function getVdoViewUrl(slot = '1') {
+  function getVdoViewUrl(slot = '1', bitrateKbps = 8000) {
     const room = getOrCreateVdoRoomId();
     const s = String(slot || '1');
-    return `https://vdo.ninja/?view=${room}_cam${s}&room=${room}&cleanoutput&autostart&noaudio`;
+    return `https://vdo.ninja/?view=${room}_cam${s}&cleanoutput&videobitrate=${bitrateKbps}&codec=h264`;
   }
 
   function getOfflineCamPushUrl(slot = '1') {
     const s = String(slot || '1');
+    const lens = state.wcamFacing === 'user' ? 'user' : 'environment';
     const info = state.wcamServerInfo;
     const base = (info && info.offlineCamBaseUrl)
       ? info.offlineCamBaseUrl
       : `https://${(info && info.ip) ? info.ip : '127.0.0.1'}:${(info && info.httpsPort) ? info.httpsPort : 3443}/cam`;
-    return `${base}?slot=${encodeURIComponent(s)}`;
+    return `${base}?slot=${encodeURIComponent(s)}&lens=${lens}`;
   }
 
   function setMonitorWcamIframe(iframeEl, viewUrl) {
@@ -1086,19 +1097,208 @@
   function setMonitorVideoStream(videoEl, stream) {
     if (!videoEl) return;
     if (stream) {
-      if (videoEl.srcObject !== stream) videoEl.srcObject = stream;
+      videoEl.muted = true;
+      videoEl.playsInline = true;
+      if (videoEl.srcObject !== stream) {
+        videoEl.srcObject = stream;
+      }
       videoEl.style.display = 'block';
-      videoEl.play().catch(() => {});
+      if (videoEl.paused || videoEl.readyState < 2) {
+        videoEl.play().catch(() => {});
+      }
     } else {
       videoEl.srcObject = null;
       videoEl.style.display = 'none';
     }
   }
 
+  function boostControlSdp(sdpStr, kbps = 12000) {
+    try {
+      if (!sdpStr) return sdpStr;
+      const lines = sdpStr.split(/\r?\n/);
+      const h264Pts = [];
+      for (const l of lines) {
+        const m = l.match(/^a=rtpmap:(\d+)\s+H264\//i);
+        if (m) h264Pts.push(m[1]);
+      }
+      const out = [];
+      let inVideo = false;
+      let hasBandwidth = false;
+      let hasTias = false;
+      for (let line of lines) {
+        if (line.startsWith('m=video ')) {
+          inVideo = true;
+          hasBandwidth = false;
+          hasTias = false;
+          out.push(line);
+          continue;
+        }
+        if (line.startsWith('m=')) inVideo = false;
+        if (inVideo && line.startsWith('b=AS:')) {
+          out.push(`b=AS:${kbps}`);
+          hasBandwidth = true;
+          continue;
+        }
+        if (inVideo && line.startsWith('b=TIAS:')) {
+          out.push(`b=TIAS:${kbps * 1000}`);
+          hasTias = true;
+          continue;
+        }
+        if (inVideo && line.startsWith('a=fmtp:') && h264Pts.length > 0) {
+          const fm = line.match(/^a=fmtp:(\d+)\s+/);
+          if (fm && h264Pts.includes(fm[1]) && !line.includes('x-google-max-bitrate')) {
+            line = `${line};x-google-min-bitrate=3000;x-google-start-bitrate=8000;x-google-max-bitrate=${kbps}`;
+          }
+        }
+        out.push(line);
+        if (inVideo && line.startsWith('c=IN ')) {
+          if (!hasBandwidth) { out.push(`b=AS:${kbps}`); hasBandwidth = true; }
+          if (!hasTias) { out.push(`b=TIAS:${kbps * 1000}`); hasTias = true; }
+        }
+      }
+      return out.join('\r\n');
+    } catch (_) {
+      return sdpStr;
+    }
+  }
+
+  function rankVideoCodecs(codecs) {
+    if (!Array.isArray(codecs)) return [];
+    const score = (c) => {
+      const m = (c.mimeType || '').toLowerCase();
+      const fmtp = (c.sdpFmtpLine || '').toLowerCase();
+      if (m === 'video/h264') {
+        if (fmtp.includes('6400') || fmtp.includes('f400')) return 1; // High Profile (1080p+/60)
+        if (fmtp.includes('4d00')) return 2; // Main Profile
+        if (fmtp.includes('42e0')) return 3; // Constrained Baseline 42e0
+        return 6; // Baseline 4200 (720p max in Level 3.1)
+      }
+      if (m === 'video/vp9') return 4;
+      if (m === 'video/vp8') return 5;
+      if (m === 'video/av1') return 7;
+      if (m === 'video/rtx') return 8;
+      return 9;
+    };
+    return codecs.slice().sort((a, b) => score(a) - score(b));
+  }
+
   const offlineControlWcamStreams = new Map();
   const offlineControlWcamPcs = new Map();
+  const offlineControlPendingIce = new Map();
+  const offlineControlWcamStats = new Map(); // slot -> '1920×1080 • 8.2M'
+  const talkbackPcs = new Map();
+  const talkbackPendingIce = new Map();
+  const crewMicPcs = new Map();
+  const crewMicPendingIce = new Map();
+  const crewIncomingAudioEls = new Map();
+  let crewIncomingMuted = false;
+  let talkbackStream = null;
+  let startTalkbackPeerForSlot = null;
   let offlineControlSse = null;
   const offlineControlViewerId = 'ctrl-' + Math.random().toString(36).slice(2, 8);
+
+  const wcamRelayChan = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('zioncast-wcam-relay') : null;
+  const relayPcs = new Map();
+  function applyRelayBitrate(pc, maxBps = 20000000) {
+    if (!pc || !pc.getSenders) return;
+    pc.getSenders().forEach(sender => {
+      if (sender.track && sender.track.kind === 'video' && sender.getParameters && sender.setParameters) {
+        try {
+          const p = sender.getParameters() || {};
+          if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+          p.encodings[0].maxBitrate = maxBps;
+          p.encodings[0].scaleResolutionDownBy = 1.0;
+          sender.setParameters(p).catch(() => {});
+          try {
+            p.degradationPreference = 'maintain-resolution';
+            sender.setParameters(p).catch(() => {});
+          } catch (_) {}
+        } catch (_) {}
+      }
+    });
+  }
+  if (wcamRelayChan) {
+    wcamRelayChan.onmessage = async (ev) => {
+      const msg = ev && ev.data;
+      if (!msg || !msg.type) return;
+      if (msg.type === 'relay-request' && msg.relayId && msg.deviceId) {
+        const devId = String(msg.deviceId);
+        let stream = null;
+        if (devId.startsWith('wcam-offline:')) {
+          const slot = devId.split(':')[1] || '1';
+          stream = offlineControlWcamStreams.get(slot) || null;
+        } else {
+          stream = cameraCardStreams.get(devId) || null;
+        }
+        const liveTrack = stream && stream.getVideoTracks().find(t => t.readyState === 'live');
+        if (!liveTrack) {
+          wcamRelayChan.postMessage({ type: 'relay-unavailable', relayId: msg.relayId, deviceId: devId });
+          return;
+        }
+        const prev = relayPcs.get(msg.relayId);
+        if (prev && prev.pc) { try { prev.pc.close(); } catch (_) {} }
+        const pc = new RTCPeerConnection({ iceServers: [] });
+        const entry = { pc, deviceId: devId, pendingIce: [] };
+        relayPcs.set(msg.relayId, entry);
+        try { liveTrack.contentHint = 'motion'; } catch (_) {}
+        const tr = pc.addTransceiver(liveTrack, { direction: 'sendonly', streams: [stream] });
+        try {
+          if (tr && typeof tr.setCodecPreferences === 'function' && RTCRtpSender.getCapabilities) {
+            const caps = RTCRtpSender.getCapabilities('video');
+            if (caps && caps.codecs) tr.setCodecPreferences(rankVideoCodecs(caps.codecs));
+          }
+        } catch (_) {}
+        pc.onconnectionstatechange = () => {
+          if (pc.connectionState === 'connected') applyRelayBitrate(pc, 20000000);
+        };
+        pc.onicecandidate = (iceEv) => {
+          if (iceEv.candidate) {
+            wcamRelayChan.postMessage({
+              type: 'relay-ice',
+              relayId: msg.relayId,
+              candidate: iceEv.candidate.toJSON ? iceEv.candidate.toJSON() : { candidate: iceEv.candidate.candidate, sdpMid: iceEv.candidate.sdpMid, sdpMLineIndex: iceEv.candidate.sdpMLineIndex }
+            });
+          }
+        };
+        try {
+          const offer = await pc.createOffer();
+          const boosted = new RTCSessionDescription({ type: offer.type, sdp: boostControlSdp(offer.sdp, 20000) });
+          await pc.setLocalDescription(boosted);
+          applyRelayBitrate(pc, 20000000);
+          wcamRelayChan.postMessage({
+            type: 'relay-offer',
+            relayId: msg.relayId,
+            deviceId: devId,
+            sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp }
+          });
+        } catch (_) {
+          wcamRelayChan.postMessage({ type: 'relay-unavailable', relayId: msg.relayId, deviceId: devId });
+        }
+      } else if (msg.type === 'relay-answer' && msg.relayId && msg.sdp) {
+        const entry = relayPcs.get(msg.relayId);
+        if (entry && entry.pc) {
+          entry.pc.setRemoteDescription(new RTCSessionDescription(msg.sdp)).then(() => {
+            const q = entry.pendingIce.slice();
+            entry.pendingIce = [];
+            q.forEach(c => entry.pc.addIceCandidate(new RTCIceCandidate(c)).catch(() => {}));
+          }).catch(() => {});
+        }
+      } else if (msg.type === 'relay-ice' && msg.relayId && msg.candidate) {
+        const entry = relayPcs.get(msg.relayId);
+        if (entry && entry.pc) {
+          if (entry.pc.remoteDescription && entry.pc.remoteDescription.type) {
+            entry.pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
+          } else {
+            entry.pendingIce.push(msg.candidate);
+          }
+        }
+      } else if (msg.type === 'relay-close' && msg.relayId) {
+        const entry = relayPcs.get(msg.relayId);
+        if (entry && entry.pc) { try { entry.pc.close(); } catch (_) {} }
+        relayPcs.delete(msg.relayId);
+      }
+    };
+  }
 
   function getLocalHttpBase() {
     const port = (state.wcamServerInfo && state.wcamServerInfo.port) ? state.wcamServerInfo.port : 3000;
@@ -1118,11 +1318,27 @@
   function attachOfflineStreamToActiveTargets(slot, stream) {
     const devId = `wcam-offline:${slot}`;
     document.querySelectorAll(`video.wcam-offline-video[data-wcam-slot="${slot}"]`).forEach(v => {
+      v.muted = true;
+      v.playsInline = true;
       if (v.srcObject !== stream) {
         v.srcObject = stream;
+      }
+      if (v.paused || v.readyState < 2) {
         v.play().catch(() => {});
       }
     });
+    const newTrack = stream && stream.getVideoTracks().find(t => t.readyState === 'live');
+    if (newTrack) {
+      relayPcs.forEach((entry) => {
+        if (entry.deviceId === devId && entry.pc && entry.pc.connectionState !== 'closed') {
+          entry.pc.getSenders().forEach(s => {
+            if (s.track && s.track.kind === 'video') {
+              s.replaceTrack(newTrack).catch(() => {});
+            }
+          });
+        }
+      });
+    }
     if (selectedViewfinderDeviceId === devId && state.cameraDisplaySectionOpen) {
       setMonitorWcamIframe(previewWcamIframe, '');
       setMonitorVideoStream(previewVideoStream, stream);
@@ -1135,29 +1351,42 @@
     }
   }
 
-  async function startControlOfflineWcamPeer(slot) {
+  async function startControlOfflineWcamPeer(slot, forceRestart = false) {
     const cleanSlot = String(slot || '1');
     const existingPc = offlineControlWcamPcs.get(cleanSlot);
-    if (existingPc && existingPc.connectionState !== 'failed' && existingPc.connectionState !== 'closed') {
-      const existingStream = offlineControlWcamStreams.get(cleanSlot);
-      if (existingStream) {
-        attachOfflineStreamToActiveTargets(cleanSlot, existingStream);
-        return existingStream;
-      }
+    const existingStream = offlineControlWcamStreams.get(cleanSlot);
+    const hasLiveTrack = !!(existingStream && existingStream.getVideoTracks().some(t => t.readyState === 'live'));
+    if (!forceRestart && existingPc && existingPc.connectionState !== 'failed' && existingPc.connectionState !== 'closed' && hasLiveTrack) {
+      attachOfflineStreamToActiveTargets(cleanSlot, existingStream);
+      return existingStream;
     }
     if (existingPc) {
       try { existingPc.close(); } catch (_) {}
       offlineControlWcamPcs.delete(cleanSlot);
     }
+    offlineControlWcamStreams.delete(cleanSlot);
+    offlineControlPendingIce.set(cleanSlot, []);
 
     const pc = new RTCPeerConnection({ iceServers: [] });
     offlineControlWcamPcs.set(cleanSlot, pc);
-    try { pc.addTransceiver('video', { direction: 'recvonly' }); } catch (_) {}
+    try {
+      const tr = pc.addTransceiver('video', { direction: 'recvonly' });
+      if (tr && typeof tr.setCodecPreferences === 'function' && RTCRtpReceiver.getCapabilities) {
+        const caps = RTCRtpReceiver.getCapabilities('video');
+        if (caps && caps.codecs) {
+          tr.setCodecPreferences(rankVideoCodecs(caps.codecs));
+        }
+      }
+    } catch (_) {}
 
     pc.ontrack = (ev) => {
+      if (offlineControlWcamPcs.get(cleanSlot) !== pc) return;
       const stream = (ev.streams && ev.streams[0]) ? ev.streams[0] : new MediaStream([ev.track]);
       offlineControlWcamStreams.set(cleanSlot, stream);
       attachOfflineStreamToActiveTargets(cleanSlot, stream);
+      if (ev.track) {
+        ev.track.onunmute = () => attachOfflineStreamToActiveTargets(cleanSlot, stream);
+      }
     };
 
     pc.onicecandidate = (ev) => {
@@ -1174,7 +1403,8 @@
 
     try {
       const offer = await pc.createOffer({ offerToReceiveVideo: true });
-      await pc.setLocalDescription(offer);
+      const boostedOffer = new RTCSessionDescription({ type: offer.type, sdp: boostControlSdp(offer.sdp, 12000) });
+      await pc.setLocalDescription(boostedOffer);
       await sendControlCamSignal({
         type: 'offer',
         targetRole: 'publisher',
@@ -1188,31 +1418,209 @@
     return offlineControlWcamStreams.get(cleanSlot) || null;
   }
 
+  function updateCrewIncomingBarUI() {
+    const bar = document.getElementById('crew-incoming-bar');
+    const lbl = document.getElementById('crew-incoming-label');
+    if (!bar) return;
+    const activeSlots = Array.from(crewIncomingAudioEls.keys());
+    if (activeSlots.length > 0) {
+      bar.style.display = 'flex';
+      if (lbl) {
+        lbl.textContent = activeSlots.map(s => `Cam ${s}`).join(', ') + ' Talking to Desk...';
+      }
+    } else {
+      bar.style.display = 'none';
+    }
+  }
+
+  function stopCrewMicReceiverForSlot(slot) {
+    const cleanSlot = String(slot || '1');
+    const pc = crewMicPcs.get(cleanSlot);
+    if (pc) { try { pc.close(); } catch (_) {} crewMicPcs.delete(cleanSlot); }
+    crewMicPendingIce.delete(cleanSlot);
+    const audioEl = crewIncomingAudioEls.get(cleanSlot);
+    if (audioEl) {
+      try { audioEl.pause(); audioEl.srcObject = null; audioEl.remove(); } catch (_) {}
+      crewIncomingAudioEls.delete(cleanSlot);
+    }
+    updateCrewIncomingBarUI();
+  }
+
+  async function startCrewMicReceiverForSlot(slot) {
+    const cleanSlot = String(slot || '1');
+    stopCrewMicReceiverForSlot(cleanSlot);
+    const pc = new RTCPeerConnection({ iceServers: [] });
+    crewMicPcs.set(cleanSlot, pc);
+    crewMicPendingIce.set(cleanSlot, []);
+    try { pc.addTransceiver('audio', { direction: 'recvonly' }); } catch (_) {}
+
+    pc.ontrack = (ev) => {
+      if (crewMicPcs.get(cleanSlot) !== pc) return;
+      const stream = (ev.streams && ev.streams[0]) ? ev.streams[0] : new MediaStream([ev.track]);
+      const sinkWrap = document.getElementById('crew-incoming-audio-sink') || document.body;
+      const el = document.createElement('audio');
+      el.autoplay = true;
+      el.playsInline = true;
+      el.muted = crewIncomingMuted;
+      el.volume = 1.0;
+      el.srcObject = stream;
+      sinkWrap.appendChild(el);
+      el.play().catch(() => {});
+      crewIncomingAudioEls.set(cleanSlot, el);
+      updateCrewIncomingBarUI();
+      showToast(`🎙️ Cam ${cleanSlot} talking to Desk`);
+    };
+
+    pc.onicecandidate = (ev) => {
+      if (ev.candidate) {
+        sendControlCamSignal({
+          type: 'crew-mic-ice',
+          targetRole: 'publisher',
+          slot: cleanSlot,
+          viewerId: offlineControlViewerId,
+          candidate: ev.candidate
+        });
+      }
+    };
+
+    try {
+      const offer = await pc.createOffer({ offerToReceiveAudio: true });
+      await pc.setLocalDescription(offer);
+      await sendControlCamSignal({
+        type: 'crew-mic-offer',
+        targetRole: 'publisher',
+        slot: cleanSlot,
+        viewerId: offlineControlViewerId,
+        sdp: pc.localDescription
+      });
+    } catch (cmErr) {
+      console.warn('[CrewMic Receiver Offer Error]', cmErr);
+    }
+  }
+
+  // Poll incoming offline WebRTC resolution & bitrate cleanly for camera grid diagnostics
+  setInterval(async () => {
+    if (!state.cameraDisplaySectionOpen || offlineControlWcamPcs.size === 0) return;
+    for (const [slot, pc] of offlineControlWcamPcs.entries()) {
+      if (!pc || pc.connectionState === 'closed') continue;
+      try {
+        const stats = await pc.getStats();
+        let w = 0, h = 0, bytes = 0;
+        stats.forEach(r => {
+          if (r.type === 'inbound-rtp' && r.kind === 'video') {
+            w = r.frameWidth || w;
+            h = r.frameHeight || h;
+            bytes = r.bytesReceived || bytes;
+          }
+        });
+        const prev = pc.__lastRxStats || { bytes: 0, ts: Date.now() };
+        const dt = Math.max(0.5, (Date.now() - prev.ts) / 1000);
+        const mbps = bytes > prev.bytes ? (((bytes - prev.bytes) * 8) / dt / 1000000).toFixed(1) : '';
+        pc.__lastRxStats = { bytes, ts: Date.now() };
+        const txt = (w && h) ? `${w}×${h}${mbps ? ` • ${mbps}M` : ''}` : 'Offline HTTPS';
+        offlineControlWcamStats.set(slot, txt);
+        const badgeEl = document.querySelector(`.camera-card[data-device-id="wcam-offline:${slot}"] .camera-type-badge`);
+        if (badgeEl) badgeEl.textContent = txt;
+      } catch (_) {}
+    }
+  }, 2500);
+
   function ensureControlOfflineWcamSse() {
-    if (offlineControlSse && offlineControlSse.readyState !== 2) return;
-    if (!state.wcamServerInfo && window.zionApi && window.zionApi.getRemoteInfo) {
-      fetchWcamServerInfo().then((info) => {
-        if (info) ensureControlOfflineWcamSse();
-      }).catch(() => {});
+    if (!state.wcamServerInfo || !state.wcamServerInfo.isRunning) {
+      if (window.zionApi && window.zionApi.getRemoteInfo) {
+        fetchWcamServerInfo().then((info) => {
+          if (info && info.isRunning) {
+            ensureControlOfflineWcamSse();
+          } else {
+            setTimeout(() => ensureControlOfflineWcamSse(), 400);
+          }
+        }).catch(() => {});
+      }
       return;
+    }
+    const targetPort = state.wcamServerInfo.port || 3000;
+    if (offlineControlSse && offlineControlSse.readyState !== 2 && offlineControlSse.__port === targetPort) return;
+    if (offlineControlSse) {
+      try { offlineControlSse.close(); } catch (_) {}
+      offlineControlSse = null;
     }
     try {
       const sse = new EventSource(`${getLocalHttpBase()}/api/cam-events?role=viewer&viewerId=${encodeURIComponent(offlineControlViewerId)}`);
+      sse.__port = targetPort;
       offlineControlSse = sse;
+      sse.onerror = () => {
+        try { sse.close(); } catch (_) {}
+        if (offlineControlSse === sse) offlineControlSse = null;
+        setTimeout(() => ensureControlOfflineWcamSse(), 2000);
+      };
       sse.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data);
           if (msg.type === 'wcam-sync' && Array.isArray(msg.cams)) {
             state.offlineWirelessCams = msg.cams;
-            msg.cams.forEach(c => startControlOfflineWcamPeer(c.slot));
+            msg.cams.forEach(c => {
+              startControlOfflineWcamPeer(c.slot);
+              if (state.talkbackActive && talkbackStream && typeof startTalkbackPeerForSlot === 'function') {
+                startTalkbackPeerForSlot(c.slot);
+              }
+            });
+            if (Array.isArray(msg.crewMicSlots)) {
+              msg.crewMicSlots.forEach(cmSlot => {
+                const s = String(cmSlot);
+                if (!crewMicPcs.has(s)) startCrewMicReceiverForSlot(s);
+              });
+            }
+            if (state.talkbackActive) {
+              const lblTb = document.getElementById('label-talkback-mic');
+              const cCount = state.offlineWirelessCams.length;
+              if (lblTb) lblTb.textContent = cCount > 0 ? `LIVE (${cCount} Cam${cCount === 1 ? '' : 's'})` : 'Mic LIVE (0 Offline Cams)';
+            }
             renderSidebarCameraList();
             if (state.cameraDisplaySectionOpen) renderCameraDisplaySection();
+          } else if (msg.type === 'talkback-request' && msg.slot) {
+            if (state.talkbackActive && talkbackStream && typeof startTalkbackPeerForSlot === 'function') {
+              startTalkbackPeerForSlot(String(msg.slot));
+            }
+          } else if (msg.type === 'crew-mic-start' && msg.slot) {
+            const s = String(msg.slot);
+            const activePc = crewMicPcs.get(s);
+            if (!(activePc && activePc.connectionState === 'connected' && crewIncomingAudioEls.has(s))) {
+              startCrewMicReceiverForSlot(s);
+            }
+          } else if (msg.type === 'crew-mic-stop' && msg.slot) {
+            stopCrewMicReceiverForSlot(String(msg.slot));
+          } else if (msg.type === 'crew-mic-answer' && msg.slot && msg.sdp) {
+            const slot = String(msg.slot);
+            const pc = crewMicPcs.get(slot);
+            if (pc) {
+              pc.setRemoteDescription(new RTCSessionDescription(msg.sdp)).then(() => {
+                const queued = crewMicPendingIce.get(slot) || [];
+                crewMicPendingIce.set(slot, []);
+                queued.forEach(cand => pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {}));
+              }).catch(() => {});
+            }
+          } else if (msg.type === 'crew-mic-ice' && msg.slot && msg.candidate) {
+            const slot = String(msg.slot);
+            const pc = crewMicPcs.get(slot);
+            if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+              pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
+            } else if (pc) {
+              const list = crewMicPendingIce.get(slot) || [];
+              list.push(msg.candidate);
+              crewMicPendingIce.set(slot, list);
+            }
           } else if (msg.type === 'cam-joined' && msg.cam) {
             const slot = String(msg.cam.slot);
             if (!state.offlineWirelessCams.some(c => String(c.slot) === slot)) {
               state.offlineWirelessCams.push(msg.cam);
             }
-            startControlOfflineWcamPeer(slot);
+            startControlOfflineWcamPeer(slot, true);
+            if (state.talkbackActive && talkbackStream && typeof startTalkbackPeerForSlot === 'function') {
+              startTalkbackPeerForSlot(slot);
+              const lblTb = document.getElementById('label-talkback-mic');
+              const cCount = state.offlineWirelessCams.length;
+              if (lblTb) lblTb.textContent = `LIVE (${cCount} Cam${cCount === 1 ? '' : 's'})`;
+            }
             renderSidebarCameraList();
             if (state.cameraDisplaySectionOpen) renderCameraDisplaySection();
           } else if (msg.type === 'cam-left' && msg.slot) {
@@ -1220,19 +1628,68 @@
             state.offlineWirelessCams = state.offlineWirelessCams.filter(c => String(c.slot) !== slot);
             const oldPc = offlineControlWcamPcs.get(slot);
             if (oldPc) { try { oldPc.close(); } catch (_) {} offlineControlWcamPcs.delete(slot); }
+            offlineControlPendingIce.delete(slot);
             offlineControlWcamStreams.delete(slot);
+            offlineControlWcamStats.delete(slot);
+            stopCrewMicReceiverForSlot(slot);
+            const oldTbPc = talkbackPcs.get(slot);
+            if (oldTbPc) { try { oldTbPc.close(); } catch (_) {} talkbackPcs.delete(slot); }
+            talkbackPendingIce.delete(slot);
+            if (state.talkbackActive) {
+              const lblTb = document.getElementById('label-talkback-mic');
+              const cCount = state.offlineWirelessCams.length;
+              if (lblTb) lblTb.textContent = cCount > 0 ? `LIVE (${cCount} Cam${cCount === 1 ? '' : 's'})` : 'Mic LIVE (0 Offline Cams)';
+            }
             renderSidebarCameraList();
             if (state.cameraDisplaySectionOpen) renderCameraDisplaySection();
+          } else if (msg.type === 'talkback-answer' && msg.slot && msg.sdp) {
+            const slot = String(msg.slot);
+            const pc = talkbackPcs.get(slot);
+            if (pc) {
+              pc.setRemoteDescription(new RTCSessionDescription(msg.sdp)).then(() => {
+                const queued = talkbackPendingIce.get(slot) || [];
+                talkbackPendingIce.set(slot, []);
+                queued.forEach(cand => pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {}));
+              }).catch(() => {});
+            }
+          } else if (msg.type === 'talkback-ice' && msg.slot && msg.candidate) {
+            const slot = String(msg.slot);
+            const pc = talkbackPcs.get(slot);
+            if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+              pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
+            } else if (pc) {
+              const list = talkbackPendingIce.get(slot) || [];
+              list.push(msg.candidate);
+              talkbackPendingIce.set(slot, list);
+            }
           } else if (msg.type === 'answer' && msg.slot && msg.sdp) {
-            const pc = offlineControlWcamPcs.get(String(msg.slot));
-            if (pc) pc.setRemoteDescription(new RTCSessionDescription(msg.sdp)).catch(() => {});
+            const slot = String(msg.slot);
+            const pc = offlineControlWcamPcs.get(slot);
+            if (pc) {
+              pc.setRemoteDescription(new RTCSessionDescription(msg.sdp)).then(() => {
+                const queued = offlineControlPendingIce.get(slot) || [];
+                offlineControlPendingIce.set(slot, []);
+                queued.forEach(cand => pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {}));
+              }).catch(() => {});
+            }
           } else if (msg.type === 'ice' && msg.slot && msg.candidate) {
-            const pc = offlineControlWcamPcs.get(String(msg.slot));
-            if (pc) pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
+            const slot = String(msg.slot);
+            const pc = offlineControlWcamPcs.get(slot);
+            if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+              pc.addIceCandidate(new RTCIceCandidate(msg.candidate)).catch(() => {});
+            } else if (pc) {
+              const list = offlineControlPendingIce.get(slot) || [];
+              list.push(msg.candidate);
+              offlineControlPendingIce.set(slot, list);
+            }
           }
-        } catch (_) {}
+        } catch (err) {
+          console.warn('[Control WCam SSE Message Error]', err);
+        }
       };
-    } catch (_) {}
+    } catch (sseInitErr) {
+      console.warn('[Control WCam SSE Init Error]', sseInitErr);
+    }
   }
 
   async function bindSourceToMonitor(deviceId, target = 'preview') {
@@ -1341,7 +1798,7 @@
   async function refreshWcamSetupDrawer() {
     const drawer = document.getElementById('wcam-setup-drawer');
     if (!drawer) return;
-    if (!state.wcamServerInfo) await fetchWcamServerInfo();
+    if (!state.wcamServerInfo || !state.wcamServerInfo.isRunning) await fetchWcamServerInfo();
 
     const isOffline = state.wcamSetupMode === 'offline';
     const slot = state.wcamSelectedSlot || '1';
@@ -1355,12 +1812,15 @@
     const descEl = document.getElementById('wcam-mode-desc');
     if (descEl) {
       descEl.innerHTML = isOffline
-        ? `<strong>100% Offline Mode (No Internet):</strong> Uses ZionCast's built-in HTTPS LAN server on port <strong>${(state.wcamServerInfo && state.wcamServerInfo.httpsPort) || 3443}</strong>. Phone connects directly on opening <em>/cam?slot=${escapeHtml(slot)}</em>.`
-        : `<strong>Zero-Cert Mode (Recommended):</strong> Phone uses brief internet handshake, then streams direct P2P over your church Wi-Fi. No app, no cables, zero certificate prompt.`;
+        ? `<strong>Offline /cam Mode (Cues + Talkback + 1080p):</strong> Streams directly to ZionCast on port <strong>${(state.wcamServerInfo && state.wcamServerInfo.httpsPort) || 3443}</strong> with <strong>Hold Steady / Zoom cues</strong> &amp; <strong>Director Talkback audio</strong> right on the phone screen.`
+        : `<strong>Zero-Cert Mode (Video Only):</strong> Streams via VDO.Ninja with zero certificate prompt, but <strong>cannot show Director Cues</strong> or play <strong>Director Talkback audio</strong>.`;
     }
 
-    document.querySelectorAll('.wcam-slot-pill').forEach(pill => {
+    document.querySelectorAll('.wcam-slot-pill[data-wcam-slot]').forEach(pill => {
       pill.classList.toggle('active', pill.dataset.wcamSlot === slot);
+    });
+    document.querySelectorAll('.wcam-slot-pill[data-wcam-lens]').forEach(pill => {
+      pill.classList.toggle('active', pill.dataset.wcamLens === (state.wcamFacing || 'environment'));
     });
 
     const btnActivate = document.getElementById('btn-wcam-activate-slot');
@@ -1375,6 +1835,9 @@
 
     const offlineBox = document.getElementById('wcam-offline-box');
     if (offlineBox) offlineBox.style.display = isOffline ? 'flex' : 'none';
+    if (isOffline && typeof window.__refreshWcamFirewallNote === 'function') {
+      window.__refreshWcamFirewallNote();
+    }
 
     const qrBox = document.getElementById('wcam-qr-box');
     const qrCap = document.getElementById('wcam-qr-caption');
@@ -1426,9 +1889,16 @@
       });
     }
 
-    document.querySelectorAll('.wcam-slot-pill').forEach(pill => {
+    document.querySelectorAll('.wcam-slot-pill[data-wcam-slot]').forEach(pill => {
       pill.addEventListener('click', () => {
         state.wcamSelectedSlot = pill.dataset.wcamSlot || '1';
+        refreshWcamSetupDrawer();
+      });
+    });
+
+    document.querySelectorAll('.wcam-slot-pill[data-wcam-lens]').forEach(pill => {
+      pill.addEventListener('click', () => {
+        state.wcamFacing = pill.dataset.wcamLens || 'environment';
         refreshWcamSetupDrawer();
       });
     });
@@ -1491,6 +1961,45 @@
         else window.open(url, '_blank');
       });
     }
+
+    const btnWcamFirewall = document.getElementById('btn-wcam-fix-firewall');
+    const wcamFirewallNote = document.getElementById('wcam-firewall-note');
+    window.__refreshWcamFirewallNote = async function() {
+      if (!window.zionApi || !window.zionApi.checkFirewallStatus) return;
+      try {
+        const res = await window.zionApi.checkFirewallStatus();
+        if (res && res.camOk && res.allowed) {
+          if (btnWcamFirewall) btnWcamFirewall.style.display = 'none';
+          if (wcamFirewallNote) {
+            wcamFirewallNote.innerHTML = '✅ <strong>Port 3443 Unlocked.</strong> On iPhone Safari: if <em>"Not Private"</em> shows, tap <em>Show Details → visit this website</em> (or install the 1-time cert).';
+          }
+        } else {
+          if (btnWcamFirewall) btnWcamFirewall.style.display = 'inline-flex';
+          if (wcamFirewallNote) {
+            wcamFirewallNote.innerHTML = '⚠️ <strong>Windows Firewall is blocking phone camera port 3443!</strong> Click <em>Unblock Cam Port 3443</em> once before scanning.';
+          }
+        }
+      } catch (_) {}
+    };
+
+    if (btnWcamFirewall) {
+      btnWcamFirewall.addEventListener('click', async () => {
+        if (!window.zionApi || !window.zionApi.fixWindowsFirewall) return;
+        const prev = btnWcamFirewall.textContent;
+        btnWcamFirewall.textContent = '⏳ Unblocking...';
+        try {
+          const res = await window.zionApi.fixWindowsFirewall();
+          await window.__refreshWcamFirewallNote();
+          if (res && res.allowed) {
+            showToast('🛡️ Unlocked Windows Firewall for ports 3000 & 3443 — scan QR on iPhone now!');
+          } else {
+            showToast('🛡️ Click Yes on the Windows prompt to unblock port 3443 for iPhone cameras.', 'warning');
+          }
+        } catch (_) {}
+        btnWcamFirewall.textContent = prev;
+      });
+    }
+    window.__refreshWcamFirewallNote();
   }
 
   function parseCameraDeviceInfo(device, index) {
@@ -2130,6 +2639,19 @@
       cameraDeviceId: state.cameraDeviceId,
       cameraDeviceLabel: state.cameraDeviceLabel || '',
       wirelessCamViewUrl: state.wirelessCamViewUrl || '',
+      prewarmCamDeviceId: (() => {
+        if (!state.cameraDisplaySectionOpen) return '';
+        const candId = selectedViewfinderDeviceId || (getAllCameraSources().find(s => s.kind !== 'hardware') || {}).id || '';
+        return (String(candId).startsWith('wcam-vdo:') || String(candId).startsWith('wcam-offline:')) ? candId : '';
+      })(),
+      prewarmWcamUrl: (() => {
+        if (!state.cameraDisplaySectionOpen) return '';
+        const candId = selectedViewfinderDeviceId || (getAllCameraSources().find(s => s.kind === 'vdo') || {}).id || '';
+        if (String(candId).startsWith('wcam-vdo:')) {
+          return getVdoViewUrl(String(candId).split(':')[1] || '1');
+        }
+        return '';
+      })(),
       cameraOpacity: state.cameraOpacity,
       bannerText: state.bannerText,
       bannerActive: state.bannerActive,
@@ -4539,6 +5061,7 @@
 
     renderCameraDisplaySection();
     startCameraWatchdog();
+    if (state.displayOpen) broadcastDisplayState();
   }
 
   function syncOperatorPreviewCameraOverlay() {
@@ -4585,6 +5108,7 @@
     }
     syncOperatorPreviewCameraOverlay();
     stopAllCameraCardStreams(true);
+    if (state.displayOpen) broadcastDisplayState();
   }
 
   async function switchCameraSource(deviceId, deviceLabel, mode = 'preacher') {
@@ -4632,6 +5156,9 @@
       card.classList.toggle('selected-source', card.dataset.deviceId === matchedSrc.id);
     });
     renderSidebarCameraList();
+    if (state.displayOpen && (String(matchedSrc.id).startsWith('wcam-vdo:') || String(matchedSrc.id).startsWith('wcam-offline:'))) {
+      broadcastDisplayState();
+    }
   }
 
   async function renderCameraDisplaySection() {
@@ -4714,7 +5241,7 @@
       const isSelectedInVf = selectedViewfinderDeviceId === src.id;
       const frameStat = src.kind === 'hardware'
         ? (cameraFrameStats.get(src.id) || { isDarkPhone: false, res: '1280×720 HD' })
-        : { isDarkPhone: false, res: src.kind === 'vdo' ? 'Wi-Fi Zero-Cert' : 'Offline HTTPS' };
+        : { isDarkPhone: false, res: src.kind === 'vdo' ? 'Wi-Fi Zero-Cert' : (offlineControlWcamStats.get(src.slot) || 'Offline HTTPS') };
 
       const card = document.createElement('div');
       card.className = 'camera-card';
@@ -4793,11 +5320,12 @@
           });
         } else if (src.kind === 'offline') {
           const cachedStream = offlineControlWcamStreams.get(src.slot);
-          if (cachedStream) {
+          const hasLiveTrack = !!(cachedStream && cachedStream.getVideoTracks().some(t => t.readyState === 'live'));
+          if (hasLiveTrack) {
             cardVideo.srcObject = cachedStream;
             cardVideo.play().catch(() => {});
           } else {
-            startControlOfflineWcamPeer(src.slot).catch(() => {});
+            startControlOfflineWcamPeer(src.slot, true).catch(() => {});
           }
         }
       }
@@ -4979,6 +5507,7 @@
       meetCueText: state.meetCueText || '',
       meetCueTime: state.meetCueTime || 0,
       wcamLiveSlot,
+      talkbackActive: !!state.talkbackActive,
       stageMessage: stageAlertMessageText || '',
       stageMessageActive: !!stageAlertMessageActive,
       countdownActive: !!countdownProjected,
@@ -5099,7 +5628,7 @@
             remoteFirewallTitle.style.color = '#34d399';
           }
           if (remoteFirewallDesc) {
-            remoteFirewallDesc.textContent = 'Public, Private & Hotspot Wi-Fi connections are allowed on ports 3000–3020.';
+            remoteFirewallDesc.textContent = 'Public, Private & Hotspot Wi-Fi connections are allowed on ports 3000–3020 & HTTPS Cam 3443–3453.';
           }
           if (btnFixRemoteFirewall) {
             btnFixRemoteFirewall.textContent = '🛡️ Re-Verify Firewall';
@@ -5449,7 +5978,8 @@
         syncRemoteStatus();
         showToast('Stage screen note cleared');
       } else if (action === 'cue-ack') {
-        showToast(`✅ Videographer acknowledged cue: ${(data && data.text) || ''}`);
+        const who = (data && data.slot) ? `Cam ${data.slot}` : 'Videographer';
+        showToast(`✅ ${who} acknowledged cue: ${(data && data.text) || ''}`);
       } else if (action === 'wcam-offline-changed') {
         state.offlineWirelessCams = Array.isArray(data) ? data : (data && Array.isArray(data.cams) ? data.cams : []);
         ensureControlOfflineWcamSse();
@@ -7235,7 +7765,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.7.0';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.7.1';
         }
       } catch (err) {
         console.warn('Update check warning:', err);
@@ -7339,16 +7869,16 @@
     const btnLaunchBrowser = document.getElementById('btn-meet-launch-browser');
 
     const qrContainer = document.getElementById('studio-qr-container');
-    const qrEmpty = document.getElementById('studio-qr-empty');
+    const btnToggleQr = document.getElementById('btn-meet-toggle-qr');
     const qrImg = document.getElementById('meet-qr-img');
     const qrUrlLabel = document.getElementById('meet-qr-url-label');
     const btnCopyLink = document.getElementById('btn-meet-copy-link');
     const btnWhatsapp = document.getElementById('btn-meet-whatsapp');
+    let meetQrVisible = false;
 
     async function refreshEmbeddedMeetQr(targetUrl) {
-      if (!targetUrl) {
+      if (!targetUrl || !meetQrVisible) {
         if (qrContainer) qrContainer.style.display = 'none';
-        if (qrEmpty) qrEmpty.style.display = 'block';
         return;
       }
       if (window.zionApi && window.zionApi.generateQrDataUrl) {
@@ -7359,7 +7889,6 @@
       }
       if (qrUrlLabel) qrUrlLabel.textContent = targetUrl;
       if (qrContainer) qrContainer.style.display = 'flex';
-      if (qrEmpty) qrEmpty.style.display = 'none';
     }
 
     function updateMeetRoomUI(url, code) {
@@ -7370,7 +7899,8 @@
       } catch (_) {}
 
       if (codeBadge) {
-        codeBadge.textContent = state.meetCode ? `${state.meetCode}` : (state.meetUrl ? 'Active' : 'Ready');
+        codeBadge.textContent = state.meetCode ? `${state.meetCode}` : (state.meetUrl ? 'ACTIVE' : 'STANDBY');
+        codeBadge.classList.toggle('active', !!(state.meetCode || state.meetUrl));
       }
       if (linkInput && state.meetUrl && document.activeElement !== linkInput) {
         linkInput.value = state.meetUrl;
@@ -7380,6 +7910,19 @@
       }
       refreshEmbeddedMeetQr(state.meetUrl);
       syncRemoteStatus();
+    }
+
+    if (btnToggleQr) {
+      btnToggleQr.addEventListener('click', () => {
+        const target = state.meetUrl || (linkInput ? normalizeMeetUrl(linkInput.value).url : '');
+        if (!target) {
+          showToast('Start or paste a Google Meet room link first to show its QR code.', 'warning');
+          return;
+        }
+        meetQrVisible = !meetQrVisible;
+        btnToggleQr.classList.toggle('active', meetQrVisible);
+        refreshEmbeddedMeetQr(target);
+      });
     }
 
     async function launchGoogleMeetInAppWindow(targetUrl) {
@@ -7469,26 +8012,280 @@
       });
     }
 
-    // Silent Visual Camera Cues (flashes straight to connected Videographer Phone Remotes)
+    function flashDirectorCue(cueText) {
+      const clean = String(cueText || '').trim();
+      if (!clean) return;
+      state.meetCueText = clean;
+      state.meetCueTime = Date.now();
+      document.querySelectorAll('.meet-cue-btn').forEach((b) => {
+        b.classList.toggle('active', b.getAttribute('data-cue') === clean);
+      });
+      syncRemoteStatus();
+      const offCount = (state.offlineWirelessCams || []).length;
+      if (offCount > 0) {
+        showToast(`Flashed cue to ${offCount} Offline /cam phone(s): ${clean}`);
+      } else if ((state.activeVdoCamSlots || []).length > 0) {
+        showToast('Cue sent to Mobile Remotes — note: Zero-Cert VDO.Ninja phones do not show cues (switch phone QR to Offline HTTPS /cam)', 'warning');
+      } else {
+        showToast(`Flashed cue to crew phones: ${clean}`);
+      }
+    }
+
+    // Silent Visual Camera Cues (flashes straight to Offline Cam & Phone Remotes)
     document.querySelectorAll('.meet-cue-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const cue = btn.getAttribute('data-cue');
-        if (!cue) return;
-        state.meetCueText = cue;
-        state.meetCueTime = Date.now();
-        syncRemoteStatus();
-        try { navigator.clipboard.writeText(cue); } catch (_) {}
-        showToast(`📣 Flashed cue to Crew Phone Remotes: ${cue}`);
+        flashDirectorCue(btn.getAttribute('data-cue'));
       });
     });
+
+    const customCueInput = document.getElementById('meet-custom-cue-input');
+    const btnSendCustomCue = document.getElementById('btn-meet-send-cue');
+    if (btnSendCustomCue && customCueInput) {
+      const submitCustomCue = () => {
+        const val = customCueInput.value.trim();
+        if (!val) {
+          showToast('Type a cue note for your cameramen first.', 'warning');
+          return;
+        }
+        flashDirectorCue(val);
+        customCueInput.value = '';
+      };
+      btnSendCustomCue.addEventListener('click', submitCustomCue);
+      customCueInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          submitCustomCue();
+        }
+      });
+    }
 
     const btnClearCue = document.getElementById('btn-meet-clear-cue');
     if (btnClearCue) {
       btnClearCue.addEventListener('click', () => {
         state.meetCueText = '';
         state.meetCueTime = 0;
+        document.querySelectorAll('.meet-cue-btn').forEach((b) => b.classList.remove('active'));
         syncRemoteStatus();
-        showToast('Cleared active director cue from phone remotes');
+        showToast('Cleared active director cue');
+      });
+    }
+
+    // Direct Operator-to-Crew Audio Talkback (streams mic to Offline /cam phones cleanly)
+    const btnTalkbackMic = document.getElementById('btn-talkback-mic');
+    const lblTalkbackMic = document.getElementById('label-talkback-mic');
+    const selTalkbackMic = document.getElementById('select-talkback-mic');
+    const micMeterWrap = document.getElementById('talkback-mic-meter-wrap');
+    const micMeterFill = document.getElementById('talkback-mic-meter-fill');
+    let micMeterCtx = null;
+    let micMeterRaf = null;
+
+    function stopMicLevelMeter() {
+      if (micMeterRaf) {
+        cancelAnimationFrame(micMeterRaf);
+        micMeterRaf = null;
+      }
+      if (micMeterCtx) {
+        try { micMeterCtx.close(); } catch (_) {}
+        micMeterCtx = null;
+      }
+      if (micMeterFill) micMeterFill.style.width = '0%';
+      if (micMeterWrap) micMeterWrap.style.display = 'none';
+    }
+
+    function startMicLevelMeter(stream) {
+      stopMicLevelMeter();
+      if (!stream || !micMeterWrap || !micMeterFill) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        micMeterCtx = new AudioCtx();
+        const src = micMeterCtx.createMediaStreamSource(stream);
+        const analyser = micMeterCtx.createAnalyser();
+        analyser.fftSize = 256;
+        src.connect(analyser); // Monitor-only node (not connected to speakers)
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        micMeterWrap.style.display = 'flex';
+        const tick = () => {
+          if (!state.talkbackActive || !micMeterCtx) return;
+          analyser.getByteFrequencyData(data);
+          let peak = 0;
+          for (let i = 0; i < data.length; i++) {
+            if (data[i] > peak) peak = data[i];
+          }
+          const pct = Math.min(100, Math.round((peak / 180) * 100));
+          micMeterFill.style.width = pct + '%';
+          micMeterRaf = requestAnimationFrame(tick);
+        };
+        tick();
+      } catch (_) {}
+    }
+
+    async function refreshTalkbackMics() {
+      if (!selTalkbackMic || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        const mics = devs.filter(d => d.kind === 'audioinput');
+        const cur = selTalkbackMic.value;
+        selTalkbackMic.innerHTML = '<option value="">Default Mic</option>';
+        mics.forEach((m, idx) => {
+          const opt = document.createElement('option');
+          opt.value = m.deviceId;
+          opt.textContent = m.label || `Mic ${idx + 1}`;
+          if (m.deviceId === cur) opt.selected = true;
+          selTalkbackMic.appendChild(opt);
+        });
+      } catch (_) {}
+    }
+    refreshTalkbackMics();
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', refreshTalkbackMics);
+    }
+
+    function stopAllTalkback() {
+      state.talkbackActive = false;
+      stopMicLevelMeter();
+      talkbackPcs.forEach((pc, slot) => {
+        try { pc.close(); } catch (_) {}
+        sendControlCamSignal({
+          type: 'talkback-bye',
+          targetRole: 'publisher',
+          slot,
+          viewerId: offlineControlViewerId
+        });
+      });
+      talkbackPcs.clear();
+      talkbackPendingIce.clear();
+      if (talkbackStream) {
+        talkbackStream.getTracks().forEach(t => t.stop());
+        talkbackStream = null;
+      }
+      if (btnTalkbackMic) btnTalkbackMic.classList.remove('live');
+      if (lblTalkbackMic) lblTalkbackMic.textContent = 'Talk to Cams: OFF';
+      syncRemoteStatus();
+    }
+
+    startTalkbackPeerForSlot = async function(slot, retryCount = 0) {
+      const cleanSlot = String(slot || '1');
+      if (!talkbackStream) return;
+      const old = talkbackPcs.get(cleanSlot);
+      if (old) { try { old.close(); } catch (_) {} }
+      talkbackPendingIce.set(cleanSlot, []);
+
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      talkbackPcs.set(cleanSlot, pc);
+      talkbackStream.getAudioTracks().forEach(track => pc.addTrack(track, talkbackStream));
+
+      pc.oniceconnectionstatechange = () => {
+        if (talkbackPcs.get(cleanSlot) !== pc || !state.talkbackActive) return;
+        if (pc.iceConnectionState === 'failed' && retryCount < 2) {
+          setTimeout(() => {
+            if (state.talkbackActive && talkbackStream) {
+              startTalkbackPeerForSlot(cleanSlot, retryCount + 1);
+            }
+          }, 600);
+        }
+      };
+
+      pc.onicecandidate = (ev) => {
+        if (ev.candidate) {
+          sendControlCamSignal({
+            type: 'talkback-ice',
+            targetRole: 'publisher',
+            slot: cleanSlot,
+            viewerId: offlineControlViewerId,
+            candidate: ev.candidate
+          });
+        }
+      };
+
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await sendControlCamSignal({
+          type: 'talkback-offer',
+          targetRole: 'publisher',
+          slot: cleanSlot,
+          viewerId: offlineControlViewerId,
+          sdp: pc.localDescription
+        });
+      } catch (_) {}
+    }
+
+    async function acquireSelectedTalkbackStream() {
+      const micId = selTalkbackMic && selTalkbackMic.value ? selTalkbackMic.value : '';
+      const audioConstraints = micId
+        ? { deviceId: { exact: micId }, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        : { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+      return await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
+    }
+
+    if (selTalkbackMic) {
+      selTalkbackMic.addEventListener('change', async () => {
+        if (!state.talkbackActive) return;
+        try {
+          const newStream = await acquireSelectedTalkbackStream();
+          const newTrack = newStream.getAudioTracks()[0];
+          if (!newTrack) return;
+          if (talkbackStream) {
+            talkbackStream.getTracks().forEach(t => t.stop());
+          }
+          talkbackStream = newStream;
+          startMicLevelMeter(talkbackStream);
+          talkbackPcs.forEach(pc => {
+            pc.getSenders().forEach(sender => {
+              if (sender.track && sender.track.kind === 'audio') {
+                sender.replaceTrack(newTrack).catch(() => {});
+              }
+            });
+          });
+          const micLabel = selTalkbackMic.options[selTalkbackMic.selectedIndex]?.textContent || 'Selected Mic';
+          showToast(`🎙️ Switched Talkback mic to: ${micLabel}`);
+        } catch (err) {
+          showToast('Could not switch mic: ' + (err.message || err.name), 'warning');
+        }
+      });
+    }
+
+    if (btnTalkbackMic) {
+      btnTalkbackMic.addEventListener('click', async () => {
+        if (state.talkbackActive) {
+          stopAllTalkback();
+          showToast('Crew Talkback Mic OFF');
+          return;
+        }
+        try {
+          talkbackStream = await acquireSelectedTalkbackStream();
+          refreshTalkbackMics();
+          startMicLevelMeter(talkbackStream);
+          state.talkbackActive = true;
+          btnTalkbackMic.classList.add('live');
+          const offCount = (state.offlineWirelessCams || []).length;
+          if (lblTalkbackMic) {
+            lblTalkbackMic.textContent = offCount > 0 ? `LIVE (${offCount} Cam${offCount === 1 ? '' : 's'})` : 'Mic LIVE (0 Offline Cams)';
+          }
+          ensureControlOfflineWcamSse();
+          (state.offlineWirelessCams || []).forEach(cam => startTalkbackPeerForSlot(cam.slot));
+          syncRemoteStatus();
+          if (offCount > 0) {
+            showToast(`🎙️ Live Talkback active -> ${offCount} Offline /cam phone(s)`);
+          } else {
+            showToast('Mic ON — connect phone via 100% Offline HTTPS (/cam) to hear Talkback (VDO.Ninja tabs cannot play ZionCast audio)', 'warning');
+          }
+        } catch (err) {
+          stopAllTalkback();
+          showToast('Could not open headset mic: ' + (err.message || err.name), 'warning');
+        }
+      });
+    }
+
+    const btnCrewIncomingMute = document.getElementById('btn-crew-incoming-mute');
+    if (btnCrewIncomingMute) {
+      btnCrewIncomingMute.addEventListener('click', () => {
+        crewIncomingMuted = !crewIncomingMuted;
+        crewIncomingAudioEls.forEach(el => {
+          el.muted = crewIncomingMuted;
+        });
+        btnCrewIncomingMute.textContent = crewIncomingMuted ? '🔇 Muted' : '🔊 Hear';
       });
     }
   }

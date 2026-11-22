@@ -24,8 +24,9 @@
   <!-- 1. Procedural Motion Background Layer (Canvas) -->
   <canvas id="display-canvas" class="display-bg-canvas"></canvas>
 
-  <!-- 2. Hardware Direct Camera Layer (DroidCam / OBS / Preacher) -->
+  <!-- 2. Hardware & Wi-Fi Camera A/B Crossfade Layers -->
   <video id="display-camera-layer" class="display-camera-layer" autoplay playsinline muted></video>
+  <video id="display-camera-layer-alt" class="display-camera-layer" autoplay playsinline muted style="display: none; opacity: 0;"></video>
   <!-- 2b. Wireless VDO.Ninja Camera Iframe Layer (Internet Zero-Cert Mode) -->
   <iframe id="display-wcam-iframe" class="display-wcam-layer" src="" allow="camera; microphone; autoplay; fullscreen" allowfullscreen style="display: none;"></iframe>
 

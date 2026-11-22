@@ -541,17 +541,23 @@ function checkFirewallStatus() {
   return new Promise((resolve) => {
     if (process.platform !== 'win32') return resolve({ allowed: true });
     const { execFile } = require('child_process');
-    execFile(
-      'netsh',
-      ['advfirewall', 'firewall', 'show', 'rule', 'name=ZionCast Remote'],
-      { timeout: 2500, windowsHide: true },
-      (err, stdout) => {
-        if (!err && stdout && /ZionCast Remote/i.test(stdout) && /Allow/i.test(stdout) && /(Any|Public)/i.test(stdout)) {
-          return resolve({ allowed: true });
+    const checkRule = (ruleName, matchRegex) => new Promise((resRule) => {
+      execFile(
+        'netsh',
+        ['advfirewall', 'firewall', 'show', 'rule', `name=${ruleName}`],
+        { timeout: 2500, windowsHide: true },
+        (err, stdout) => {
+          if (!err && stdout && matchRegex.test(stdout) && /Allow/i.test(stdout) && /(Any|Public)/i.test(stdout)) {
+            return resRule(true);
+          }
+          resRule(false);
         }
-        resolve({ allowed: false });
-      }
-    );
+      );
+    });
+    Promise.all([
+      checkRule('ZionCast Remote', /ZionCast Remote/i),
+      checkRule('ZionCast Wireless Cam HTTPS', /ZionCast Wireless Cam HTTPS/i)
+    ]).then(([remoteOk, camOk]) => resolve({ allowed: remoteOk && camOk, remoteOk, camOk }));
   });
 }
 
@@ -862,7 +868,7 @@ function checkUpdatesViaRawCdn(currentVersion) {
                 currentVersion,
                 latestVersion: latestVer,
                 releaseName: 'ZionCast ' + latestTag,
-                releaseNotes: 'ZionCast ' + latestTag + ' is available with camera auto-filtering, TV isolation, and sleek flyer-friendly countdown HUD.',
+                releaseNotes: 'ZionCast ' + latestTag + ' is available with wireless Wi-Fi phone cameras, Crew Comms, and dual-screen projection.',
                 releaseUrl: 'https://github.com/GreatDev14/ZionCast/releases/tag/' + latestTag,
                 downloadUrl: 'https://github.com/GreatDev14/ZionCast/releases/download/' + latestTag + '/ZionCast-Setup-' + latestVer + '.exe'
               });
@@ -915,7 +921,12 @@ function checkUpdatesViaRedirect(currentVersion) {
 }
 
 ipcMain.handle('check-for-updates', async () => {
-  const currentVersion = app.getVersion();
+  let currentVersion = app.getVersion();
+  if (!app.isPackaged) {
+    try {
+      currentVersion = require('./package.json').version || currentVersion;
+    } catch (_) {}
+  }
 
   // 1. Check raw GitHub CDN package.json (100% rate-limit proof, never 403!)
   try {

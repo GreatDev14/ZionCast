@@ -183,7 +183,7 @@ function initFaqAccordion() {
    3. Download Click Handlers & Toast Fallback
    ========================================================================== */
 const GITHUB_REPO = 'GreatDev14/ZionCast';
-const GITHUB_RELEASE_TAG = 'v1.7.0';
+const GITHUB_RELEASE_TAG = 'v1.7.1';
 const GITHUB_RELEASE_BASE = `https://github.com/${GITHUB_REPO}/releases/download/${GITHUB_RELEASE_TAG}/`;
 
 async function syncLatestGitHubReleaseToWebsite() {
