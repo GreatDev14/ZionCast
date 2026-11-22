@@ -1779,10 +1779,10 @@
     return out;
   }
 
-  async function fetchWcamServerInfo() {
+  async function fetchWcamServerInfo(preferredIp = null) {
     if (!window.zionApi || !window.zionApi.getRemoteInfo) return null;
     try {
-      const info = await window.zionApi.getRemoteInfo();
+      const info = await window.zionApi.getRemoteInfo(preferredIp);
       if (info) {
         state.wcamServerInfo = info;
         if (Array.isArray(info.offlineCams)) {
@@ -1795,10 +1795,66 @@
     }
   }
 
-  async function refreshWcamSetupDrawer() {
-    const drawer = document.getElementById('wcam-setup-drawer');
-    if (!drawer) return;
-    if (!state.wcamServerInfo || !state.wcamServerInfo.isRunning) await fetchWcamServerInfo();
+  let wcamDrawerPollTimer = null;
+
+  function syncWcamIpControls(info) {
+    const ipSel = document.getElementById('wcam-ip-select');
+    const ipStatus = document.getElementById('wcam-ip-status');
+    const cands = (info && Array.isArray(info.networkCandidates)) ? info.networkCandidates : [];
+    const activeIp = (info && (info.selectedIp || (info.localIps && info.localIps[0]))) || '127.0.0.1';
+
+    if (ipSel) {
+      const sig = `${activeIp}::${cands.map(c => `${c.ip}|${c.label}`).join(';;')}`;
+      if (ipSel.dataset.lastSig !== sig) {
+        ipSel.dataset.lastSig = sig;
+        ipSel.innerHTML = '';
+        if (cands.length === 0) {
+          const opt = document.createElement('option');
+          opt.value = '127.0.0.1';
+          opt.textContent = 'No Wi-Fi / Hotspot detected (127.0.0.1)';
+          ipSel.appendChild(opt);
+        } else {
+          cands.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.ip;
+            opt.textContent = c.label;
+            if (c.ip === activeIp) opt.selected = true;
+            ipSel.appendChild(opt);
+          });
+        }
+      }
+    }
+
+    if (ipStatus) {
+      if (!activeIp || activeIp === '127.0.0.1') {
+        ipStatus.className = 'wcam-ip-status warn';
+        ipStatus.textContent = '⚠️ Connect laptop & phones to same Wi-Fi / Hotspot, then click Refresh IP';
+      } else {
+        ipStatus.className = 'wcam-ip-status';
+        ipStatus.textContent = info && info.wifiSsid
+          ? `📶 "${info.wifiSsid}" • ${activeIp}`
+          : `📶 Active IP: ${activeIp}`;
+      }
+    }
+  }
+
+  function startWcamDrawerPoll() {
+    if (wcamDrawerPollTimer) clearInterval(wcamDrawerPollTimer);
+    wcamDrawerPollTimer = setInterval(() => {
+      const drawer = document.getElementById('wcam-setup-drawer');
+      if (!state.wcamDrawerOpen || !drawer || drawer.style.display === 'none') {
+        clearInterval(wcamDrawerPollTimer);
+        wcamDrawerPollTimer = null;
+        return;
+      }
+      refreshWcamSetupDrawer(null);
+    }, 2500);
+  }
+
+  let wcamDrawerRefreshSeq = 0;
+
+  async function applyWcamSetupDrawerDOM(info) {
+    if (info) syncWcamIpControls(info);
 
     const isOffline = state.wcamSetupMode === 'offline';
     const slot = state.wcamSelectedSlot || '1';
@@ -1842,14 +1898,28 @@
     const qrBox = document.getElementById('wcam-qr-box');
     const qrCap = document.getElementById('wcam-qr-caption');
     if (qrCap) qrCap.textContent = isOffline ? `Cam ${slot} (Offline HTTPS)` : `Cam ${slot} (Zero-Cert)`;
-    if (qrBox && window.zionApi && window.zionApi.generateQrDataUrl) {
+    if (qrBox && window.zionApi && window.zionApi.generateQrDataUrl && qrBox.dataset.lastQrUrl !== url) {
       try {
         const res = await window.zionApi.generateQrDataUrl(url);
         if (res && res.success && res.dataUrl) {
+          qrBox.dataset.lastQrUrl = url;
           qrBox.innerHTML = `<img src="${res.dataUrl}" alt="Scan with phone">`;
         }
       } catch (_) {}
     }
+  }
+
+  async function refreshWcamSetupDrawer(preferredIp = null) {
+    const drawer = document.getElementById('wcam-setup-drawer');
+    if (!drawer) return;
+    const seq = ++wcamDrawerRefreshSeq;
+    // Render synchronously from cached info first so opening/switching pills never shows blank fields
+    if (!preferredIp && state.wcamServerInfo) {
+      applyWcamSetupDrawerDOM(state.wcamServerInfo);
+    }
+    const freshInfo = await fetchWcamServerInfo(preferredIp);
+    if (seq !== wcamDrawerRefreshSeq) return;
+    await applyWcamSetupDrawerDOM(freshInfo || state.wcamServerInfo);
   }
 
   function initWirelessCameraEngine() {
@@ -1868,8 +1938,29 @@
         btnToggle.classList.toggle('active', state.wcamDrawerOpen);
         if (state.wcamDrawerOpen) {
           ensureControlOfflineWcamSse();
-          await refreshWcamSetupDrawer();
+          await refreshWcamSetupDrawer(null);
+          startWcamDrawerPoll();
+        } else if (wcamDrawerPollTimer) {
+          clearInterval(wcamDrawerPollTimer);
+          wcamDrawerPollTimer = null;
         }
+      });
+    }
+
+    const wcamIpSelect = document.getElementById('wcam-ip-select');
+    if (wcamIpSelect) {
+      wcamIpSelect.addEventListener('change', async () => {
+        const chosen = wcamIpSelect.value || null;
+        await refreshWcamSetupDrawer(chosen);
+        if (chosen) showToast(`📱 Phone Camera QR switched to ${chosen}`);
+      });
+    }
+
+    const btnWcamRefreshIp = document.getElementById('btn-wcam-refresh-ip');
+    if (btnWcamRefreshIp) {
+      btnWcamRefreshIp.addEventListener('click', async () => {
+        await refreshWcamSetupDrawer('auto');
+        showToast('🔄 Refreshed Wi-Fi / Hotspot IP for Phone Camera QR!');
       });
     }
 
@@ -5735,7 +5826,7 @@
     if (btnRefreshRemoteIp) {
       btnRefreshRemoteIp.addEventListener('click', async () => {
         if (remoteIpSelect) remoteIpSelect.value = '';
-        await refreshRemoteModalUI(null);
+        await refreshRemoteModalUI('auto');
         await updateFirewallBadgeUI();
         showToast('🔄 Re-detected active Wi-Fi network & updated QR code!');
       });
@@ -7765,7 +7856,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.7.1';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.7.2';
         }
       } catch (err) {
         console.warn('Update check warning:', err);

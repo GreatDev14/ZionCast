@@ -144,13 +144,17 @@ class RemoteServer {
       const isVirtual = lower.includes('vethernet') || lower.includes('virtualbox') ||
         lower.includes('vmnet') || lower.includes('vmware') || lower.includes('hyper-v') ||
         lower.includes('docker') || lower.includes('wsl') || lower.includes('bluetooth') ||
-        lower.includes('tailscale') || lower.includes('loopback');
+        lower.includes('tailscale') || lower.includes('loopback') ||
+        lower.includes('wireguard') || lower.includes('nordlynx') || lower.includes('proton') ||
+        lower.includes('warp') || lower.includes('cloudflare') || lower.includes('zerotier') ||
+        lower.includes('hamachi') || lower.includes('openvpn') || lower.includes('wintun') ||
+        lower.includes('anyconnect') || lower.includes('npcap');
 
       for (const net of (interfaces[name] || [])) {
         if (net.family !== 'IPv4' || net.internal) continue;
         const ip = net.address;
         if (!ip || ip.startsWith('169.254.') || ip === '192.168.56.1') continue;
-        if (isVirtual && ip !== routeIp) continue;
+        if (isVirtual) continue;
 
         const isRoute = ip === routeIp;
         const isHotspot = ip.startsWith('192.168.137.') || lower.includes('local area connection*');
@@ -307,20 +311,25 @@ class RemoteServer {
     ]);
     this.networkCandidates = this.buildNetworkCandidates(routeIp, wifiSsid);
     this.localIps = this.networkCandidates.map(c => c.ip);
+    this.refreshHttpsCertContextIfNeeded(this.localIps);
 
-    // Refresh self-signed HTTPS cert SANs if Wi-Fi/hotspot switched to a new IP after startup
-    const cleanCheckKey = Array.from(new Set(['127.0.0.1', ...this.localIps.filter(ip => ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip))])).sort().join(',');
-    if (this.httpsServer && cleanCheckKey !== this.certIpsKey) {
-      try {
-        const creds = this.ensureSelfSignedCert(this.localIps);
-        if (typeof this.httpsServer.setSecureContext === 'function') {
-          this.httpsServer.setSecureContext({ key: creds.key, cert: creds.cert });
-        }
-      } catch (_) {}
-    }
     const httpOk = await this.startWithPortRetry(3000, 3010);
     await this.startHttpsWithPortRetry(3443, 3453).catch(e => console.warn('[Remote HTTPS]', e));
     return httpOk;
+  }
+
+  refreshHttpsCertContextIfNeeded(ips = this.localIps) {
+    const cleanCheckKey = Array.from(new Set(['127.0.0.1', ...(ips || []).filter(ip => ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip))])).sort().join(',');
+    if (this.httpsServer && cleanCheckKey !== this.certIpsKey) {
+      try {
+        const creds = this.ensureSelfSignedCert(ips || []);
+        if (typeof this.httpsServer.setSecureContext === 'function') {
+          this.httpsServer.setSecureContext({ key: creds.key, cert: creds.cert });
+        }
+        return true;
+      } catch (_) {}
+    }
+    return false;
   }
 
   startHttpsWithPortRetry(startPort, maxPort) {
@@ -388,7 +397,25 @@ class RemoteServer {
           this.qrCodeDataUrl = await this.getQrForUrl(primaryUrl);
 
           if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+          let hbTick = 0;
           this.heartbeatTimer = setInterval(() => {
+            hbTick++;
+            if (hbTick % 2 === 0) {
+              try {
+                const liveCands = this.buildNetworkCandidates(null, this.lastWifiSsid);
+                const liveIps = liveCands.map(c => c.ip);
+                const oldKey = (this.localIps || []).slice().sort().join(',');
+                const newKey = liveIps.slice().sort().join(',');
+                if (newKey !== oldKey) {
+                  this.networkCandidates = liveCands;
+                  this.localIps = liveIps;
+                  if (this.selectedIp && !liveIps.includes(this.selectedIp)) {
+                    this.selectedIp = null;
+                  }
+                }
+                this.refreshHttpsCertContextIfNeeded(this.localIps);
+              } catch (_) {}
+            }
             for (const client of this.clients) {
               try {
                 client.write(': ping\n\n');
@@ -462,10 +489,10 @@ class RemoteServer {
   }
 
   async getInfo(preferredIp = null) {
-    if (preferredIp && preferredIp !== 'auto') {
-      this.selectedIp = preferredIp;
-    } else if (preferredIp === null || preferredIp === 'auto') {
+    if (preferredIp === 'auto') {
       this.selectedIp = null;
+    } else if (preferredIp) {
+      this.selectedIp = preferredIp;
     }
 
     const [routeIp, wifiSsid] = await Promise.all([
@@ -477,15 +504,7 @@ class RemoteServer {
     this.localIps = this.networkCandidates.map(c => c.ip);
 
     // Refresh self-signed HTTPS cert SANs if Wi-Fi/hotspot switched to a new IP after startup
-    const cleanCheckKey = Array.from(new Set(['127.0.0.1', ...this.localIps.filter(ip => ip && /^\d+\.\d+\.\d+\.\d+$/.test(ip))])).sort().join(',');
-    if (this.httpsServer && cleanCheckKey !== this.certIpsKey) {
-      try {
-        const creds = this.ensureSelfSignedCert(this.localIps);
-        if (typeof this.httpsServer.setSecureContext === 'function') {
-          this.httpsServer.setSecureContext({ key: creds.key, cert: creds.cert });
-        }
-      } catch (_) {}
-    }
+    this.refreshHttpsCertContextIfNeeded(this.localIps);
 
     let activeIp = this.localIps[0] || '127.0.0.1';
     if (this.selectedIp && this.localIps.includes(this.selectedIp)) {
@@ -556,6 +575,15 @@ class RemoteServer {
     }
 
     if (url.pathname === '/cam' || url.pathname === '/camera') {
+      const hostHeader = String(req.headers.host || '');
+      const bareHost = hostHeader.replace(/:\d+$/, '');
+      if (!req.socket.encrypted && bareHost && bareHost !== '127.0.0.1' && bareHost !== 'localhost') {
+        res.writeHead(302, {
+          Location: `https://${bareHost}:${this.httpsPort}${url.pathname}${url.search}`
+        });
+        res.end();
+        return;
+      }
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(this.getOfflineCamHtml());
       return;

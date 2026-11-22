@@ -4626,6 +4626,39 @@ body.studio-mode .studio-comms-panel {
   color: #34d399;
 }
 
+.wcam-ip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.wcam-ip-lbl {
+  font-size: 0.71rem;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.wcam-ip-select {
+  background: #080c16;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #e2e8f0;
+  font-size: 0.71rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+  max-width: 260px;
+}
+
+.wcam-ip-status {
+  font-size: 0.69rem;
+  font-weight: 700;
+  color: #34d399;
+}
+
+.wcam-ip-status.warn {
+  color: #fbbf24;
+}
+
 .wcam-url-row {
   display: flex;
   align-items: center;
