@@ -8,12 +8,13 @@ const remoteServer = require('./remote-server.js');
 if (app && app.commandLine) app.commandLine.appendSwitch('disable-renderer-backgrounding');
 if (app && app.commandLine) app.commandLine.appendSwitch('disable-background-timer-throttling');
 if (app && app.commandLine) app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
-if (app && app.commandLine) app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+if (app && app.commandLine) app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion,WebRtcHideLocalIpsWithMdns');
 if (app && app.commandLine) app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 if (app && app.commandLine) app.commandLine.appendSwitch('enable-gpu-rasterization');
 if (app && app.commandLine) app.commandLine.appendSwitch('enable-zero-copy');
 if (app && app.commandLine) app.commandLine.appendSwitch('ignore-gpu-blocklist');
 if (app && app.commandLine) app.commandLine.appendSwitch('enable-accelerated-video-decode');
+if (app && app.commandLine) app.commandLine.appendSwitch('enable-accelerated-video-encode');
 
 let controlWindow = null;
 let displayWindow = null;

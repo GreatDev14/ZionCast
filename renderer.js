@@ -1112,14 +1112,14 @@
     }
   }
 
-  function boostControlSdp(sdpStr, kbps = 12000) {
+  function boostControlSdp(sdpStr, kbps = 8000, minKbps = 1000, startKbps = 3000) {
     try {
       if (!sdpStr) return sdpStr;
       const lines = sdpStr.split(/\r?\n/);
-      const h264Pts = [];
+      const videoPts = [];
       for (const l of lines) {
-        const m = l.match(/^a=rtpmap:(\d+)\s+H264\//i);
-        if (m) h264Pts.push(m[1]);
+        const m = l.match(/^a=rtpmap:(\d+)\s+(H264|VP8|VP9|AV1)\//i);
+        if (m) videoPts.push(m[1]);
       }
       const out = [];
       let inVideo = false;
@@ -1144,10 +1144,11 @@
           hasTias = true;
           continue;
         }
-        if (inVideo && line.startsWith('a=fmtp:') && h264Pts.length > 0) {
+        if (inVideo && line.startsWith('a=fmtp:') && videoPts.length > 0) {
           const fm = line.match(/^a=fmtp:(\d+)\s+/);
-          if (fm && h264Pts.includes(fm[1]) && !line.includes('x-google-max-bitrate')) {
-            line = `${line};x-google-min-bitrate=3000;x-google-start-bitrate=8000;x-google-max-bitrate=${kbps}`;
+          // Do NOT mutate profile-level-id (RFC 6184 mismatch forces Safari to drop hardware H.264 High Profile!)
+          if (fm && videoPts.includes(fm[1]) && !line.includes('x-google-max-bitrate')) {
+            line = `${line};x-google-min-bitrate=${minKbps};x-google-start-bitrate=${startKbps};x-google-max-bitrate=${kbps}`;
           }
         }
         out.push(line);
@@ -1182,10 +1183,52 @@
     return codecs.slice().sort((a, b) => score(a) - score(b));
   }
 
+  // For 127.0.0.1 loopback relay to Display 2: use fast hardware H.264 or lightweight VP8 (NEVER CPU-heavy software VP9!)
+  function rankRelayCodecs(codecs) {
+    if (!Array.isArray(codecs)) return [];
+    const score = (c) => {
+      const m = (c.mimeType || '').toLowerCase();
+      const fmtp = (c.sdpFmtpLine || '').toLowerCase();
+      if (m === 'video/h264') {
+        if (fmtp.includes('6400') || fmtp.includes('f400')) return 1;
+        if (fmtp.includes('4d00')) return 2;
+        if (fmtp.includes('42e0')) return 3;
+        return 4;
+      }
+      if (m === 'video/vp8') return 5;
+      if (m === 'video/vp9') return 7;
+      if (m === 'video/av1') return 8;
+      if (m === 'video/rtx') return 9;
+      return 10;
+    };
+    return codecs.slice().sort((a, b) => score(a) - score(b));
+  }
+
   const offlineControlWcamStreams = new Map();
   const offlineControlWcamPcs = new Map();
   const offlineControlPendingIce = new Map();
   const offlineControlWcamStats = new Map(); // slot -> '1920×1080 • 8.2M'
+  const offlineControlWcamZoom = new Map(); // slot -> 1.0..5.0
+  function applyOfflineZoomToSlotTargets(slot, zoom) {
+    const cleanSlot = String(slot || '1');
+    const z = Math.max(1, Math.min(5, Number(zoom) || 1));
+    offlineControlWcamZoom.set(cleanSlot, z);
+    const tf = z > 1.01 ? `scale(${z.toFixed(2)})` : 'none';
+    const devId = `wcam-offline:${cleanSlot}`;
+    document.querySelectorAll(`video.wcam-offline-video[data-wcam-slot="${cleanSlot}"]`).forEach(v => {
+      v.style.transform = tf;
+      v.style.transformOrigin = 'center center';
+    });
+    if (selectedViewfinderDeviceId === devId && previewVideoStream) {
+      previewVideoStream.style.transform = tf;
+    }
+    if (state.cameraEnabled && state.cameraDeviceId === devId && liveVideoStream) {
+      liveVideoStream.style.transform = tf;
+    }
+    if (wcamRelayChan) {
+      wcamRelayChan.postMessage({ type: 'relay-zoom', deviceId: devId, zoom: z });
+    }
+  }
   const talkbackPcs = new Map();
   const talkbackPendingIce = new Map();
   const crewMicPcs = new Map();
@@ -1199,7 +1242,7 @@
 
   const wcamRelayChan = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('zioncast-wcam-relay') : null;
   const relayPcs = new Map();
-  function applyRelayBitrate(pc, maxBps = 20000000) {
+  function applyRelayBitrate(pc, maxBps = 12000000) {
     if (!pc || !pc.getSenders) return;
     pc.getSenders().forEach(sender => {
       if (sender.track && sender.track.kind === 'video' && sender.getParameters && sender.setParameters) {
@@ -1207,12 +1250,20 @@
           const p = sender.getParameters() || {};
           if (!p.encodings || !p.encodings.length) p.encodings = [{}];
           p.encodings[0].maxBitrate = maxBps;
+          p.encodings[0].maxFramerate = 30;
           p.encodings[0].scaleResolutionDownBy = 1.0;
-          sender.setParameters(p).catch(() => {});
-          try {
-            p.degradationPreference = 'maintain-resolution';
-            sender.setParameters(p).catch(() => {});
-          } catch (_) {}
+          // 127.0.0.1 loopback has unlimited bandwidth — NEVER allow WebRTC to downscale TV resolution!
+          p.degradationPreference = 'maintain-resolution';
+          sender.setParameters(p).catch(() => {
+            try {
+              const p2 = sender.getParameters() || {};
+              if (!p2.encodings || !p2.encodings.length) p2.encodings = [{}];
+              p2.encodings[0].maxBitrate = maxBps;
+              p2.encodings[0].maxFramerate = 30;
+              p2.encodings[0].scaleResolutionDownBy = 1.0;
+              sender.setParameters(p2).catch(() => {});
+            } catch (_) {}
+          });
         } catch (_) {}
       }
     });
@@ -1245,11 +1296,11 @@
         try {
           if (tr && typeof tr.setCodecPreferences === 'function' && RTCRtpSender.getCapabilities) {
             const caps = RTCRtpSender.getCapabilities('video');
-            if (caps && caps.codecs) tr.setCodecPreferences(rankVideoCodecs(caps.codecs));
+            if (caps && caps.codecs) tr.setCodecPreferences(rankRelayCodecs(caps.codecs));
           }
         } catch (_) {}
         pc.onconnectionstatechange = () => {
-          if (pc.connectionState === 'connected') applyRelayBitrate(pc, 20000000);
+          if (pc.connectionState === 'connected') applyRelayBitrate(pc, 12000000);
         };
         pc.onicecandidate = (iceEv) => {
           if (iceEv.candidate) {
@@ -1262,13 +1313,15 @@
         };
         try {
           const offer = await pc.createOffer();
-          const boosted = new RTCSessionDescription({ type: offer.type, sdp: boostControlSdp(offer.sdp, 20000) });
+          const boosted = new RTCSessionDescription({ type: offer.type, sdp: boostControlSdp(offer.sdp, 12000, 4000, 8000) });
           await pc.setLocalDescription(boosted);
-          applyRelayBitrate(pc, 20000000);
+          applyRelayBitrate(pc, 12000000);
+          const curZoom = devId.startsWith('wcam-offline:') ? (offlineControlWcamZoom.get(devId.split(':')[1] || '1') || 1) : 1;
           wcamRelayChan.postMessage({
             type: 'relay-offer',
             relayId: msg.relayId,
             deviceId: devId,
+            zoom: curZoom,
             sdp: { type: pc.localDescription.type, sdp: pc.localDescription.sdp }
           });
         } catch (_) {
@@ -1356,9 +1409,12 @@
     const existingPc = offlineControlWcamPcs.get(cleanSlot);
     const existingStream = offlineControlWcamStreams.get(cleanSlot);
     const hasLiveTrack = !!(existingStream && existingStream.getVideoTracks().some(t => t.readyState === 'live'));
-    if (!forceRestart && existingPc && existingPc.connectionState !== 'failed' && existingPc.connectionState !== 'closed' && hasLiveTrack) {
-      attachOfflineStreamToActiveTargets(cleanSlot, existingStream);
-      return existingStream;
+    const existingState = existingPc ? (existingPc.connectionState || existingPc.iceConnectionState || '') : '';
+    if (!forceRestart && existingPc && existingState !== 'failed' && existingState !== 'closed' && existingState !== 'disconnected') {
+      if (hasLiveTrack) {
+        attachOfflineStreamToActiveTargets(cleanSlot, existingStream);
+      }
+      return existingStream || null;
     }
     if (existingPc) {
       try { existingPc.close(); } catch (_) {}
@@ -1401,9 +1457,37 @@
       }
     };
 
+    let disconnectRecoverTimer = null;
+    const handlePeerHealthChange = () => {
+      if (offlineControlWcamPcs.get(cleanSlot) !== pc) return;
+      const st = pc.iceConnectionState || pc.connectionState;
+      if (st === 'connected' || st === 'completed') {
+        if (disconnectRecoverTimer) { clearTimeout(disconnectRecoverTimer); disconnectRecoverTimer = null; }
+      } else if (st === 'failed') {
+        if (disconnectRecoverTimer) { clearTimeout(disconnectRecoverTimer); disconnectRecoverTimer = null; }
+        setTimeout(() => {
+          if (offlineControlWcamPcs.get(cleanSlot) === pc && (state.offlineWirelessCams || []).some(c => String(c.slot) === cleanSlot)) {
+            startControlOfflineWcamPeer(cleanSlot, true);
+          }
+        }, 1200);
+      } else if (st === 'disconnected') {
+        if (disconnectRecoverTimer) clearTimeout(disconnectRecoverTimer);
+        disconnectRecoverTimer = setTimeout(() => {
+          disconnectRecoverTimer = null;
+          if (offlineControlWcamPcs.get(cleanSlot) === pc &&
+              (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') &&
+              (state.offlineWirelessCams || []).some(c => String(c.slot) === cleanSlot)) {
+            startControlOfflineWcamPeer(cleanSlot, true);
+          }
+        }, 4000);
+      }
+    };
+    pc.oniceconnectionstatechange = handlePeerHealthChange;
+    pc.onconnectionstatechange = handlePeerHealthChange;
+
     try {
       const offer = await pc.createOffer({ offerToReceiveVideo: true });
-      const boostedOffer = new RTCSessionDescription({ type: offer.type, sdp: boostControlSdp(offer.sdp, 12000) });
+      const boostedOffer = new RTCSessionDescription({ type: offer.type, sdp: boostControlSdp(offer.sdp, 10000, 1000, 3000) });
       await pc.setLocalDescription(boostedOffer);
       await sendControlCamSignal({
         type: 'offer',
@@ -1564,6 +1648,9 @@
                 startTalkbackPeerForSlot(c.slot);
               }
             });
+            if (msg.camZooms && typeof msg.camZooms === 'object') {
+              Object.keys(msg.camZooms).forEach(zSlot => applyOfflineZoomToSlotTargets(zSlot, msg.camZooms[zSlot]));
+            }
             if (Array.isArray(msg.crewMicSlots)) {
               msg.crewMicSlots.forEach(cmSlot => {
                 const s = String(cmSlot);
@@ -1609,12 +1696,23 @@
               list.push(msg.candidate);
               crewMicPendingIce.set(slot, list);
             }
+          } else if (msg.type === 'cam-zoom' && msg.slot) {
+            applyOfflineZoomToSlotTargets(String(msg.slot), msg.zoom);
           } else if (msg.type === 'cam-joined' && msg.cam) {
             const slot = String(msg.cam.slot);
             if (!state.offlineWirelessCams.some(c => String(c.slot) === slot)) {
               state.offlineWirelessCams.push(msg.cam);
             }
-            startControlOfflineWcamPeer(slot, true);
+            // Only renegotiate if track changed or the existing peer isn't already healthy & live
+            const curPc = offlineControlWcamPcs.get(slot);
+            const curSt = curPc ? (curPc.iceConnectionState || curPc.connectionState) : '';
+            const curStream = offlineControlWcamStreams.get(slot);
+            const isHealthy = !msg.trackChanged && !!(curPc && (curSt === 'connected' || curSt === 'completed') && curStream && curStream.getVideoTracks().some(t => t.readyState === 'live'));
+            if (!isHealthy) {
+              startControlOfflineWcamPeer(slot, true);
+            } else {
+              attachOfflineStreamToActiveTargets(slot, curStream);
+            }
             if (state.talkbackActive && talkbackStream && typeof startTalkbackPeerForSlot === 'function') {
               startTalkbackPeerForSlot(slot);
               const lblTb = document.getElementById('label-talkback-mic');
@@ -1631,6 +1729,7 @@
             offlineControlPendingIce.delete(slot);
             offlineControlWcamStreams.delete(slot);
             offlineControlWcamStats.delete(slot);
+            offlineControlWcamZoom.delete(slot);
             stopCrewMicReceiverForSlot(slot);
             const oldTbPc = talkbackPcs.get(slot);
             if (oldTbPc) { try { oldTbPc.close(); } catch (_) {} talkbackPcs.delete(slot); }
@@ -2182,10 +2281,18 @@
     if (existing && existing.getVideoTracks().some(t => t.readyState === 'live')) {
       return existing;
     }
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false
-    });
+    let stream = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+        audio: false
+      });
+    } catch (_) {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+    }
     cameraCardStreams.set(deviceId, stream);
     return stream;
   }
@@ -2300,10 +2407,10 @@
         stream = existing;
         wasExistingStream = true;
       } else {
-        // Always open at unified 1280x720 so Chromium VideoCaptureService shares one session across all monitors!
+        // Open at unified 1920x1080 Full HD so Chromium VideoCaptureService shares one crisp 1080p session across all monitors!
         stream = await Promise.race([
           navigator.mediaDevices.getUserMedia({
-            video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            video: { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
             audio: false
           }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('Camera open timeout')), 3500))
@@ -5291,22 +5398,26 @@
     syncOperatorPreviewCameraOverlay();
 
     if (!grid) return;
-    grid.innerHTML = '';
 
     if (sources.length === 0) {
       grid.innerHTML = `
         <div class="camera-empty-state-card">
-          <div style="font-size: 2.2rem; line-height: 1;">📱</div>
-          <div style="font-size: 1rem; font-weight: 800; color: #f8fafc;">No Connected Cameras Detected</div>
-          <p style="font-size: 0.8rem; color: #94a3b8; max-width: 520px; margin: 0 auto; line-height: 1.5;">
-            Turn any iPhone or Android phone on the same Wi-Fi into a live camera with <strong>zero apps needed</strong>, or connect via <strong>Iriun Webcam</strong>, <strong>Camo Studio</strong>, or USB.
+          <div class="cam-empty-icon-ring">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M23 7l-7 5 7 5V7z"></path>
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+            </svg>
+          </div>
+          <div style="font-size: 0.94rem; font-weight: 800; color: #f8fafc; letter-spacing: -0.01em;">No Connected Cameras</div>
+          <p style="font-size: 0.76rem; color: #94a3b8; max-width: 460px; margin: 0 auto; line-height: 1.5;">
+            Scan the QR code from any iPhone or Android on the same Wi-Fi, or connect via USB, Iriun, or Camo Studio.
           </p>
-          <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px;">
-            <button id="btn-empty-wifi-cam" class="btn-fast" style="padding: 8px 18px; background: #0284c7; color: #fff; font-weight: 800; border-color: #38bdf8; font-size: 0.8rem;">
-              📱 Add Wi-Fi Phone Cam (No App)
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 4px;">
+            <button id="btn-empty-wifi-cam" class="btn-fast cam-empty-cta-primary">
+              Connect Phone Cam
             </button>
-            <button id="btn-empty-scan" class="btn-fast" style="padding: 8px 18px; background: #10b981; color: #fff; font-weight: 800; border-color: #059669; font-size: 0.8rem;">
-              🔄 Scan for Hardware/Iriun
+            <button id="btn-empty-scan" class="btn-fast cam-empty-cta-secondary">
+              Scan Hardware / USB
             </button>
           </div>
         </div>
@@ -5325,6 +5436,16 @@
       return;
     }
 
+    // Reconcile camera cards IN-PLACE so adding/removing Cam 2/3/4 never tears down Cam 1's live <video> element
+    const emptyEl = grid.querySelector('.camera-empty-state-card');
+    if (emptyEl) emptyEl.remove();
+    const activeIds = new Set(sources.map(s => s.id));
+    grid.querySelectorAll('.camera-card').forEach(existingCard => {
+      if (!activeIds.has(existingCard.dataset.deviceId)) {
+        existingCard.remove();
+      }
+    });
+
     sources.forEach((src) => {
       const isLiveOnTv = state.cameraEnabled && (state.cameraDeviceId === src.id || (src.rawLabel && state.cameraDeviceLabel === src.rawLabel));
       const isPreacherMode = isLiveOnTv && state.cameraMode === 'preacher';
@@ -5333,6 +5454,54 @@
       const frameStat = src.kind === 'hardware'
         ? (cameraFrameStats.get(src.id) || { isDarkPhone: false, res: '1280×720 HD' })
         : { isDarkPhone: false, res: src.kind === 'vdo' ? 'Wi-Fi Zero-Cert' : (offlineControlWcamStats.get(src.slot) || 'Offline HTTPS') };
+
+      const existingCard = Array.from(grid.children).find(el => el.classList && el.classList.contains('camera-card') && el.dataset.deviceId === src.id);
+      if (existingCard) {
+        existingCard.className = 'camera-card'
+          + (isSelectedInVf ? ' selected-source' : '')
+          + (isLiveOnTv ? (isPreacherMode ? ' live-on-tv' : ' live-worship-bg') : '');
+        const resEl = existingCard.querySelector('.camera-type-badge, .camera-card-res-pill');
+        if (resEl) resEl.textContent = frameStat.res;
+        const statusEl = existingCard.querySelector('.camera-card-status-pill');
+        if (statusEl) {
+          statusEl.className = 'camera-card-status-pill ' + (isPreacherMode ? 'live' : (isWorshipMode ? 'worship' : (isSelectedInVf ? 'previewing' : 'ready')));
+          statusEl.textContent = isPreacherMode ? '🔴 LIVE ON TV' : (isWorshipMode ? '🎵 WORSHIP BG' : (isSelectedInVf ? '👁️ PREVIEWING' : (src.kind === 'vdo' ? '📡 READY / WAITING' : '🟢 CONNECTED')));
+        }
+        const btnPrev = existingCard.querySelector('.btn-cam-card-action.preview');
+        if (btnPrev) btnPrev.className = 'btn-cam-card-action preview' + (isSelectedInVf && !isLiveOnTv ? ' active' : '');
+        const btnTv = existingCard.querySelector('.btn-cam-card-action.preacher');
+        if (btnTv) {
+          btnTv.className = 'btn-cam-card-action preacher' + (isPreacherMode ? ' active' : '');
+          btnTv.innerHTML = isPreacherMode ? '⏹️ Remove from TV' : '📺 Add to TV';
+          btnTv.onclick = (e) => {
+            e.stopPropagation();
+            if (isPreacherMode) updateCameraMode('none');
+            else switchCameraSource(src.id, src.rawLabel || src.cleanName, 'preacher');
+          };
+        }
+        const btnBg = existingCard.querySelector('.btn-cam-card-action.worship');
+        if (btnBg) {
+          btnBg.className = 'btn-cam-card-action worship' + (isWorshipMode ? ' active' : '');
+          btnBg.innerHTML = isWorshipMode ? '⏹️ Stop Worship BG' : '🎵 Worship BG';
+          btnBg.onclick = (e) => {
+            e.stopPropagation();
+            if (isWorshipMode) updateCameraMode('none');
+            else switchCameraSource(src.id, src.rawLabel || src.cleanName, 'background');
+          };
+        }
+        if (src.kind === 'offline') {
+          const vEl = existingCard.querySelector('video.wcam-offline-video');
+          const cachedStream = offlineControlWcamStreams.get(src.slot);
+          const hasLiveTrack = !!(cachedStream && cachedStream.getVideoTracks().some(t => t.readyState === 'live'));
+          if (vEl && hasLiveTrack) {
+            if (vEl.srcObject !== cachedStream) vEl.srcObject = cachedStream;
+            if (vEl.paused) vEl.play().catch(() => {});
+          } else if (!hasLiveTrack) {
+            startControlOfflineWcamPeer(src.slot, false).catch(() => {});
+          }
+        }
+        return;
+      }
 
       const card = document.createElement('div');
       card.className = 'camera-card';
@@ -5416,7 +5585,7 @@
             cardVideo.srcObject = cachedStream;
             cardVideo.play().catch(() => {});
           } else {
-            startControlOfflineWcamPeer(src.slot, true).catch(() => {});
+            startControlOfflineWcamPeer(src.slot, false).catch(() => {});
           }
         }
       }
@@ -6608,6 +6777,473 @@
 
   const padSynth = new AmbientPadSynth();
 
+  // 13 Verified Studio-Grade Nigerian Soaking Worship Instrumentals (Pure Piano, Strings, Saxophone & Pads — Zero Karaoke, Zero Vocals)
+  const NIGERIAN_WORSHIP_INSTRUMENTALS = [
+    {
+      id: 'dunsin-baba',
+      ytId: 'o2wf-0xxIog',
+      title: 'Baba (1Hr Soaking Piano & Strings)',
+      style: 'Dunsin Oyekan • Deep Altar Piano & Strings',
+      key: 'E',
+      bpm: 64,
+      chords: [
+        { bass: 45, notes: [57, 61, 64, 68, 71] },
+        { bass: 40, notes: [56, 59, 64, 66, 71] },
+        { bass: 47, notes: [59, 63, 66, 68, 71] },
+        { bass: 49, notes: [56, 61, 64, 68, 71] }
+      ]
+    },
+    {
+      id: 'dunsin-more-than-a-song',
+      ytId: 'N0FrARQDmeY',
+      title: 'More Than a Song (1Hr Soaking)',
+      style: 'Dunsin Oyekan • Deep Worship Instrumental',
+      key: 'G',
+      bpm: 64,
+      chords: [
+        { bass: 40, notes: [55, 59, 62, 64, 67] },
+        { bass: 36, notes: [52, 55, 59, 62, 67] },
+        { bass: 43, notes: [55, 59, 62, 66, 69] },
+        { bass: 38, notes: [50, 54, 57, 62, 66] }
+      ]
+    },
+    {
+      id: 'emperor-of-the-universe',
+      ytId: '__wHn5MSN7U',
+      title: 'Emperor of the Universe (Piano)',
+      style: 'Dunsin Oyekan × Theophilus Sunday',
+      key: 'F#',
+      bpm: 63,
+      chords: [
+        { bass: 42, notes: [54, 58, 61, 63, 66] },
+        { bass: 41, notes: [53, 56, 61, 65, 68] },
+        { bass: 39, notes: [54, 58, 61, 63, 66] },
+        { bass: 47, notes: [54, 59, 61, 63, 66] }
+      ]
+    },
+    {
+      id: 'speechless-soaking',
+      ytId: 'Jz5hsLJXcR0',
+      title: 'Speechless (Deep Soaking Piano)',
+      style: 'His Shekinah • Awe & Presence Piano',
+      key: 'C',
+      bpm: 62,
+      chords: [
+        { bass: 36, notes: [52, 55, 60, 62, 67] },
+        { bass: 41, notes: [53, 57, 60, 64, 67] },
+        { bass: 45, notes: [52, 55, 57, 60, 64] },
+        { bass: 43, notes: [50, 55, 59, 62, 67] }
+      ]
+    },
+    {
+      id: 'theophilus-medley',
+      ytId: '1Jgo6fzFmgQ',
+      title: 'Theophilus Sunday Piano Medley',
+      style: 'Strings & Tongues • Deep Prayer Soaking',
+      key: 'F',
+      bpm: 64,
+      chords: [
+        { bass: 41, notes: [53, 57, 60, 62, 65] },
+        { bass: 36, notes: [52, 55, 60, 64, 67] },
+        { bass: 38, notes: [53, 57, 60, 62, 65] },
+        { bass: 46, notes: [53, 58, 60, 62, 65] }
+      ]
+    },
+    {
+      id: 'theophilus-take-over',
+      ytId: 'nQSFJIJCDVo',
+      title: 'Take Over (Deep Soaking Worship)',
+      style: 'Minister Theophilus Sunday • Alone With God',
+      key: 'D',
+      bpm: 62,
+      chords: [
+        { bass: 43, notes: [55, 59, 62, 66, 69] },
+        { bass: 38, notes: [54, 57, 62, 64, 69] },
+        { bass: 45, notes: [57, 61, 64, 66, 69] },
+        { bass: 47, notes: [54, 59, 62, 66, 69] }
+      ]
+    },
+    {
+      id: 'nathaniel-iba-o-iba',
+      ytId: 'lKi-yXRFbzg',
+      title: 'Iba O Iba (5Hr Prophetic Soaking)',
+      style: 'Nathaniel Bassey • Selaphonic Sounds',
+      key: 'Eb',
+      bpm: 64,
+      chords: [
+        { bass: 36, notes: [55, 58, 60, 63, 67] },
+        { bass: 44, notes: [55, 58, 60, 63, 68] },
+        { bass: 39, notes: [55, 58, 63, 65, 70] },
+        { bass: 46, notes: [53, 58, 62, 65, 70] }
+      ]
+    },
+    {
+      id: 'koinonia-piano',
+      ytId: 'NTWDE7uA4bE',
+      title: 'Koinonia Piano Worship',
+      style: 'Dunsin Oyekan × Nathaniel Bassey Piano',
+      key: 'Ab',
+      bpm: 62,
+      chords: [
+        { bass: 37, notes: [53, 56, 60, 63, 68] },
+        { bass: 39, notes: [55, 58, 63, 65, 70] },
+        { bass: 44, notes: [56, 60, 63, 65, 68] },
+        { bass: 41, notes: [56, 60, 63, 65, 68] }
+      ]
+    },
+    {
+      id: 'prophetic-sax-yoruba',
+      ytId: 'Qhk01gEOMp0',
+      title: 'Prophetic Saxophone Worship (30m)',
+      style: 'Daniel Aikhomu • Deep Yoruba Sax Soaking',
+      key: 'G',
+      bpm: 65,
+      chords: [
+        { bass: 43, notes: [55, 59, 62, 64, 67] },
+        { bass: 36, notes: [52, 55, 60, 62, 67] },
+        { bass: 40, notes: [55, 59, 62, 64, 67] },
+        { bass: 38, notes: [54, 57, 62, 64, 69] }
+      ]
+    },
+    {
+      id: 'speak-lord-dappytkeys',
+      ytId: 'mKUXO-RlTew',
+      title: 'Speak Lord (3Hr Soaking Piano)',
+      style: 'DappyTKeys • Grand Piano & Soft Strings',
+      key: 'A',
+      bpm: 63,
+      chords: [
+        { bass: 45, notes: [57, 61, 64, 66, 69] },
+        { bass: 40, notes: [56, 59, 64, 66, 71] },
+        { bass: 42, notes: [57, 61, 64, 66, 69] },
+        { bass: 38, notes: [54, 57, 61, 64, 69] }
+      ]
+    },
+    {
+      id: 'minister-mike-iwo-loye',
+      ytId: 'VLCJbTVF6vs',
+      title: 'Iwo Loye (Prophetic Instrumental)',
+      style: 'Minister Mike • Deep Soaking Prayer',
+      key: 'F#',
+      bpm: 64,
+      chords: [
+        { bass: 42, notes: [54, 58, 61, 63, 66] },
+        { bass: 41, notes: [53, 56, 61, 65, 68] },
+        { bass: 39, notes: [54, 58, 61, 63, 66] },
+        { bass: 47, notes: [54, 59, 61, 63, 66] }
+      ]
+    },
+    {
+      id: 'minister-mike-ran-mi-lowo',
+      ytId: '32eu0L_r-E0',
+      title: 'Ran Mi Lowo (1Hr Instrumental)',
+      style: 'Minister Mike • Spontaneous Worship',
+      key: 'Eb',
+      bpm: 63,
+      chords: [
+        { bass: 39, notes: [55, 58, 63, 65, 70] },
+        { bass: 46, notes: [53, 58, 62, 65, 70] },
+        { bass: 36, notes: [55, 58, 60, 63, 67] },
+        { bass: 44, notes: [55, 58, 60, 63, 68] }
+      ]
+    },
+    {
+      id: 'minister-mike-toto-iba-re',
+      ytId: 'mH-gOanWY1U',
+      title: 'Toto Iba Re (Prayer Instrumental)',
+      style: 'Minister Mike • Deep Worship Keys',
+      key: 'C',
+      bpm: 65,
+      chords: [
+        { bass: 36, notes: [52, 55, 60, 62, 67] },
+        { bass: 41, notes: [53, 57, 60, 64, 67] },
+        { bass: 45, notes: [52, 55, 57, 60, 64] },
+        { bass: 43, notes: [50, 55, 59, 62, 67] }
+      ]
+    }
+  ];
+
+  class WorshipInstrumentalPlayer {
+    constructor() {
+      this.ctx = null;
+      this.masterGain = null;
+      this.activeTrack = null;
+      this.stepTimer = null;
+      this.volume = 0.75;
+      this.chordIdx = 0;
+      this.beatIdx = 0;
+      this.activeNodes = new Set();
+    }
+
+    midiToFreq(m) {
+      return 440 * Math.pow(2, (m - 69) / 12);
+    }
+
+    initAudio() {
+      if (!this.ctx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioCtx();
+      }
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+    }
+
+    playRhodesNote(midi, startTime, duration, velocity = 0.22) {
+      if (!this.ctx || !this.masterGain) return;
+      const freq = this.midiToFreq(midi);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, startTime);
+      g.gain.linearRampToValueAtTime(velocity, startTime + 0.018);
+      g.gain.exponentialRampToValueAtTime(velocity * 0.42, startTime + 0.35);
+      g.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+      // Warm fundamental + gentle Rhodes bell tine overtone
+      const osc1 = this.ctx.createOscillator();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(freq, startTime);
+
+      const osc2 = this.ctx.createOscillator();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(freq * 2, startTime);
+      const tineGain = this.ctx.createGain();
+      tineGain.gain.setValueAtTime(velocity * 0.22, startTime);
+      tineGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.45);
+
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(2100, startTime);
+      lp.frequency.exponentialRampToValueAtTime(750, startTime + duration);
+
+      osc1.connect(lp);
+      osc2.connect(tineGain);
+      tineGain.connect(lp);
+      lp.connect(g);
+      g.connect(this.masterGain);
+
+      osc1.start(startTime);
+      osc2.start(startTime);
+      osc1.stop(startTime + duration + 0.05);
+      osc2.stop(startTime + duration + 0.05);
+      this.activeNodes.add(osc1);
+      this.activeNodes.add(osc2);
+      osc1.onended = () => { this.activeNodes.delete(osc1); try { osc1.disconnect(); g.disconnect(); lp.disconnect(); } catch (_) {} };
+      osc2.onended = () => { this.activeNodes.delete(osc2); try { osc2.disconnect(); tineGain.disconnect(); } catch (_) {} };
+    }
+
+    playChordPadAndBass(chord, startTime, barDuration) {
+      if (!this.ctx || !this.masterGain) return;
+      // 1. Warm sub bass
+      const bassOsc = this.ctx.createOscillator();
+      const bassGain = this.ctx.createGain();
+      bassOsc.type = 'sine';
+      bassOsc.frequency.setValueAtTime(this.midiToFreq(chord.bass), startTime);
+      bassGain.gain.setValueAtTime(0.0001, startTime);
+      bassGain.gain.linearRampToValueAtTime(0.28, startTime + 0.25);
+      bassGain.gain.setValueAtTime(0.24, startTime + barDuration * 0.8);
+      bassGain.gain.exponentialRampToValueAtTime(0.0001, startTime + barDuration + 0.4);
+      bassOsc.connect(bassGain);
+      bassGain.connect(this.masterGain);
+      bassOsc.start(startTime);
+      bassOsc.stop(startTime + barDuration + 0.45);
+      this.activeNodes.add(bassOsc);
+      bassOsc.onended = () => { this.activeNodes.delete(bassOsc); try { bassOsc.disconnect(); bassGain.disconnect(); } catch (_) {} };
+
+      // 2. Warm stereo-detuned worship pad
+      const padFilter = this.ctx.createBiquadFilter();
+      padFilter.type = 'lowpass';
+      padFilter.frequency.setValueAtTime(580, startTime);
+      padFilter.Q.setValueAtTime(1.4, startTime);
+      const padGain = this.ctx.createGain();
+      padGain.gain.setValueAtTime(0.0001, startTime);
+      padGain.gain.linearRampToValueAtTime(0.14, startTime + 0.65);
+      padGain.gain.setValueAtTime(0.12, startTime + barDuration * 0.82);
+      padGain.gain.exponentialRampToValueAtTime(0.0001, startTime + barDuration + 0.7);
+      padFilter.connect(padGain);
+      padGain.connect(this.masterGain);
+
+      chord.notes.slice(0, 4).forEach((midi, idx) => {
+        [-4, 4].forEach(det => {
+          const o = this.ctx.createOscillator();
+          o.type = idx % 2 === 0 ? 'sawtooth' : 'triangle';
+          o.frequency.setValueAtTime(this.midiToFreq(midi), startTime);
+          o.detune.setValueAtTime(det, startTime);
+          o.connect(padFilter);
+          o.start(startTime);
+          o.stop(startTime + barDuration + 0.75);
+          this.activeNodes.add(o);
+          o.onended = () => { this.activeNodes.delete(o); try { o.disconnect(); } catch (_) {} };
+        });
+      });
+    }
+
+    playTrack(track) {
+      if (!track) return;
+      this.stop(true);
+      this.activeTrack = track;
+
+      // 1. Stream real recorded YouTube instrumental audio via ZionCast localhost embed proxy when online
+      const ytFrame = document.getElementById('pad-yt-audio-frame');
+      if (ytFrame && track.ytId && navigator.onLine !== false) {
+        this.isYoutubeMode = true;
+        const port = (state.wcamServerInfo && state.wcamServerInfo.port) ? state.wcamServerInfo.port : 3000;
+        const embedUrl = `http://127.0.0.1:${port}/embed?v=${encodeURIComponent(track.ytId)}&autoplay=1&mute=0&loop=1`;
+        ytFrame.src = embedUrl;
+        const targetVol = Math.round(this.volume * 100);
+        const sendVol = () => {
+          try { ytFrame.contentWindow.postMessage({ type: 'yt-volume', volume: targetVol }, '*'); } catch (_) {}
+        };
+        ytFrame.onload = () => {
+          sendVol();
+          setTimeout(sendVol, 900);
+        };
+        return;
+      }
+
+      // 2. Automatic 100%-offline fallback (Rhodes EP + Worship Pad + Sub Bass) if church has no internet
+      this.isYoutubeMode = false;
+      this.initAudio();
+      this.chordIdx = 0;
+      this.beatIdx = 0;
+
+      const mg = this.ctx.createGain();
+      mg.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+      mg.gain.exponentialRampToValueAtTime(Math.max(0.0001, this.volume * 0.52), this.ctx.currentTime + 0.6);
+      mg.connect(this.ctx.destination);
+      this.masterGain = mg;
+
+      const beatSec = 60 / (track.bpm || 66);
+      const barSec = beatSec * 4;
+
+      const tick = () => {
+        if (!this.activeTrack || this.activeTrack.id !== track.id || !this.ctx) return;
+        const now = this.ctx.currentTime + 0.03;
+        const chord = track.chords[this.chordIdx % track.chords.length];
+        const b = this.beatIdx % 4;
+
+        if (b === 0) {
+          // Downbeat: Lush worship pad + sub bass + warm rolled gospel Rhodes chord
+          this.playChordPadAndBass(chord, now, barSec);
+          chord.notes.forEach((n, idx) => {
+            this.playRhodesNote(n, now + idx * 0.045, barSec * 0.92, 0.16 - idx * 0.015);
+          });
+        } else if (b === 1) {
+          // Gentle upper arpeggio voice
+          this.playRhodesNote(chord.notes[2], now, beatSec * 2.2, 0.12);
+          this.playRhodesNote(chord.notes[4] || (chord.notes[0] + 12), now + beatSec * 0.5, beatSec * 2.0, 0.11);
+        } else if (b === 2) {
+          // Expressive mid-bar worship swell & chime
+          this.playRhodesNote(chord.notes[1], now, beatSec * 2.4, 0.13);
+          this.playRhodesNote(chord.notes[3], now + 0.05, beatSec * 2.4, 0.12);
+          this.playRhodesNote((chord.notes[4] || chord.notes[2]) + 12, now + beatSec * 0.5, beatSec * 1.8, 0.07);
+        } else if (b === 3) {
+          // Soft passing arpeggio into next chord
+          this.playRhodesNote(chord.notes[3], now, beatSec * 1.6, 0.11);
+          this.playRhodesNote(chord.notes[2], now + beatSec * 0.5, beatSec * 1.4, 0.10);
+        }
+
+        this.beatIdx++;
+        if (this.beatIdx % 4 === 0) {
+          this.chordIdx = (this.chordIdx + 1) % track.chords.length;
+        }
+      };
+
+      tick();
+      this.stepTimer = setInterval(tick, Math.round(beatSec * 1000));
+    }
+
+    stop(immediate = false) {
+      if (this.stepTimer) {
+        clearInterval(this.stepTimer);
+        this.stepTimer = null;
+      }
+      if (this.ytFadeTimer) {
+        clearInterval(this.ytFadeTimer);
+        this.ytFadeTimer = null;
+      }
+      this.activeTrack = null;
+      const ytFrame = document.getElementById('pad-yt-audio-frame');
+      if (this.isYoutubeMode && ytFrame) {
+        this.isYoutubeMode = false;
+        if (immediate) {
+          try { ytFrame.contentWindow.postMessage({ type: 'yt-stop' }, '*'); } catch (_) {}
+          ytFrame.src = 'about:blank';
+        } else {
+          let curVol = Math.round(this.volume * 100);
+          this.ytFadeTimer = setInterval(() => {
+            curVol = Math.max(0, curVol - 12);
+            try { ytFrame.contentWindow.postMessage({ type: 'yt-volume', volume: curVol }, '*'); } catch (_) {}
+            if (curVol <= 0) {
+              clearInterval(this.ytFadeTimer);
+              this.ytFadeTimer = null;
+              try { ytFrame.contentWindow.postMessage({ type: 'yt-stop' }, '*'); } catch (_) {}
+              ytFrame.src = 'about:blank';
+            }
+          }, 120);
+        }
+      }
+      if (this.masterGain && this.ctx) {
+        const oldGain = this.masterGain;
+        const oldNodes = Array.from(this.activeNodes);
+        this.masterGain = null;
+        this.activeNodes.clear();
+        const now = this.ctx.currentTime;
+        const fadeSec = immediate ? 0.25 : 1.5;
+        try {
+          oldGain.gain.cancelScheduledValues(now);
+          oldGain.gain.setValueAtTime(Math.max(0.0001, oldGain.gain.value), now);
+          oldGain.gain.exponentialRampToValueAtTime(0.0001, now + fadeSec);
+        } catch (_) {}
+        setTimeout(() => {
+          oldNodes.forEach(n => { try { n.stop(); n.disconnect(); } catch (_) {} });
+          try { oldGain.disconnect(); } catch (_) {}
+        }, Math.round((fadeSec + 0.15) * 1000));
+      }
+    }
+
+    setVolume(vol) {
+      this.volume = Math.max(0, Math.min(1, vol));
+      if (this.isYoutubeMode) {
+        const ytFrame = document.getElementById('pad-yt-audio-frame');
+        if (ytFrame && ytFrame.contentWindow) {
+          try { ytFrame.contentWindow.postMessage({ type: 'yt-volume', volume: Math.round(this.volume * 100) }, '*'); } catch (_) {}
+        }
+      }
+      if (this.masterGain && this.ctx) {
+        this.masterGain.gain.setValueAtTime(Math.max(0.0001, this.volume * 0.52), this.ctx.currentTime);
+      }
+    }
+
+    seekTo(seconds) {
+      if (!this.isYoutubeMode) return;
+      const ytFrame = document.getElementById('pad-yt-audio-frame');
+      if (ytFrame && ytFrame.contentWindow) {
+        try { ytFrame.contentWindow.postMessage({ type: 'yt-seek', seconds: Math.max(0, Number(seconds) || 0) }, '*'); } catch (_) {}
+      }
+    }
+
+    seekBy(deltaSeconds) {
+      if (!this.isYoutubeMode) return;
+      const ytFrame = document.getElementById('pad-yt-audio-frame');
+      if (ytFrame && ytFrame.contentWindow) {
+        try { ytFrame.contentWindow.postMessage({ type: 'yt-seek-delta', delta: Number(deltaSeconds) || 0 }, '*'); } catch (_) {}
+      }
+    }
+
+    setPaused(paused) {
+      this.isPaused = !!paused;
+      if (this.isYoutubeMode) {
+        const ytFrame = document.getElementById('pad-yt-audio-frame');
+        if (ytFrame && ytFrame.contentWindow) {
+          try { ytFrame.contentWindow.postMessage({ type: this.isPaused ? 'yt-pause' : 'yt-play' }, '*'); } catch (_) {}
+        }
+      } else if (this.ctx) {
+        if (this.isPaused) this.ctx.suspend().catch(() => {});
+        else this.ctx.resume().catch(() => {});
+      }
+    }
+  }
+
+  const worshipInstPlayer = new WorshipInstrumentalPlayer();
+
   function initAmbientWorshipPads() {
     const btnOpenPadsModal = document.getElementById('btn-open-pads-modal');
     const modalPads = document.getElementById('modal-pads');
@@ -6619,10 +7255,161 @@
     const volumeLabel = document.getElementById('pad-volume-label');
     const btnStopPad = document.getElementById('btn-pad-stop');
     const keyButtons = document.querySelectorAll('.pad-key-btn');
+    const btnTabKeys = document.getElementById('btn-pad-tab-keys');
+    const btnTabNaija = document.getElementById('btn-pad-tab-naija');
+    const panelKeys = document.getElementById('pad-panel-keys');
+    const panelNaija = document.getElementById('pad-panel-naija');
+    const naijaGrid = document.getElementById('naija-inst-grid');
+    const naijaSeekSlider = document.getElementById('naija-seek-slider');
+    const naijaTimeCur = document.getElementById('naija-time-cur');
+    const naijaTimeDur = document.getElementById('naija-time-dur');
+    const btnNaijaPrev = document.getElementById('btn-naija-prev');
+    const btnNaijaBack = document.getElementById('btn-naija-back');
+    const btnNaijaPlayPause = document.getElementById('btn-naija-playpause');
+    const btnNaijaFwd = document.getElementById('btn-naija-fwd');
+    const btnNaijaNext = document.getElementById('btn-naija-next');
+
+    let currentNaijaIdx = -1;
+    let lastKnownDuration = 0;
+    let isScrubbingNaija = false;
+
+    const fmtSec = (s) => {
+      const n = Math.max(0, Math.floor(Number(s) || 0));
+      const h = Math.floor(n / 3600);
+      const m = Math.floor((n % 3600) / 60);
+      const sec = n % 60;
+      const pad2 = (v) => String(v).padStart(2, '0');
+      return h > 0 ? `${h}:${pad2(m)}:${pad2(sec)}` : `${m}:${pad2(sec)}`;
+    };
+
+    const padHeroDeck = document.getElementById('pad-hero-deck');
+    const naijaTransportBar = document.getElementById('naija-transport-bar');
+    const ICON_PLAY_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>';
+    const ICON_PAUSE_SVG = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>';
+
+    const startNaijaTrackByIndex = (idx) => {
+      if (!NIGERIAN_WORSHIP_INSTRUMENTALS.length) return;
+      const safeIdx = ((idx % NIGERIAN_WORSHIP_INSTRUMENTALS.length) + NIGERIAN_WORSHIP_INSTRUMENTALS.length) % NIGERIAN_WORSHIP_INSTRUMENTALS.length;
+      const track = NIGERIAN_WORSHIP_INSTRUMENTALS[safeIdx];
+      currentNaijaIdx = safeIdx;
+      lastKnownDuration = 0;
+      padSynth.stop();
+      keyButtons.forEach(b => b.classList.remove('pad-active'));
+      if (naijaGrid) {
+        naijaGrid.querySelectorAll('.naija-inst-card').forEach((c, i) => c.classList.toggle('playing', i === safeIdx));
+      }
+      worshipInstPlayer.isPaused = false;
+      worshipInstPlayer.playTrack(track);
+      if (padHeroDeck) padHeroDeck.classList.add('is-playing');
+      if (naijaTransportBar) naijaTransportBar.style.display = 'flex';
+      if (btnNaijaPlayPause) btnNaijaPlayPause.innerHTML = ICON_PAUSE_SVG;
+      if (naijaSeekSlider) naijaSeekSlider.value = '0';
+      if (naijaTimeCur) naijaTimeCur.textContent = '0:00';
+      if (naijaTimeDur) naijaTimeDur.textContent = '0:00';
+      if (nowPlayingText) {
+        nowPlayingText.textContent = track.title;
+        nowPlayingText.style.color = '#f8fafc';
+      }
+      if (toneDescText) {
+        toneDescText.textContent = `${track.style} • Key ${track.key} • Pure Instruments`;
+      }
+      if (btnOpenPadsModal) {
+        btnOpenPadsModal.style.color = '#34d399';
+        btnOpenPadsModal.style.borderColor = '#10b981';
+      }
+    };
+
+    if (btnNaijaPrev) btnNaijaPrev.addEventListener('click', () => startNaijaTrackByIndex(currentNaijaIdx <= 0 ? NIGERIAN_WORSHIP_INSTRUMENTALS.length - 1 : currentNaijaIdx - 1));
+    if (btnNaijaNext) btnNaijaNext.addEventListener('click', () => startNaijaTrackByIndex(currentNaijaIdx < 0 ? 0 : currentNaijaIdx + 1));
+    if (btnNaijaBack) btnNaijaBack.addEventListener('click', () => worshipInstPlayer.seekBy(-15));
+    if (btnNaijaFwd) btnNaijaFwd.addEventListener('click', () => worshipInstPlayer.seekBy(15));
+    if (btnNaijaPlayPause) {
+      btnNaijaPlayPause.addEventListener('click', () => {
+        if (!worshipInstPlayer.activeTrack) {
+          startNaijaTrackByIndex(currentNaijaIdx >= 0 ? currentNaijaIdx : 0);
+          return;
+        }
+        const nextPaused = !worshipInstPlayer.isPaused;
+        worshipInstPlayer.setPaused(nextPaused);
+        btnNaijaPlayPause.innerHTML = nextPaused ? ICON_PLAY_SVG : ICON_PAUSE_SVG;
+        if (padHeroDeck) padHeroDeck.classList.toggle('is-playing', !nextPaused);
+      });
+    }
+    if (naijaSeekSlider) {
+      naijaSeekSlider.addEventListener('mousedown', () => { isScrubbingNaija = true; });
+      naijaSeekSlider.addEventListener('touchstart', () => { isScrubbingNaija = true; }, { passive: true });
+      naijaSeekSlider.addEventListener('input', () => {
+        if (lastKnownDuration > 0 && naijaTimeCur) {
+          naijaTimeCur.textContent = fmtSec((Number(naijaSeekSlider.value) / 1000) * lastKnownDuration);
+        }
+      });
+      const commitSeek = () => {
+        isScrubbingNaija = false;
+        if (lastKnownDuration > 0) {
+          worshipInstPlayer.seekTo((Number(naijaSeekSlider.value) / 1000) * lastKnownDuration);
+        }
+      };
+      naijaSeekSlider.addEventListener('change', commitSeek);
+      naijaSeekSlider.addEventListener('mouseup', () => { isScrubbingNaija = false; });
+    }
+
+    window.addEventListener('message', (ev) => {
+      const d = ev && ev.data;
+      if (!d || d.type !== 'yt-progress' || !worshipInstPlayer.isYoutubeMode) return;
+      if (typeof d.duration === 'number' && d.duration > 0) {
+        lastKnownDuration = d.duration;
+        if (naijaTimeDur) naijaTimeDur.textContent = fmtSec(d.duration);
+      }
+      if (!isScrubbingNaija && typeof d.currentTime === 'number') {
+        if (naijaTimeCur) naijaTimeCur.textContent = fmtSec(d.currentTime);
+        if (naijaSeekSlider && lastKnownDuration > 0) {
+          naijaSeekSlider.value = String(Math.round((d.currentTime / lastKnownDuration) * 1000));
+        }
+      }
+    });
 
     if (btnOpenPadsModal) {
       btnOpenPadsModal.addEventListener('click', () => {
         if (modalPads) modalPads.classList.add('open');
+      });
+    }
+
+    if (btnTabKeys && btnTabNaija && panelKeys && panelNaija) {
+      btnTabKeys.addEventListener('click', () => {
+        btnTabKeys.classList.add('active');
+        btnTabNaija.classList.remove('active');
+        panelKeys.style.display = 'flex';
+        panelNaija.style.display = 'none';
+      });
+      btnTabNaija.addEventListener('click', () => {
+        btnTabNaija.classList.add('active');
+        btnTabKeys.classList.remove('active');
+        panelNaija.style.display = 'flex';
+        panelKeys.style.display = 'none';
+      });
+    }
+
+    if (naijaGrid) {
+      naijaGrid.innerHTML = '';
+      NIGERIAN_WORSHIP_INSTRUMENTALS.forEach((track, idx) => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'naija-inst-card';
+        card.dataset.trackId = track.id;
+        card.innerHTML = `
+          <span class="naija-track-num">${String(idx + 1).padStart(2, '0')}</span>
+          <span class="naija-track-main">
+            <span class="naija-inst-title">${escapeHtml(track.title)}</span>
+            <span class="naija-inst-meta">${escapeHtml(track.style)}</span>
+          </span>
+          <span class="naija-track-badges">
+            <span class="naija-key-pill">Key ${escapeHtml(track.key)}</span>
+          </span>
+        `;
+        card.addEventListener('click', () => {
+          startNaijaTrackByIndex(idx);
+        });
+        naijaGrid.appendChild(card);
       });
     }
 
@@ -6631,13 +7418,20 @@
         const key = btn.dataset.key;
         if (!key) return;
 
+        worshipInstPlayer.stop(true);
+        if (naijaGrid) naijaGrid.querySelectorAll('.naija-inst-card').forEach(c => c.classList.remove('playing'));
         keyButtons.forEach(b => b.classList.remove('pad-active'));
         btn.classList.add('pad-active');
 
         padSynth.playKey(key);
+        if (padHeroDeck) padHeroDeck.classList.add('is-playing');
+        if (naijaTransportBar) naijaTransportBar.style.display = 'none';
         if (nowPlayingText) {
-          nowPlayingText.textContent = `▶ Playing: Key of ${key}`;
-          nowPlayingText.style.color = '#10b981';
+          nowPlayingText.textContent = `Key of ${key} — Ambient Pad`;
+          nowPlayingText.style.color = '#f8fafc';
+        }
+        if (toneDescText && selectTone) {
+          toneDescText.textContent = selectTone.options[selectTone.selectedIndex].text;
         }
         if (btnOpenPadsModal) {
           btnOpenPadsModal.style.color = '#34d399';
@@ -6649,10 +7443,14 @@
     if (btnStopPad) {
       btnStopPad.addEventListener('click', () => {
         padSynth.stop();
+        worshipInstPlayer.stop(false);
+        if (padHeroDeck) padHeroDeck.classList.remove('is-playing');
+        if (naijaTransportBar) naijaTransportBar.style.display = 'none';
         keyButtons.forEach(b => b.classList.remove('pad-active'));
+        if (naijaGrid) naijaGrid.querySelectorAll('.naija-inst-card').forEach(c => c.classList.remove('playing'));
         if (nowPlayingText) {
-          nowPlayingText.textContent = 'Pad Silent (Tap a Key Below)';
-          nowPlayingText.style.color = '#f59e0b';
+          nowPlayingText.textContent = 'Silent — Select a Key or Instrumental';
+          nowPlayingText.style.color = '#94a3b8';
         }
         if (btnOpenPadsModal) {
           btnOpenPadsModal.style.color = '#a855f7';
@@ -6681,6 +7479,7 @@
         const val = parseInt(volumeSlider.value, 10);
         if (volumeLabel) volumeLabel.textContent = `${val}%`;
         padSynth.setVolume(val / 100);
+        worshipInstPlayer.setVolume(val / 100);
       });
     }
   }
@@ -7856,7 +8655,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.7.2';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.7.3';
         }
       } catch (err) {
         console.warn('Update check warning:', err);

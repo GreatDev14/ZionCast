@@ -183,7 +183,7 @@ function initFaqAccordion() {
    3. Download Click Handlers & Toast Fallback
    ========================================================================== */
 const GITHUB_REPO = 'GreatDev14/ZionCast';
-const GITHUB_RELEASE_TAG = 'v1.7.2';
+const GITHUB_RELEASE_TAG = 'v1.7.3';
 const GITHUB_RELEASE_BASE = `https://github.com/${GITHUB_REPO}/releases/download/${GITHUB_RELEASE_TAG}/`;
 
 async function syncLatestGitHubReleaseToWebsite() {
@@ -204,6 +204,7 @@ async function syncLatestGitHubReleaseToWebsite() {
     const winInstallerBtn = document.getElementById('win-installer-download');
     const winPortableBtn = document.getElementById('win-portable-download');
     const winVerLabel = document.getElementById('win-version-label');
+    const navVerBadge = document.getElementById('nav-version-badge');
 
     if (setupAsset && setupAsset.browser_download_url) {
       if (heroWinBtn) {
@@ -222,8 +223,11 @@ async function syncLatestGitHubReleaseToWebsite() {
     if (ver && winVerLabel) {
       winVerLabel.textContent = `${ver} (Latest Release)`;
     }
+    if (ver && navVerBadge) {
+      navVerBadge.textContent = `v${ver}`;
+    }
   } catch (err) {
-    // Fallback to static v1.5.1 links already in HTML
+    // Fallback to static release links already in HTML
   }
 }
 

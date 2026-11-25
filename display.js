@@ -748,6 +748,10 @@
     const attempts = [];
     if (resolvedId) {
       attempts.push({
+        video: { deviceId: { exact: resolvedId }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+        audio: false
+      });
+      attempts.push({
         video: { deviceId: { exact: resolvedId }, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false
       });
@@ -756,6 +760,10 @@
         audio: false
       });
     } else {
+      attempts.push({
+        video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
+        audio: false
+      });
       attempts.push({
         video: { width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: false
@@ -820,13 +828,30 @@
   const relayChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('zioncast-wcam-relay') : null;
   const pendingRelayWaiters = new Map();
   const relayPcMap = new Map();
+  const relayZoomByDevice = new Map();
   let activeRelayId = '';
   let activeRelayDeviceId = '';
+
+  function applyZoomToDisplayVideo(el, deviceId) {
+    if (!el) return;
+    const z = relayZoomByDevice.get(String(deviceId || '')) || 1;
+    el.style.transformOrigin = 'center center';
+    el.style.transform = z > 1.01 ? `scale(${z.toFixed(2)})` : 'none';
+  }
 
   if (relayChannel) {
     relayChannel.onmessage = async (ev) => {
       const msg = ev && ev.data;
-      if (!msg || !msg.type || !msg.relayId) return;
+      if (!msg || !msg.type) return;
+      if (msg.type === 'relay-zoom' && msg.deviceId) {
+        const z = Math.max(1, Math.min(5, Number(msg.zoom) || 1));
+        relayZoomByDevice.set(String(msg.deviceId), z);
+        if (String(state.cameraDeviceId || '') === String(msg.deviceId)) {
+          applyZoomToDisplayVideo(getActiveCameraVideoEl(), msg.deviceId);
+        }
+        return;
+      }
+      if (!msg.relayId) return;
       const waiter = pendingRelayWaiters.get(msg.relayId);
       if (msg.type === 'relay-unavailable') {
         if (waiter) {
@@ -836,6 +861,9 @@
         return;
       }
       if (msg.type === 'relay-offer' && msg.sdp && waiter) {
+        if (msg.deviceId && typeof msg.zoom === 'number') {
+          relayZoomByDevice.set(String(msg.deviceId), Math.max(1, Math.min(5, msg.zoom)));
+        }
         try {
           const pc = new RTCPeerConnection({ iceServers: [] });
           relayPcMap.set(msg.relayId, { pc, pendingIce: [] });
@@ -898,7 +926,7 @@
     if (relayChannel) relayChannel.postMessage({ type: 'relay-close', relayId: rid });
   }
 
-  function requestRelayStreamFromControl(deviceId, timeoutMs = 550) {
+  function requestRelayStreamFromControl(deviceId, timeoutMs = 2000) {
     if (!relayChannel || !deviceId) return Promise.resolve(null);
     return new Promise((resolve) => {
       const relayId = 'rel-' + Math.random().toString(36).slice(2, 9);
@@ -919,9 +947,57 @@
     });
   }
 
+  let camCrossfadeSeq = 0;
+
+  function isAnyCameraLayerVisiblyLive() {
+    return [camLayerA, camLayerB, wcamIframe].some(el =>
+      el && el.style.display !== 'none' && el.style.opacity === '1' && el.classList.contains('camera-active')
+    );
+  }
+
+  function waitForFirstVideoFrame(videoEl, maxWaitMs = 450) {
+    return new Promise((resolve) => {
+      if (!videoEl || (videoEl.readyState >= 2 && videoEl.videoWidth > 0)) {
+        resolve();
+        return;
+      }
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        videoEl.removeEventListener('loadeddata', done);
+        videoEl.removeEventListener('playing', done);
+        videoEl.removeEventListener('canplay', done);
+        resolve();
+      };
+      const timer = setTimeout(done, maxWaitMs);
+      videoEl.addEventListener('loadeddata', done, { once: true });
+      videoEl.addEventListener('playing', done, { once: true });
+      videoEl.addEventListener('canplay', done, { once: true });
+      if (typeof videoEl.requestVideoFrameCallback === 'function') {
+        try { videoEl.requestVideoFrameCallback(() => done()); } catch (_) {}
+      }
+    });
+  }
+
+  function syncPreacherBackdropOnCameraLive() {
+    if (!state.cameraEnabled || state.cameraMode !== 'preacher') return;
+    if (scrim) scrim.style.background = 'rgba(0, 0, 0, 0.05)';
+    if (state.clearText && textContainer) {
+      textContainer.classList.add('fade-out');
+      if (subtitleText) {
+        subtitleText.classList.remove('active');
+        subtitleText.style.display = 'none';
+      }
+      lastSlideSignature = '';
+    }
+  }
+
   function crossfadeToCameraLayer(newEl, mode, stream, opts = {}) {
     if (!newEl) return;
     const prevEl = newEl === camLayerA ? camLayerB : camLayerA;
+    const myFadeSeq = ++camCrossfadeSeq;
     if (camFadeOutTimer) {
       clearTimeout(camFadeOutTimer);
       camFadeOutTimer = null;
@@ -931,38 +1007,57 @@
     }
     newEl.muted = true;
     newEl.playsInline = true;
+    newEl.style.opacity = '0';
+    newEl.style.display = 'block';
+    applyZoomToDisplayVideo(newEl, state.cameraDeviceId || activeRelayDeviceId);
     newEl.play().catch(() => {});
+
     const targetZ = (mode === 'preacher') ? '6' : '3';
-    // Layer incoming camera directly over outgoing camera so 0.28s fade shows zero flicker
-    const overPrevZ = prevEl && prevEl.style.display !== 'none' && prevEl.style.opacity !== '0'
-      ? String(Math.max(Number(targetZ), Number(prevEl.style.zIndex || targetZ) + 1))
-      : targetZ;
-    fadeInCameraElement(newEl, overPrevZ);
-    activeCamLayerIdx = newEl === camLayerA ? 0 : 1;
-    cameraVideo = newEl;
+    // Keep outgoing camera or slide 100% solid underneath until incoming camera decodes its first real frame!
+    waitForFirstVideoFrame(newEl, 450).then(() => {
+      if (myFadeSeq !== camCrossfadeSeq) return;
+      if (!state.cameraEnabled || state.cameraMode === 'none') return;
+      const overPrevZ = prevEl && prevEl.style.display !== 'none' && prevEl.style.opacity !== '0'
+        ? String(Math.max(Number(targetZ), Number(prevEl.style.zIndex || targetZ) + 1))
+        : targetZ;
+      fadeInCameraElement(newEl, overPrevZ);
+      activeCamLayerIdx = newEl === camLayerA ? 0 : 1;
+      cameraVideo = newEl;
+      syncPreacherBackdropOnCameraLive();
 
-    const oldRelay = opts.oldRelayId || '';
-    const oldHwStream = opts.oldHwStream || null;
-    const oldWcamStop = !!opts.stopOfflineWcam;
-    const oldClearVdo = !!opts.clearVdo;
+      const oldRelay = opts.oldRelayId || '';
+      const oldHwStream = opts.oldHwStream || null;
+      const oldWcamStop = !!opts.stopOfflineWcam;
+      const oldClearVdo = !!opts.clearVdo;
 
-    camFadeOutTimer = setTimeout(() => {
-      camFadeOutTimer = null;
-      newEl.style.zIndex = targetZ;
-      if (prevEl && prevEl !== newEl) {
-        prevEl.classList.remove('camera-active');
-        prevEl.style.opacity = '0';
-        prevEl.style.display = 'none';
-        prevEl.style.pointerEvents = 'none';
-        prevEl.srcObject = null;
-      }
-      if (oldRelay && oldRelay !== activeRelayId) closeRelayById(oldRelay);
-      if (oldHwStream && oldHwStream !== activeCameraStream) {
-        oldHwStream.getTracks().forEach(t => t.stop());
-      }
-      if (oldWcamStop) stopOfflineWirelessCamFeed();
-      if (oldClearVdo) clearVdoNinjaCamFeed(state.prewarmWcamUrl || '');
-    }, 320);
+      camFadeOutTimer = setTimeout(() => {
+        camFadeOutTimer = null;
+        if (myFadeSeq !== camCrossfadeSeq) return;
+        newEl.style.zIndex = targetZ;
+        if (prevEl && prevEl !== newEl) {
+          prevEl.classList.remove('camera-active');
+          prevEl.style.opacity = '0';
+          prevEl.style.display = 'none';
+          prevEl.style.pointerEvents = 'none';
+          prevEl.srcObject = null;
+        }
+        if (state.cameraEnabled && state.cameraMode === 'preacher') {
+          if (mediaImg) { mediaImg.classList.remove('media-active'); mediaImg.style.display = 'none'; }
+          if (mediaVideo) {
+            mediaVideo.classList.remove('media-active');
+            mediaVideo.style.display = 'none';
+            if (!mediaVideo.paused) { try { mediaVideo.pause(); } catch (_) {} }
+            mediaVideo.muted = true;
+          }
+        }
+        if (oldRelay && oldRelay !== activeRelayId) closeRelayById(oldRelay);
+        if (oldHwStream && oldHwStream !== activeCameraStream) {
+          oldHwStream.getTracks().forEach(t => t.stop());
+        }
+        if (oldWcamStop) stopOfflineWirelessCamFeed();
+        if (oldClearVdo) clearVdoNinjaCamFeed(state.prewarmWcamUrl || '');
+      }, 320);
+    });
   }
 
   function fadeOutAllCameraVideoLayers(delayCleanupCb) {
@@ -1119,6 +1214,17 @@
         }
       };
 
+      pc.oniceconnectionstatechange = () => {
+        if (offlineWcamPc !== pc || offlineWcamSlot !== cleanSlot) return;
+        if (pc.iceConnectionState === 'failed') {
+          setTimeout(() => {
+            if (offlineWcamPc === pc && offlineWcamSlot === cleanSlot) {
+              initiateOfferForSlot();
+            }
+          }, 1500);
+        }
+      };
+
       try {
         const offer = await pc.createOffer({ offerToReceiveVideo: true });
         await pc.setLocalDescription(offer);
@@ -1191,12 +1297,33 @@
       }
       if (state.prewarmCamDeviceId && String(state.prewarmCamDeviceId).startsWith('wcam-offline:')) {
         clearVdoNinjaCamFeed('');
-        fadeOutAllCameraVideoLayers(() => {
+        const targetPrewarmId = String(state.prewarmCamDeviceId);
+        fadeOutAllCameraVideoLayers(async () => {
           if (activeCameraStream) { activeCameraStream.getTracks().forEach(t => t.stop()); activeCameraStream = null; }
           activeCameraDeviceId = null;
-          const warmSlot = String(state.prewarmCamDeviceId).replace('wcam-offline:', '');
-          if (!activeRelayId || activeRelayDeviceId !== state.prewarmCamDeviceId) {
-            setupOfflineWirelessCamFeed(warmSlot, 'none', true);
+          // Pre-warm via localhost Control Desk relay (ZERO duplicate iPhone encoding / Wi-Fi bandwidth!)
+          if (activeRelayId && activeRelayDeviceId === targetPrewarmId) return;
+          const warmRelay = await requestRelayStreamFromControl(targetPrewarmId);
+          if (state.cameraEnabled && state.cameraMode !== 'none') {
+            if (warmRelay && warmRelay.relayId) closeRelayById(warmRelay.relayId);
+            return;
+          }
+          if (warmRelay && warmRelay.stream) {
+            if (activeRelayId && activeRelayId !== warmRelay.relayId) closeRelayById(activeRelayId);
+            stopOfflineWirelessCamFeed();
+            activeRelayId = warmRelay.relayId;
+            activeRelayDeviceId = targetPrewarmId;
+            activeCameraDeviceId = targetPrewarmId;
+            const preEl = getActiveCameraVideoEl();
+            if (preEl) {
+              preEl.srcObject = warmRelay.stream;
+              preEl.play().catch(() => {});
+              preEl.classList.remove('camera-active');
+              preEl.style.display = 'block';
+              preEl.style.opacity = '0';
+              preEl.style.zIndex = '2';
+              preEl.style.pointerEvents = 'none';
+            }
           }
         });
         return;
@@ -1228,8 +1355,14 @@
     const activeEl = getActiveCameraVideoEl();
     const activeElTrack = activeEl && activeEl.srcObject && activeEl.srcObject.getVideoTracks ? activeEl.srcObject.getVideoTracks().find(t => t.readyState === 'live') : null;
     if (activeCameraDeviceId === requestKey && activeElTrack) {
+      if (camFadeOutTimer) {
+        clearTimeout(camFadeOutTimer);
+        camFadeOutTimer = null;
+      }
       clearVdoNinjaCamFeed('');
+      applyZoomToDisplayVideo(activeEl, deviceId || activeRelayDeviceId);
       fadeInCameraElement(activeEl, (mode === 'preacher') ? '6' : '3');
+      if (mode === 'preacher') syncPreacherBackdropOnCameraLive();
       if (activeEl.paused) activeEl.play().catch(() => {});
       return;
     }
@@ -1392,23 +1525,31 @@
     setupCameraFeed(state.cameraDeviceId, state.cameraMode, state.cameraDeviceLabel);
 
     // 3. Contrast Scrim Layer & Camera Layer Z-Index
+    const camVisiblyLiveNow = isAnyCameraLayerVisiblyLive();
     if (state.cameraEnabled && state.cameraMode === 'preacher') {
-      // Full preacher camera mode: place camera above scrim (z-index 6) so pastor feed is 100% bright & crisp,
-      // while still below textContainer (z-index 10) if scripture/lyrics are projected over the preacher!
-      scrim.style.background = 'rgba(0, 0, 0, 0.05)';
-      cameraVideo.style.zIndex = '6';
-      if (wcamIframe) wcamIframe.style.zIndex = '6';
+      // Only switch scrim/z-index once camera is visibly live (or not mid-crossfade) so theme never flashes first
+      if (camVisiblyLiveNow) {
+        scrim.style.background = 'rgba(0, 0, 0, 0.05)';
+      }
+      if (!camFadeOutTimer) {
+        cameraVideo.style.zIndex = '6';
+        if (wcamIframe) wcamIframe.style.zIndex = '6';
+      }
     } else if (state.cameraEnabled && state.cameraMode === 'background') {
       // Worship background camera mode: dimmer scrim (z-index 4) protects lyric legibility over camera (z-index 3)
       const opacity = state.cameraOpacity !== undefined ? state.cameraOpacity : 0.75;
       scrim.style.background = `rgba(0, 0, 0, ${opacity})`;
-      cameraVideo.style.zIndex = '3';
-      if (wcamIframe) wcamIframe.style.zIndex = '3';
+      if (!camFadeOutTimer) {
+        cameraVideo.style.zIndex = '3';
+        if (wcamIframe) wcamIframe.style.zIndex = '3';
+      }
     } else {
       // Normal procedural / media background: gentle ambient scrim; keep off-air/prewarmed camera beneath canvas
       scrim.style.background = 'rgba(0, 0, 0, 0.4)';
-      cameraVideo.style.zIndex = state.prewarmCamDeviceId ? '2' : '3';
-      if (wcamIframe) wcamIframe.style.zIndex = state.prewarmWcamUrl ? '2' : '3';
+      if (!camFadeOutTimer) {
+        cameraVideo.style.zIndex = state.prewarmCamDeviceId ? '2' : '3';
+        if (wcamIframe) wcamIframe.style.zIndex = state.prewarmWcamUrl ? '2' : '3';
+      }
     }
 
     function formatMediaUrl(url) {
@@ -1471,17 +1612,17 @@
       }
 
       if (state.cameraEnabled && state.cameraMode !== 'none') {
-        // Hide custom static/video media so hardware camera layer is completely unobstructed
-        mediaImg.classList.remove('media-active');
-        mediaVideo.classList.remove('media-active');
-        mediaImg.style.display = 'none';
-        mediaVideo.style.display = 'none';
-        if (!mediaVideo.paused) {
-          try { mediaVideo.pause(); } catch (_) {}
+        // Keep current media/slide untouched until the camera layer has faded in cleanly (prevents bare theme flash!)
+        if (camVisiblyLiveNow) {
+          mediaImg.classList.remove('media-active');
+          mediaVideo.classList.remove('media-active');
+          mediaImg.style.display = 'none';
+          mediaVideo.style.display = 'none';
+          if (!mediaVideo.paused) {
+            try { mediaVideo.pause(); } catch (_) {}
+          }
+          mediaVideo.muted = true;
         }
-        mediaVideo.muted = true;
-        canvas.style.display = 'block';
-        canvas.style.opacity = '1';
       } else if (state.backgroundType === 'video' && state.customBgUrl) {
         canvas.style.opacity = '0';
         canvas.style.display = 'none';
@@ -1602,7 +1743,8 @@
       }
     }
 
-    const isTextHidden = state.clearText || state.themeOnly || state.blackout || !state.activeSlide || !hasSlideLyrics;
+    const deferClearForIncomingPreacherCam = !!(state.cameraEnabled && state.cameraMode === 'preacher' && state.clearText && !camVisiblyLiveNow && !state.blackout && !state.themeOnly);
+    const isTextHidden = (!deferClearForIncomingPreacherCam && state.clearText) || state.themeOnly || state.blackout || !state.activeSlide || !hasSlideLyrics;
 
     if (isTextHidden) {
       textContainer.classList.add('fade-out');
@@ -1800,16 +1942,30 @@
       }
     }
 
-    // 8. Live Sanctuary Clock Overlay for Entire Congregation
+    // 8. Live Sanctuary Broadcast Clock Overlay for Entire Congregation
     const sanctuaryClock = document.getElementById('display-sanctuary-clock');
     const clockText = document.getElementById('display-clock-text');
+    const clockSec = document.getElementById('display-clock-sec');
+    const clockAmPm = document.getElementById('display-clock-ampm');
+    const clockDate = document.getElementById('display-clock-date');
     if (sanctuaryClock && clockText) {
       if (state.showClockOnTv) {
         sanctuaryClock.classList.add('visible');
         if (!window.__sanctuaryClockInterval) {
           const updateClock = () => {
             const now = new Date();
-            clockText.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const rawH = now.getHours();
+            const h12 = rawH % 12 || 12;
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            const ampm = rawH >= 12 ? 'PM' : 'AM';
+            clockText.textContent = `${h12}:${mm}`;
+            if (clockSec) clockSec.textContent = ss;
+            if (clockAmPm) clockAmPm.textContent = ampm;
+            if (clockDate) {
+              const dayStr = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
+              clockDate.textContent = dayStr;
+            }
           };
           updateClock();
           window.__sanctuaryClockInterval = setInterval(updateClock, 1000);

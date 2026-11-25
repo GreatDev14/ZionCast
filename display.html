@@ -49,10 +49,15 @@
     <div id="display-body" class="display-body-text"></div>
   </div>
 
-  <!-- 5b. Live Sanctuary Clock Overlay for Entire Congregation (Top-Right of Church TV) -->
+  <!-- 5b. Live Sanctuary Broadcast Clock Overlay (Top-Right of Church TV) -->
   <div id="display-sanctuary-clock" class="display-sanctuary-clock">
-    <span class="clock-icon">🕒</span>
-    <span id="display-clock-text">--:--</span>
+    <div class="clock-main-row">
+      <span class="clock-live-dot" aria-hidden="true"></span>
+      <span id="display-clock-text" class="clock-hm">--:--</span>
+      <span id="display-clock-sec" class="clock-sec">00</span>
+      <span id="display-clock-ampm" class="clock-ampm">AM</span>
+    </div>
+    <div id="display-clock-date" class="clock-date-sub">SUNDAY</div>
   </div>
 
   <!-- 5c. Pre-Service Countdown Timer Overlay Layer (Sleek Broadcast HUD) -->
