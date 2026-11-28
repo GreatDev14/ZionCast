@@ -49,6 +49,15 @@
     <div id="display-body" class="display-body-text"></div>
   </div>
 
+  <!-- 5a. Live Camera Broadcast Watermark Overlay (Default ZionCast; deeply customizable or clearable) -->
+  <div id="display-camera-watermark" class="display-camera-watermark pos-bottom-right size-medium style-glass layout-row shape-rounded" aria-hidden="true">
+    <img id="display-watermark-logo" class="watermark-logo" src="assets/icon.png" alt="">
+    <div class="watermark-text-col">
+      <span id="display-watermark-text" class="watermark-text">ZionCast</span>
+      <span id="display-watermark-subtext" class="watermark-subtext" style="display: none;"></span>
+    </div>
+  </div>
+
   <!-- 5b. Live Sanctuary Broadcast Clock Overlay (Top-Right of Church TV) -->
   <div id="display-sanctuary-clock" class="display-sanctuary-clock">
     <div class="clock-main-row">
@@ -84,6 +93,8 @@
   <!-- 8. Instant Blackout Curtain (Pure Black Fade) -->
   <div id="display-blackout" class="display-blackout-curtain"></div>
 
+  <script src="camera-stabilizer.js"></script>
+  <script src="worship-motion-engine.js"></script>
   <script src="display.js"></script>
 </body>
 </html>

@@ -36,6 +36,9 @@
     videoLoop: true,
     videoVolume: 1.0,
     videoRestartSeq: 0,
+    videoPlaybackRate: 1.0,
+    videoBgScrimOpacity: 0.42,
+    themeFilterCategory: 'all',
     videoTitle: '',
     videoIsStandalone: false,
     videoAudioSinkId: '',
@@ -49,6 +52,27 @@
     cameraDeviceLabel: '',
     wirelessCamViewUrl: '',
     cameraOpacity: 0.75,
+    cameraStabilization: 'off',
+    cameraWatermarkEnabled: true,
+    cameraWatermarkMode: 'default',
+    cameraWatermarkText: '',
+    cameraWatermarkSubtext: '',
+    cameraWatermarkImage: '',
+    cameraWatermarkLogoShape: 'rounded',
+    cameraWatermarkLayout: 'row',
+    cameraWatermarkStyle: 'glass',
+    cameraWatermarkPosition: 'bottom-right',
+    cameraWatermarkCustomX: 88,
+    cameraWatermarkCustomY: 88,
+    cameraWatermarkScale: 1.0,
+    cameraWatermarkMargin: 30,
+    cameraWatermarkFont: 'Inter',
+    cameraWatermarkWeight: 400,
+    cameraWatermarkColor: '#f8fafc',
+    cameraWatermarkOpacity: 0.88,
+    cameraWatermarkScope: 'cameras',
+    cameraWatermarkTab: 'content',
+    cameraWatermarkDrawerOpen: false,
     vdoRoomId: '',
     activeVdoCamSlots: [],
     offlineWirelessCams: [],
@@ -337,7 +361,14 @@
   const bibleVerseSelect = document.getElementById('bible-verse-select');
   const bibleQuickSearch = document.getElementById('bible-quick-search');
   const btnBibleLookup = document.getElementById('btn-bible-lookup');
+  const bibleTopicSearch = document.getElementById('bible-topic-search');
+  const btnBibleTopicSearch = document.getElementById('btn-bible-topic-search');
+  const btnBibleTopicClear = document.getElementById('btn-bible-topic-clear');
   const bibleVersesList = document.getElementById('bible-verses-list');
+  let bibleResearchTestament = 'all';
+  let bibleResearchActiveQuery = '';
+  let bibleResearchLimit = 50;
+  let bibleTopicDebounceTimer = null;
 
   // Camera & Theme controls
   const cameraDeviceSelect = document.getElementById('camera-device-select');
@@ -542,6 +573,10 @@
         cameraMode: state.cameraMode,
         cameraDeviceId: state.cameraDeviceId,
         cameraOpacity: state.cameraOpacity,
+        cameraStabilization: normalizeStabilizationLevel(state.cameraStabilization),
+        videoPlaybackRate: typeof state.videoPlaybackRate === 'number' ? state.videoPlaybackRate : 1.0,
+        videoBgScrimOpacity: typeof state.videoBgScrimOpacity === 'number' ? state.videoBgScrimOpacity : 0.42,
+        ...getCameraWatermarkPayload(),
         currentBibleVersion: currentBibleVersion,
         bannerText: state.bannerText,
         bannerStyle: state.bannerStyle,
@@ -697,6 +732,33 @@
           if (cameraDimmerSlider) cameraDimmerSlider.value = s.cameraOpacity;
           if (badgeCameraDimmer) badgeCameraDimmer.textContent = `${Math.round(s.cameraOpacity * 100)}%`;
         }
+        if (s.cameraStabilization !== undefined) {
+          state.cameraStabilization = normalizeStabilizationLevel(s.cameraStabilization);
+        }
+        if (typeof s.videoPlaybackRate === 'number') {
+          state.videoPlaybackRate = Math.max(0.25, Math.min(2.0, s.videoPlaybackRate));
+        }
+        if (typeof s.videoBgScrimOpacity === 'number') {
+          state.videoBgScrimOpacity = Math.max(0, Math.min(0.85, s.videoBgScrimOpacity));
+        }
+        if (s.cameraWatermarkEnabled !== undefined) state.cameraWatermarkEnabled = !!s.cameraWatermarkEnabled;
+        if (s.cameraWatermarkMode) state.cameraWatermarkMode = s.cameraWatermarkMode === 'custom' ? 'custom' : 'default';
+        if (typeof s.cameraWatermarkText === 'string') state.cameraWatermarkText = s.cameraWatermarkText;
+        if (typeof s.cameraWatermarkSubtext === 'string') state.cameraWatermarkSubtext = s.cameraWatermarkSubtext;
+        if (typeof s.cameraWatermarkImage === 'string') state.cameraWatermarkImage = s.cameraWatermarkImage;
+        if (s.cameraWatermarkLogoShape) state.cameraWatermarkLogoShape = s.cameraWatermarkLogoShape;
+        if (s.cameraWatermarkLayout) state.cameraWatermarkLayout = s.cameraWatermarkLayout;
+        if (s.cameraWatermarkStyle) state.cameraWatermarkStyle = s.cameraWatermarkStyle;
+        if (s.cameraWatermarkPosition) state.cameraWatermarkPosition = s.cameraWatermarkPosition;
+        if (typeof s.cameraWatermarkCustomX === 'number') state.cameraWatermarkCustomX = s.cameraWatermarkCustomX;
+        if (typeof s.cameraWatermarkCustomY === 'number') state.cameraWatermarkCustomY = s.cameraWatermarkCustomY;
+        if (typeof s.cameraWatermarkScale === 'number') state.cameraWatermarkScale = s.cameraWatermarkScale;
+        if (typeof s.cameraWatermarkMargin === 'number') state.cameraWatermarkMargin = s.cameraWatermarkMargin;
+        if (s.cameraWatermarkFont) state.cameraWatermarkFont = s.cameraWatermarkFont;
+        if (s.cameraWatermarkWeight !== undefined) state.cameraWatermarkWeight = Number(s.cameraWatermarkWeight) || 400;
+        if (s.cameraWatermarkColor) state.cameraWatermarkColor = s.cameraWatermarkColor;
+        if (typeof s.cameraWatermarkOpacity === 'number') state.cameraWatermarkOpacity = Math.max(0.15, Math.min(1, s.cameraWatermarkOpacity));
+        if (s.cameraWatermarkScope) state.cameraWatermarkScope = s.cameraWatermarkScope === 'always' ? 'always' : 'cameras';
         if (s.currentBibleVersion) {
           currentBibleVersion = s.currentBibleVersion;
           if (bibleVersionSelect) bibleVersionSelect.value = s.currentBibleVersion;
@@ -769,6 +831,10 @@
 
     // 6. Asynchronous hardware and database populating in background
     initWirelessCameraEngine();
+    initCameraStabilizerControls();
+    syncCameraStabilizerUI();
+    initCameraWatermarkControls();
+    syncCameraWatermarkUI();
     loadBackgroundPresets().catch(console.warn);
     loadBibleData(currentBibleVersion).catch(console.warn);
     enumerateVideoDevices().then(() => {
@@ -1009,6 +1075,7 @@
       const isWireLive = state.cameraDeviceId && String(state.cameraDeviceId).startsWith('wcam-');
       if (!isWireVf && previewVideoStream) previewVideoStream.srcObject = null;
       if (!isWireLive && liveVideoStream) liveVideoStream.srcObject = null;
+      syncAllMonitorStabilizers();
       if (!isWireLive) activeControlCameraId = null;
       if (state.cameraEnabled && labelCameraStatus) {
         labelCameraStatus.textContent = `Camera: ${state.cameraMode.toUpperCase()} LIVE ON TV`;
@@ -1110,6 +1177,7 @@
       videoEl.srcObject = null;
       videoEl.style.display = 'none';
     }
+    syncMonitorStabilizer(videoEl);
   }
 
   function boostControlSdp(sdpStr, kbps = 8000, minKbps = 1000, startKbps = 3000) {
@@ -1209,6 +1277,48 @@
   const offlineControlPendingIce = new Map();
   const offlineControlWcamStats = new Map(); // slot -> '1920×1080 • 8.2M'
   const offlineControlWcamZoom = new Map(); // slot -> 1.0..5.0
+  function normalizeStabilizationLevel(level) {
+    if (window.ZionCameraStabilizer && typeof window.ZionCameraStabilizer.normalizeLevel === 'function') {
+      return window.ZionCameraStabilizer.normalizeLevel(level);
+    }
+    const raw = String(level || 'off').toLowerCase().trim();
+    if (raw === 'med') return 'medium';
+    return ['off', 'light', 'medium', 'strong'].includes(raw) ? raw : 'off';
+  }
+
+  function getMonitorTargetZoom(videoEl) {
+    const devId = videoEl === liveVideoStream ? state.cameraDeviceId : selectedViewfinderDeviceId;
+    if (devId && String(devId).startsWith('wcam-offline:')) {
+      const slot = String(devId).split(':')[1] || '1';
+      return offlineControlWcamZoom.get(slot) || 1;
+    }
+    return 1;
+  }
+
+  function syncMonitorStabilizer(videoEl) {
+    if (!videoEl) return;
+    const z = getMonitorTargetZoom(videoEl);
+    const lvl = normalizeStabilizationLevel(state.cameraStabilization);
+    const active = !!(videoEl.srcObject && videoEl.style.display !== 'none');
+    if (window.ZionCameraStabilizer) {
+      if (active) {
+        window.ZionCameraStabilizer.syncVideoTarget(videoEl, { level: lvl, zoom: z });
+      } else {
+        window.ZionCameraStabilizer.stopVideoTarget(videoEl);
+        videoEl.style.transformOrigin = 'center center';
+        videoEl.style.transform = z > 1.01 ? `scale(${z.toFixed(2)})` : 'none';
+      }
+    } else {
+      videoEl.style.transformOrigin = 'center center';
+      videoEl.style.transform = z > 1.01 ? `scale(${z.toFixed(2)})` : 'none';
+    }
+  }
+
+  function syncAllMonitorStabilizers() {
+    syncMonitorStabilizer(previewVideoStream);
+    syncMonitorStabilizer(liveVideoStream);
+  }
+
   function applyOfflineZoomToSlotTargets(slot, zoom) {
     const cleanSlot = String(slot || '1');
     const z = Math.max(1, Math.min(5, Number(zoom) || 1));
@@ -1220,10 +1330,10 @@
       v.style.transformOrigin = 'center center';
     });
     if (selectedViewfinderDeviceId === devId && previewVideoStream) {
-      previewVideoStream.style.transform = tf;
+      syncMonitorStabilizer(previewVideoStream);
     }
     if (state.cameraEnabled && state.cameraDeviceId === devId && liveVideoStream) {
-      liveVideoStream.style.transform = tf;
+      syncMonitorStabilizer(liveVideoStream);
     }
     if (wcamRelayChan) {
       wcamRelayChan.postMessage({ type: 'relay-zoom', deviceId: devId, zoom: z });
@@ -1803,10 +1913,11 @@
     const idStr = String(deviceId);
     if (idStr.startsWith('wcam-vdo:')) {
       const slot = idStr.split(':')[1] || '1';
-      const viewUrl = getVdoViewUrl(slot);
-      if (updatePreview) { setMonitorVideoStream(previewVideoStream, null); setMonitorWcamIframe(previewWcamIframe, viewUrl); }
-      if (updateLive) { setMonitorVideoStream(liveVideoStream, null); setMonitorWcamIframe(liveWcamIframe, viewUrl); }
-      return viewUrl;
+      const monitorViewUrl = getVdoViewUrl(slot, 2000);
+      const tvViewUrl = getVdoViewUrl(slot, 6000);
+      if (updatePreview) { setMonitorVideoStream(previewVideoStream, null); setMonitorWcamIframe(previewWcamIframe, monitorViewUrl); }
+      if (updateLive) { setMonitorVideoStream(liveVideoStream, null); setMonitorWcamIframe(liveWcamIframe, monitorViewUrl); }
+      return tvViewUrl;
     }
 
     if (idStr.startsWith('wcam-offline:')) {
@@ -2035,6 +2146,13 @@
         state.wcamDrawerOpen = !state.wcamDrawerOpen;
         drawer.style.display = state.wcamDrawerOpen ? 'flex' : 'none';
         btnToggle.classList.toggle('active', state.wcamDrawerOpen);
+        if (state.wcamDrawerOpen && state.cameraWatermarkDrawerOpen) {
+          state.cameraWatermarkDrawerOpen = false;
+          const wmDrawer = document.getElementById('cam-watermark-drawer');
+          const wmBtn = document.getElementById('btn-cam-watermark-toggle');
+          if (wmDrawer) wmDrawer.style.display = 'none';
+          if (wmBtn) wmBtn.classList.remove('active');
+        }
         if (state.wcamDrawerOpen) {
           ensureControlOfflineWcamSse();
           await refreshWcamSetupDrawer(null);
@@ -2190,6 +2308,518 @@
       });
     }
     window.__refreshWcamFirewallNote();
+  }
+
+  const WATERMARK_POSITIONS = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right', 'custom'];
+  const WATERMARK_POS_LABELS = {
+    'top-left': 'Top Left',
+    'top-center': 'Top Center',
+    'top-right': 'Top Right',
+    'bottom-left': 'Bottom Left',
+    'bottom-center': 'Bottom Center',
+    'bottom-right': 'Bottom Right',
+    'custom': 'Custom Drag'
+  };
+  const WATERMARK_STYLES = ['glass', 'clean', 'light', 'solid', 'gold'];
+  const WATERMARK_LAYOUTS = ['row', 'row-reverse', 'column'];
+  const WATERMARK_SHAPES = ['square', 'rounded', 'circle'];
+  const WATERMARK_WEIGHTS = [300, 400, 500, 700];
+
+  function normalizeCameraWatermarkConfig(src) {
+    const s = src || {};
+    const pos = WATERMARK_POSITIONS.includes(s.cameraWatermarkPosition) ? s.cameraWatermarkPosition : 'bottom-right';
+    const styleVariant = WATERMARK_STYLES.includes(s.cameraWatermarkStyle) ? s.cameraWatermarkStyle : 'glass';
+    const layoutVariant = WATERMARK_LAYOUTS.includes(s.cameraWatermarkLayout) ? s.cameraWatermarkLayout : 'row';
+    const shapeVariant = WATERMARK_SHAPES.includes(s.cameraWatermarkLogoShape) ? s.cameraWatermarkLogoShape : 'rounded';
+    const weight = WATERMARK_WEIGHTS.includes(Number(s.cameraWatermarkWeight)) ? Number(s.cameraWatermarkWeight) : 400;
+    const scale = Math.max(0.6, Math.min(1.8, Number(s.cameraWatermarkScale ?? 1.0) || 1.0));
+    const margin = Math.max(8, Math.min(120, Number(s.cameraWatermarkMargin ?? 30) || 30));
+    const customX = Math.max(4, Math.min(96, Number(s.cameraWatermarkCustomX ?? 88)));
+    const customY = Math.max(4, Math.min(96, Number(s.cameraWatermarkCustomY ?? 88)));
+    const opacity = Math.max(0.15, Math.min(1, Number(s.cameraWatermarkOpacity ?? 0.88)));
+    return {
+      enabled: s.cameraWatermarkEnabled !== false,
+      mode: s.cameraWatermarkMode === 'custom' ? 'custom' : 'default',
+      text: typeof s.cameraWatermarkText === 'string' ? s.cameraWatermarkText : '',
+      subtext: typeof s.cameraWatermarkSubtext === 'string' ? s.cameraWatermarkSubtext : '',
+      image: typeof s.cameraWatermarkImage === 'string' ? s.cameraWatermarkImage : '',
+      logoShape: shapeVariant,
+      layout: layoutVariant,
+      style: styleVariant,
+      position: pos,
+      customX,
+      customY,
+      scale,
+      margin,
+      font: String(s.cameraWatermarkFont || 'Inter').trim() || 'Inter',
+      weight,
+      color: String(s.cameraWatermarkColor || '#f8fafc').trim() || '#f8fafc',
+      opacity,
+      scope: s.cameraWatermarkScope === 'always' ? 'always' : 'cameras'
+    };
+  }
+
+  function getCameraWatermarkPayload() {
+    const c = normalizeCameraWatermarkConfig(state);
+    return {
+      cameraWatermarkEnabled: c.enabled,
+      cameraWatermarkMode: c.mode,
+      cameraWatermarkText: c.text,
+      cameraWatermarkSubtext: c.subtext,
+      cameraWatermarkImage: c.image,
+      cameraWatermarkLogoShape: c.logoShape,
+      cameraWatermarkLayout: c.layout,
+      cameraWatermarkStyle: c.style,
+      cameraWatermarkPosition: c.position,
+      cameraWatermarkCustomX: c.customX,
+      cameraWatermarkCustomY: c.customY,
+      cameraWatermarkScale: c.scale,
+      cameraWatermarkMargin: c.margin,
+      cameraWatermarkFont: c.font,
+      cameraWatermarkWeight: c.weight,
+      cameraWatermarkColor: c.color,
+      cameraWatermarkOpacity: c.opacity,
+      cameraWatermarkSize: 'medium',
+      cameraWatermarkScope: c.scope
+    };
+  }
+
+  function applyCameraWatermarkToEl(el, cfg, isVisible) {
+    if (!el) return;
+    const isCustom = cfg.mode === 'custom';
+    const rawImg = isCustom ? String(cfg.image || '').trim() : 'assets/icon.png';
+    const logoSrc = isCustom ? (rawImg ? formatLocalMediaUrl(rawImg) : '') : rawImg;
+    const textVal = isCustom ? String(cfg.text || '').trim() : 'ZionCast';
+    const subVal = isCustom ? String(cfg.subtext || '').trim() : '';
+    const hasContent = !!(logoSrc || textVal || subVal);
+
+    const logoEl = el.querySelector('.watermark-logo');
+    const textEl = el.querySelector('.watermark-text');
+    const subEl = el.querySelector('.watermark-subtext');
+    const textCol = el.querySelector('.watermark-text-col');
+
+    if (logoEl) {
+      if (logoSrc) {
+        if (logoEl.dataset.loadedSrc !== logoSrc) {
+          logoEl.dataset.loadedSrc = logoSrc;
+          logoEl.onerror = () => { logoEl.style.display = 'none'; };
+          logoEl.src = logoSrc;
+        }
+        logoEl.style.display = 'block';
+      } else {
+        logoEl.dataset.loadedSrc = '';
+        logoEl.style.display = 'none';
+      }
+    }
+
+    if (textEl) {
+      textEl.textContent = textVal;
+      textEl.style.display = textVal ? 'inline-block' : 'none';
+    }
+    if (subEl) {
+      subEl.textContent = subVal;
+      subEl.style.display = subVal ? 'inline-block' : 'none';
+    }
+    if (textCol) {
+      textCol.style.display = (textVal || subVal) ? 'flex' : 'none';
+    }
+
+    const show = !!(isVisible && cfg.enabled && hasContent);
+    const classes = [
+      'monitor-camera-watermark',
+      'pos-' + cfg.position,
+      'style-' + cfg.style,
+      'layout-' + cfg.layout,
+      'shape-' + cfg.logoShape
+    ];
+    if (logoSrc && !textVal && !subVal) classes.push('image-only');
+    if (show) classes.push('visible');
+    el.className = classes.join(' ');
+
+    const monMargin = Math.max(4, Math.round(cfg.margin * 0.25));
+    const resolvedColor = (cfg.style === 'light' && cfg.color.toLowerCase() === '#f8fafc') ? '#0f172a' : cfg.color;
+    el.style.setProperty('--wm-scale', String(cfg.scale));
+    el.style.setProperty('--wm-margin-x', monMargin + 'px');
+    el.style.setProperty('--wm-margin-y', monMargin + 'px');
+    el.style.setProperty('--wm-font', `'${cfg.font}', 'Inter', 'Outfit', 'Segoe UI', system-ui, sans-serif`);
+    el.style.setProperty('--wm-weight', String(cfg.weight));
+    el.style.setProperty('--wm-color', resolvedColor);
+
+    if (cfg.position === 'custom') {
+      el.style.left = cfg.customX + '%';
+      el.style.top = cfg.customY + '%';
+      el.style.right = 'auto';
+      el.style.bottom = 'auto';
+      el.style.transform = `translate(-${cfg.customX}%, -${cfg.customY}%)`;
+    } else {
+      el.style.left = '';
+      el.style.top = '';
+      el.style.right = '';
+      el.style.bottom = '';
+      el.style.transform = '';
+    }
+    el.style.opacity = show ? String(cfg.opacity) : '0';
+  }
+
+  function syncCameraWatermarkUI() {
+    const cfg = normalizeCameraWatermarkConfig(state);
+    const isCustom = cfg.mode === 'custom';
+    const hasActiveContent = isCustom ? !!(cfg.text.trim() || cfg.subtext.trim() || cfg.image.trim()) : true;
+    const effectiveOn = cfg.enabled && hasActiveContent;
+
+    const tbBadge = document.getElementById('cam-wmark-tb-badge');
+    if (tbBadge) {
+      tbBadge.textContent = effectiveOn ? 'ON' : 'OFF';
+      tbBadge.classList.toggle('off', !effectiveOn);
+    }
+
+    const statusPill = document.getElementById('wmark-status-pill');
+    if (statusPill) {
+      const posLabel = cfg.position === 'custom'
+        ? `${Math.round(cfg.customX)}%, ${Math.round(cfg.customY)}%`
+        : (WATERMARK_POS_LABELS[cfg.position] || 'Bottom Right');
+      if (!cfg.enabled) {
+        statusPill.textContent = 'Cleared (Hidden on TV)';
+        statusPill.classList.remove('active');
+      } else if (!hasActiveContent) {
+        statusPill.textContent = 'Custom Empty — Enter Text or Upload Image';
+        statusPill.classList.remove('active');
+      } else {
+        statusPill.textContent = `${isCustom ? 'Custom' : 'ZionCast Default'} • ${posLabel}`;
+        statusPill.classList.add('active');
+      }
+    }
+
+    document.querySelectorAll('[data-wmark-tab]').forEach(btn => {
+      const active = btn.dataset.wmarkTab === (state.cameraWatermarkTab || 'content');
+      btn.classList.toggle('active', active);
+    });
+    ['content', 'position', 'style'].forEach(tabKey => {
+      const panel = document.getElementById('wmark-panel-' + tabKey);
+      if (panel) panel.style.display = (state.cameraWatermarkTab || 'content') === tabKey ? 'flex' : 'none';
+    });
+
+    document.querySelectorAll('[data-wmark-mode]').forEach(btn => {
+      const m = btn.dataset.wmarkMode;
+      const active = !cfg.enabled ? m === 'off' : m === cfg.mode;
+      btn.classList.toggle('active', active);
+    });
+    document.querySelectorAll('[data-wmark-pos]').forEach(btn => btn.classList.toggle('active', btn.dataset.wmarkPos === cfg.position));
+    document.querySelectorAll('[data-wmark-shape]').forEach(btn => btn.classList.toggle('active', btn.dataset.wmarkShape === cfg.logoShape));
+    document.querySelectorAll('[data-wmark-layout]').forEach(btn => btn.classList.toggle('active', btn.dataset.wmarkLayout === cfg.layout));
+    document.querySelectorAll('[data-wmark-scope]').forEach(btn => btn.classList.toggle('active', btn.dataset.wmarkScope === cfg.scope));
+    document.querySelectorAll('[data-wmark-style]').forEach(btn => btn.classList.toggle('active', btn.dataset.wmarkStyle === cfg.style));
+    document.querySelectorAll('[data-wmark-weight]').forEach(btn => btn.classList.toggle('active', Number(btn.dataset.wmarkWeight) === cfg.weight));
+
+    const xyPill = document.getElementById('wmark-custom-xy-pill');
+    if (xyPill) {
+      xyPill.textContent = `Drag: ${Math.round(cfg.customX)}%, ${Math.round(cfg.customY)}%`;
+      xyPill.classList.toggle('active', cfg.position === 'custom');
+    }
+
+    const textInput = document.getElementById('wmark-input-text');
+    if (textInput && document.activeElement !== textInput) textInput.value = cfg.text || '';
+    const subInput = document.getElementById('wmark-input-sub');
+    if (subInput && document.activeElement !== subInput) subInput.value = cfg.subtext || '';
+
+    const btnClearLogo = document.getElementById('btn-wmark-clear-logo');
+    const logoLabel = document.getElementById('wmark-logo-label');
+    if (btnClearLogo) btnClearLogo.style.display = cfg.image ? 'inline-flex' : 'none';
+    if (logoLabel) {
+      if (cfg.image) {
+        const base = String(cfg.image).split(/[\\/]/).pop() || 'Custom Image';
+        logoLabel.textContent = base;
+        logoLabel.title = cfg.image;
+      } else {
+        logoLabel.textContent = isCustom ? 'No Image Uploaded' : 'Default ZionCast Logo';
+        logoLabel.title = '';
+      }
+    }
+
+    const scaleSlider = document.getElementById('wmark-scale-slider');
+    const scaleVal = document.getElementById('wmark-scale-val');
+    const scalePct = Math.round(cfg.scale * 100);
+    if (scaleSlider && document.activeElement !== scaleSlider) scaleSlider.value = String(scalePct);
+    if (scaleVal) scaleVal.textContent = `${scalePct}%`;
+
+    const marginSlider = document.getElementById('wmark-margin-slider');
+    const marginVal = document.getElementById('wmark-margin-val');
+    if (marginSlider && document.activeElement !== marginSlider) marginSlider.value = String(cfg.margin);
+    if (marginVal) marginVal.textContent = `${cfg.margin}px`;
+
+    const opSlider = document.getElementById('wmark-opacity-slider');
+    const opVal = document.getElementById('wmark-opacity-val');
+    const opPct = Math.round(cfg.opacity * 100);
+    if (opSlider && document.activeElement !== opSlider) opSlider.value = String(opPct);
+    if (opVal) opVal.textContent = `${opPct}%`;
+
+    const fontSelect = document.getElementById('wmark-font-select');
+    if (fontSelect && document.activeElement !== fontSelect) fontSelect.value = cfg.font;
+    const colorInput = document.getElementById('wmark-color-input');
+    if (colorInput && document.activeElement !== colorInput) colorInput.value = cfg.color;
+
+    applyCameraWatermarkToEl(document.getElementById('drawer-camera-watermark'), cfg, true);
+    const liveShouldShow = (cfg.scope === 'always' || !!(state.cameraEnabled && state.cameraMode !== 'none')) && !state.blackout;
+    applyCameraWatermarkToEl(document.getElementById('live-camera-watermark'), cfg, liveShouldShow);
+    syncOperatorPreviewCameraOverlay();
+  }
+
+  function updateCameraWatermarkAndBroadcast(saveNow = true) {
+    syncCameraWatermarkUI();
+    broadcastDisplayState();
+    if (saveNow) triggerAutoSave();
+  }
+
+  function initCameraWatermarkControls() {
+    const btnToggle = document.getElementById('btn-cam-watermark-toggle');
+    const drawer = document.getElementById('cam-watermark-drawer');
+    if (btnToggle && drawer) {
+      btnToggle.addEventListener('click', () => {
+        state.cameraWatermarkDrawerOpen = !state.cameraWatermarkDrawerOpen;
+        drawer.style.display = state.cameraWatermarkDrawerOpen ? 'flex' : 'none';
+        btnToggle.classList.toggle('active', state.cameraWatermarkDrawerOpen);
+        if (state.cameraWatermarkDrawerOpen && state.wcamDrawerOpen) {
+          state.wcamDrawerOpen = false;
+          const wcamDrawer = document.getElementById('wcam-setup-drawer');
+          const wcamBtn = document.getElementById('btn-wcam-toggle');
+          if (wcamDrawer) wcamDrawer.style.display = 'none';
+          if (wcamBtn) wcamBtn.classList.remove('active');
+          if (wcamDrawerPollTimer) {
+            clearInterval(wcamDrawerPollTimer);
+            wcamDrawerPollTimer = null;
+          }
+        }
+        syncCameraWatermarkUI();
+      });
+    }
+
+    document.querySelectorAll('[data-wmark-tab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.cameraWatermarkTab = btn.dataset.wmarkTab || 'content';
+        syncCameraWatermarkUI();
+      });
+    });
+
+    document.querySelectorAll('[data-wmark-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const m = btn.dataset.wmarkMode;
+        if (m === 'off') {
+          state.cameraWatermarkEnabled = false;
+        } else {
+          state.cameraWatermarkEnabled = true;
+          state.cameraWatermarkMode = m === 'custom' ? 'custom' : 'default';
+        }
+        updateCameraWatermarkAndBroadcast(true);
+      });
+    });
+
+    const textInput = document.getElementById('wmark-input-text');
+    if (textInput) {
+      textInput.addEventListener('input', (e) => {
+        state.cameraWatermarkText = e.target.value;
+        state.cameraWatermarkMode = 'custom';
+        state.cameraWatermarkEnabled = true;
+        updateCameraWatermarkAndBroadcast(true);
+      });
+    }
+
+    const subInput = document.getElementById('wmark-input-sub');
+    if (subInput) {
+      subInput.addEventListener('input', (e) => {
+        state.cameraWatermarkSubtext = e.target.value;
+        state.cameraWatermarkMode = 'custom';
+        state.cameraWatermarkEnabled = true;
+        updateCameraWatermarkAndBroadcast(true);
+      });
+    }
+
+    const btnUploadLogo = document.getElementById('btn-wmark-upload-logo');
+    if (btnUploadLogo) {
+      btnUploadLogo.addEventListener('click', async () => {
+        if (!window.zionApi || !window.zionApi.openFileDialog) return;
+        const res = await window.zionApi.openFileDialog({
+          title: 'Select Church / Ministry Watermark Image',
+          filters: [
+            { name: 'Image Files (PNG, SVG, JPG, WEBP)', extensions: ['png', 'svg', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif'] },
+            { name: 'All Files (*.*)', extensions: ['*'] }
+          ]
+        });
+        if (res && !res.canceled && res.filePaths && res.filePaths.length > 0) {
+          state.cameraWatermarkImage = res.filePaths[0];
+          state.cameraWatermarkMode = 'custom';
+          state.cameraWatermarkEnabled = true;
+          updateCameraWatermarkAndBroadcast(true);
+          showToast('🖼️ Custom watermark image applied');
+        }
+      });
+    }
+
+    const btnClearLogo = document.getElementById('btn-wmark-clear-logo');
+    if (btnClearLogo) {
+      btnClearLogo.addEventListener('click', () => {
+        state.cameraWatermarkImage = '';
+        updateCameraWatermarkAndBroadcast(true);
+      });
+    }
+
+    const bindPillGroup = (selector, attr, prop, transform = v => v) => {
+      document.querySelectorAll(selector).forEach(btn => {
+        btn.addEventListener('click', () => {
+          state[prop] = transform(btn.dataset[attr]);
+          updateCameraWatermarkAndBroadcast(true);
+        });
+      });
+    };
+    bindPillGroup('[data-wmark-pos]', 'wmarkPos', 'cameraWatermarkPosition');
+    bindPillGroup('[data-wmark-shape]', 'wmarkShape', 'cameraWatermarkLogoShape');
+    bindPillGroup('[data-wmark-layout]', 'wmarkLayout', 'cameraWatermarkLayout');
+    bindPillGroup('[data-wmark-scope]', 'wmarkScope', 'cameraWatermarkScope');
+    bindPillGroup('[data-wmark-style]', 'wmarkStyle', 'cameraWatermarkStyle');
+    bindPillGroup('[data-wmark-weight]', 'wmarkWeight', 'cameraWatermarkWeight', v => Number(v) || 400);
+
+    const scaleSlider = document.getElementById('wmark-scale-slider');
+    if (scaleSlider) {
+      scaleSlider.addEventListener('input', (e) => {
+        state.cameraWatermarkScale = Math.max(0.6, Math.min(1.8, (Number(e.target.value) || 100) / 100));
+        updateCameraWatermarkAndBroadcast(true);
+      });
+    }
+
+    const marginSlider = document.getElementById('wmark-margin-slider');
+    if (marginSlider) {
+      marginSlider.addEventListener('input', (e) => {
+        state.cameraWatermarkMargin = Math.max(8, Math.min(120, Number(e.target.value) || 30));
+        updateCameraWatermarkAndBroadcast(true);
+      });
+    }
+
+    const opSlider = document.getElementById('wmark-opacity-slider');
+    if (opSlider) {
+      opSlider.addEventListener('input', (e) => {
+        state.cameraWatermarkOpacity = Math.max(0.15, Math.min(1, (Number(e.target.value) || 88) / 100));
+        updateCameraWatermarkAndBroadcast(true);
+      });
+    }
+
+    const fontSelect = document.getElementById('wmark-font-select');
+    if (fontSelect) {
+      fontSelect.addEventListener('change', (e) => {
+        state.cameraWatermarkFont = e.target.value || 'Inter';
+        updateCameraWatermarkAndBroadcast(true);
+      });
+    }
+
+    const colorInput = document.getElementById('wmark-color-input');
+    if (colorInput) {
+      colorInput.addEventListener('input', (e) => {
+        state.cameraWatermarkColor = e.target.value || '#f8fafc';
+        updateCameraWatermarkAndBroadcast(true);
+      });
+    }
+
+    document.querySelectorAll('[data-wmark-color]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.cameraWatermarkColor = btn.dataset.wmarkColor || '#f8fafc';
+        updateCameraWatermarkAndBroadcast(true);
+      });
+    });
+
+    // Interactive Drag-to-Position directly on the preview stage
+    const stage = document.getElementById('wmark-preview-stage');
+    if (stage) {
+      let isDragging = false;
+      const moveFromEvent = (ev, persistNow) => {
+        const rect = stage.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const pctX = Math.max(8, Math.min(92, ((ev.clientX - rect.left) / rect.width) * 100));
+        const pctY = Math.max(10, Math.min(90, ((ev.clientY - rect.top) / rect.height) * 100));
+        state.cameraWatermarkPosition = 'custom';
+        state.cameraWatermarkCustomX = Math.round(pctX * 10) / 10;
+        state.cameraWatermarkCustomY = Math.round(pctY * 10) / 10;
+        updateCameraWatermarkAndBroadcast(persistNow);
+      };
+      stage.addEventListener('mousedown', (ev) => {
+        isDragging = true;
+        stage.classList.add('dragging');
+        moveFromEvent(ev, false);
+      });
+      window.addEventListener('mousemove', (ev) => {
+        if (!isDragging) return;
+        moveFromEvent(ev, false);
+      });
+      window.addEventListener('mouseup', (ev) => {
+        if (!isDragging) return;
+        isDragging = false;
+        stage.classList.remove('dragging');
+        moveFromEvent(ev, true);
+      });
+    }
+
+    const btnClear = document.getElementById('btn-wmark-clear');
+    if (btnClear) {
+      btnClear.addEventListener('click', () => {
+        state.cameraWatermarkEnabled = false;
+        updateCameraWatermarkAndBroadcast(true);
+        showToast('Watermark cleared from camera output');
+      });
+    }
+
+    const btnReset = document.getElementById('btn-wmark-reset');
+    if (btnReset) {
+      btnReset.addEventListener('click', () => {
+        state.cameraWatermarkEnabled = true;
+        state.cameraWatermarkMode = 'default';
+        state.cameraWatermarkLogoShape = 'rounded';
+        state.cameraWatermarkLayout = 'row';
+        state.cameraWatermarkStyle = 'glass';
+        state.cameraWatermarkPosition = 'bottom-right';
+        state.cameraWatermarkCustomX = 88;
+        state.cameraWatermarkCustomY = 88;
+        state.cameraWatermarkScale = 1.0;
+        state.cameraWatermarkMargin = 30;
+        state.cameraWatermarkFont = 'Inter';
+        state.cameraWatermarkWeight = 400;
+        state.cameraWatermarkColor = '#f8fafc';
+        state.cameraWatermarkOpacity = 0.88;
+        state.cameraWatermarkScope = 'cameras';
+        updateCameraWatermarkAndBroadcast(true);
+        showToast('Restored default ZionCast watermark');
+      });
+    }
+  }
+
+  function syncCameraStabilizerUI() {
+    const lvl = normalizeStabilizationLevel(state.cameraStabilization);
+    state.cameraStabilization = lvl;
+    const group = document.getElementById('cam-stabilizer-group');
+    const ind = document.getElementById('cam-stab-indicator');
+    if (group) group.classList.toggle('active', lvl !== 'off');
+    if (ind) ind.classList.toggle('active', lvl !== 'off');
+    document.querySelectorAll('[data-cam-stab]').forEach(btn => {
+      const btnLvl = normalizeStabilizationLevel(btn.dataset.camStab);
+      btn.classList.toggle('active', btnLvl === lvl);
+    });
+  }
+
+  function initCameraStabilizerControls() {
+    const labels = {
+      off: 'Off (Full frame)',
+      light: 'Light (8% crop)',
+      medium: 'Medium (14% crop)',
+      strong: 'Strong (22% crop)'
+    };
+    document.querySelectorAll('[data-cam-stab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const next = normalizeStabilizationLevel(btn.dataset.camStab);
+        if (state.cameraStabilization === next) return;
+        state.cameraStabilization = next;
+        syncCameraStabilizerUI();
+        syncAllMonitorStabilizers();
+        broadcastDisplayState();
+        triggerAutoSave();
+        showToast(`Anti-Shake: ${labels[next] || next}`);
+      });
+    });
   }
 
   function parseCameraDeviceInfo(device, index) {
@@ -2831,6 +3461,8 @@
       videoLoop: state.videoLoop !== false,
       videoVolume: typeof state.videoVolume === 'number' ? state.videoVolume : 1.0,
       videoRestartSeq: state.videoRestartSeq || 0,
+      videoPlaybackRate: Math.max(0.25, Math.min(2.0, Number(state.videoPlaybackRate) || 1.0)),
+      videoBgScrimOpacity: typeof state.videoBgScrimOpacity === 'number' ? Math.max(0, Math.min(0.85, state.videoBgScrimOpacity)) : 0.42,
       videoAudioSinkId: state.videoAudioSinkId || '',
       cameraEnabled: state.cameraEnabled,
       cameraMode: state.cameraMode,
@@ -2851,6 +3483,8 @@
         return '';
       })(),
       cameraOpacity: state.cameraOpacity,
+      cameraStabilization: normalizeStabilizationLevel(state.cameraStabilization),
+      ...getCameraWatermarkPayload(),
       bannerText: state.bannerText,
       bannerActive: state.bannerActive,
       bannerStyle: state.bannerStyle || 'urgent-red',
@@ -3005,7 +3639,7 @@
       }
     }
 
-    // Mirror Local Media Video Control Bar & Single-Screen Audio Fallback
+    // Mirror Local Media Video Control Bar & Worship Loop Controls
     const activeVideoBar = document.getElementById('active-video-bar');
     const labelActiveVideoTitle = document.getElementById('label-active-video-title');
     const btnToggleVideoPlay = document.getElementById('btn-toggle-video-play');
@@ -3013,9 +3647,24 @@
     const btnToggleVideoLoop = document.getElementById('btn-toggle-video-loop');
     const videoVolumeSlider = document.getElementById('video-volume-slider');
     const badgeVideoVolume = document.getElementById('badge-video-volume');
+    const videoSpeedSelect = document.getElementById('video-speed-select');
+    const videoScrimSlider = document.getElementById('video-scrim-slider');
+    const badgeVideoScrim = document.getElementById('badge-video-scrim');
+    const btnVideoLyricsMode = document.getElementById('btn-video-lyrics-mode');
     const liveMediaVideo = document.getElementById('live-media-video');
 
     const isVideoActive = payload.backgroundType === 'video' && !!payload.customBgUrl && !(payload.cameraEnabled && payload.cameraMode !== 'none');
+
+    if (liveScrim && !(payload.cameraEnabled && payload.cameraMode !== 'none')) {
+      if (isVideoActive) {
+        const showLyricsLive = !(payload.clearText || payload.themeOnly || payload.blackout || !payload.activeSlide || !(payload.activeSlide.body || '').trim());
+        const scrimAlpha = typeof payload.videoBgScrimOpacity === 'number' ? Math.max(0, Math.min(0.85, payload.videoBgScrimOpacity)) : 0.42;
+        liveScrim.style.background = `rgba(0, 0, 0, ${scrimAlpha})`;
+        liveScrim.style.opacity = showLyricsLive ? '1' : '0';
+      } else {
+        liveScrim.style.background = '';
+      }
+    }
 
     if (activeVideoBar) {
       if (isVideoActive) {
@@ -3043,6 +3692,23 @@
         if (btnToggleVideoLoop) {
           btnToggleVideoLoop.textContent = payload.videoLoop !== false ? '🔁 Loop: ON' : '➡️ Loop: OFF';
         }
+        if (videoSpeedSelect && document.activeElement !== videoSpeedSelect) {
+          videoSpeedSelect.value = String(payload.videoPlaybackRate || 1);
+        }
+        const scrimPct = Math.round((typeof payload.videoBgScrimOpacity === 'number' ? payload.videoBgScrimOpacity : 0.42) * 100);
+        if (videoScrimSlider && document.activeElement !== videoScrimSlider) {
+          videoScrimSlider.value = String(scrimPct);
+        }
+        if (badgeVideoScrim) {
+          badgeVideoScrim.textContent = `${scrimPct}%`;
+        }
+        if (btnVideoLyricsMode) {
+          const isFullscreenStandalone = !!(payload.clearText || payload.themeOnly);
+          btnVideoLyricsMode.textContent = isFullscreenStandalone ? '📺 Fullscreen' : '🎵 Under Lyrics';
+          btnVideoLyricsMode.style.background = isFullscreenStandalone ? 'rgba(56, 189, 248, 0.16)' : 'rgba(16, 185, 129, 0.16)';
+          btnVideoLyricsMode.style.borderColor = isFullscreenStandalone ? 'rgba(56, 189, 248, 0.45)' : 'rgba(16, 185, 129, 0.45)';
+          btnVideoLyricsMode.style.color = isFullscreenStandalone ? '#38bdf8' : '#34d399';
+        }
         const volPct = Math.round((typeof payload.videoVolume === 'number' ? payload.videoVolume : 1) * 100);
         if (videoVolumeSlider && document.activeElement !== videoVolumeSlider) {
           videoVolumeSlider.value = String(volPct);
@@ -3055,16 +3721,17 @@
       }
     }
 
-    // If the TV Projector window (display.html) is OPEN, display.html handles 100% of video decoding & audio
-    // so there is zero double-decoding lag and zero echo. If the TV window is CLOSED, play inside liveMediaVideo!
+    // Mirror worship/media video smoothly inside Control Desk Live Monitor (always muted when TV Display is open to prevent echo; pauses >2048px 4K duplicate decode)
     if (liveMediaVideo) {
-      if (isVideoActive && !state.displayOpen) {
+      const isUltraHd4k = (liveMediaVideo.videoWidth || 0) > 2048;
+      if (isVideoActive && (!state.displayOpen || !isUltraHd4k)) {
         const rawKey = String(payload.customBgUrl);
         const formatted = formatLocalMediaUrl(rawKey);
         liveMediaVideo.style.display = 'block';
         liveMediaVideo.loop = payload.videoLoop !== false;
+        liveMediaVideo.playbackRate = Math.max(0.25, Math.min(2.0, Number(payload.videoPlaybackRate) || 1.0));
         liveMediaVideo.volume = typeof payload.videoVolume === 'number' ? Math.max(0, Math.min(1, payload.videoVolume)) : 1.0;
-        liveMediaVideo.muted = !!(payload.blackout || payload.videoMuted);
+        liveMediaVideo.muted = state.displayOpen ? true : !!(payload.blackout || payload.videoMuted);
         if (liveMediaVideo.dataset.loadedRawUrl !== rawKey) {
           liveMediaVideo.dataset.loadedRawUrl = rawKey;
           liveMediaVideo.src = formatted;
@@ -3087,6 +3754,14 @@
         liveMediaVideo.muted = true;
         liveMediaVideo.style.display = 'none';
       }
+    }
+
+    // Mirror Camera Broadcast Watermark on Live TV Output Monitor
+    const liveWatermarkEl = document.getElementById('live-camera-watermark');
+    if (liveWatermarkEl) {
+      const liveCfg = normalizeCameraWatermarkConfig(payload);
+      const liveShow = (liveCfg.scope === 'always' || !!(payload.cameraEnabled && payload.cameraMode !== 'none')) && !payload.blackout;
+      applyCameraWatermarkToEl(liveWatermarkEl, liveCfg, liveShow);
     }
   }
 
@@ -3123,20 +3798,35 @@
     window.addEventListener('resize', resizeCanvases);
     resizeCanvases();
 
+    const monitorParticles = (window.ZionWorshipMotion && window.ZionWorshipMotion.createParticlePool)
+      ? window.ZionWorshipMotion.createParticlePool(45, 320, 180)
+      : [];
     let lastDrawMs = 0;
     function drawMonitors(now = 0) {
       // If the window is minimized or hidden, skip drawing to save 100% of CPU and GPU!
       if (!document.hidden) {
-        // When video, image, or youtube is active, throttle monitor canvas redraws so 100% of GPU goes to video decoding
-        const isStaticOrVideo = state.backgroundType === 'video' || state.backgroundType === 'image' || state.backgroundType === 'youtube';
-        if (!isStaticOrVideo || (now - lastDrawMs > 250)) {
-          lastDrawMs = now;
-          t += 0.02;
-          if (prevW === 0 || liveW === 0) resizeCanvases();
+        const liveMediaVid = document.getElementById('live-media-video');
+        const prevCovered = !!(
+          (previewVideoStream && previewVideoStream.style.display !== 'none' && previewVideoStream.srcObject) ||
+          (previewWcamIframe && previewWcamIframe.style.display !== 'none')
+        );
+        const liveCovered = !!(
+          (liveVideoStream && liveVideoStream.style.display !== 'none' && liveVideoStream.srcObject) ||
+          (liveWcamIframe && liveWcamIframe.style.display !== 'none') ||
+          (liveMediaVid && liveMediaVid.style.display !== 'none')
+        );
 
-          // Draw active procedural or cached media background into both canvases
-          renderMonitorBg(ctxPrev, prevW, prevH, t, state.backgroundId);
-          renderMonitorBg(ctxLive, liveW, liveH, t, state.backgroundId);
+        if (!prevCovered || !liveCovered) {
+          const isStaticOrVideo = state.backgroundType === 'video' || state.backgroundType === 'image' || state.backgroundType === 'youtube';
+          const minInterval = isStaticOrVideo ? 250 : 32;
+          if (now - lastDrawMs >= minInterval) {
+            lastDrawMs = now;
+            t += 0.025;
+            if (prevW === 0 || liveW === 0) resizeCanvases();
+
+            if (!prevCovered) renderMonitorBg(ctxPrev, prevW, prevH, t, state.backgroundId, monitorParticles);
+            if (!liveCovered) renderMonitorBg(ctxLive, liveW, liveH, t, state.backgroundId, monitorParticles);
+          }
         }
       }
 
@@ -3202,7 +3892,7 @@
     return entry;
   }
 
-  function renderMonitorBg(ctx, w, h, t, bgId) {
+  function renderMonitorBg(ctx, w, h, t, bgId, particlePool) {
     if (state.backgroundType === 'video' && state.customBgUrl) {
       const frameEntry = getOrCaptureVideoFrame(state.customBgUrl);
       if (frameEntry && frameEntry.ready && frameEntry.canvas) {
@@ -3223,132 +3913,8 @@
       }
     }
 
-    if (bgId === 'celestial-clouds') {
-      const g = ctx.createRadialGradient(w * 0.5, h * 0.4, 20, w * 0.5, h * 0.5, w * 0.7);
-      g.addColorStop(0, '#581c87');
-      g.addColorStop(0.5, '#2e1065');
-      g.addColorStop(1, '#090d16');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-    } else if (bgId === 'deep-gradient-pulse') {
-      const g = ctx.createLinearGradient(0, 0, w, h);
-      g.addColorStop(0, '#0c1a3b');
-      g.addColorStop(1, '#1e1b4b');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-    } else if (bgId === 'golden-sanctuary') {
-      const g = ctx.createRadialGradient(w * 0.5, h * 0.2, 10, w * 0.5, h * 0.5, w * 0.7);
-      g.addColorStop(0, '#78350f');
-      g.addColorStop(1, '#120b04');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-    } else if (bgId === 'sacred-light-rays') {
-      const g = ctx.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, '#0a0d14');
-      g.addColorStop(1, '#020408');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = 'rgba(254, 240, 138, 0.15)';
-      ctx.beginPath();
-      ctx.moveTo(w * 0.5, 0);
-      ctx.lineTo(w * 0.2, h);
-      ctx.lineTo(w * 0.8, h);
-      ctx.closePath();
-      ctx.fill();
-    } else if (bgId === 'living-waters') {
-      const g = ctx.createLinearGradient(0, 0, w, h);
-      g.addColorStop(0, '#021526');
-      g.addColorStop(0.5, '#032b44');
-      g.addColorStop(1, '#010c14');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-    } else if (bgId === 'heavenly-dawn') {
-      const g = ctx.createRadialGradient(w * 0.5, h * 0.6, 20, w * 0.5, h * 0.5, w * 0.7);
-      g.addColorStop(0, '#be185d');
-      g.addColorStop(0.5, '#831843');
-      g.addColorStop(1, '#05020a');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-    } else if (bgId === 'holy-fire') {
-      const g = ctx.createRadialGradient(w * 0.5, h * 0.9, 20, w * 0.5, h * 0.6, w * 0.6);
-      g.addColorStop(0, '#ef4444');
-      g.addColorStop(0.5, '#7f1d1d');
-      g.addColorStop(1, '#0f0202');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-    } else if (bgId === 'starlight-firmament') {
-      ctx.fillStyle = '#030014';
-      ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = 'rgba(99, 102, 241, 0.15)';
-      ctx.beginPath();
-      ctx.arc(w * 0.5, h * 0.5, w * 0.4, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (bgId === 'cross-majesty') {
-      const g = ctx.createRadialGradient(w * 0.5, h * 0.38, 8, w * 0.5, h * 0.45, w * 0.62);
-      g.addColorStop(0, '#5a2d08');
-      g.addColorStop(0.5, '#1f0f03');
-      g.addColorStop(1, '#050301');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-      const cw = Math.max(5, h * 0.036);
-      const ch = h * 0.52;
-      const bw = h * 0.30;
-      ctx.fillStyle = 'rgba(10, 5, 2, 0.85)';
-      ctx.fillRect(w * 0.5 - cw * 0.5, h * 0.18, cw, ch);
-      ctx.fillRect(w * 0.5 - bw * 0.5, h * 0.18 + ch * 0.24, bw, cw);
-    } else if (bgId === 'calvary-cross-glory') {
-      const g = ctx.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, '#160826');
-      g.addColorStop(0.55, '#4a1242');
-      g.addColorStop(1, '#451a03');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-      const halo = ctx.createRadialGradient(w * 0.5, h * 0.38, 4, w * 0.5, h * 0.38, h * 0.36);
-      halo.addColorStop(0, 'rgba(254, 240, 138, 0.45)');
-      halo.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      ctx.fillStyle = halo;
-      ctx.fillRect(0, 0, w, h);
-      const cw = Math.max(5, h * 0.034);
-      const ch = h * 0.56;
-      const bw = h * 0.32;
-      ctx.fillStyle = 'rgba(254, 240, 138, 0.65)';
-      ctx.fillRect(w * 0.5 - cw * 0.5, h * 0.17, cw, ch);
-      ctx.fillRect(w * 0.5 - bw * 0.5, h * 0.17 + ch * 0.23, bw, cw);
-    } else if (bgId === 'royal-crown-velvet') {
-      const g = ctx.createLinearGradient(0, 0, w, h);
-      g.addColorStop(0, '#17072b');
-      g.addColorStop(0.55, '#4c1d95');
-      g.addColorStop(1, '#291504');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-    } else if (bgId === 'holy-communion-crimson') {
-      const g = ctx.createRadialGradient(w * 0.5, h * 0.75, 10, w * 0.5, h * 0.5, w * 0.7);
-      g.addColorStop(0, '#6b0820');
-      g.addColorStop(0.5, '#360411');
-      g.addColorStop(1, '#0d0104');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-    } else if (bgId === 'dove-celestial-sky') {
-      const g = ctx.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, '#075985');
-      g.addColorStop(0.5, '#082f49');
-      g.addColorStop(1, '#020b16');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-    } else if (bgId === 'shekinah-glory-gold') {
-      const g = ctx.createRadialGradient(w * 0.5, h * 0.45, 10, w * 0.5, h * 0.5, w * 0.7);
-      g.addColorStop(0, '#713f12');
-      g.addColorStop(0.5, '#3f2008');
-      g.addColorStop(1, '#0c0702');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
-    } else if (bgId === 'emerald-sanctuary') {
-      const g = ctx.createLinearGradient(0, 0, w, h);
-      g.addColorStop(0, '#021c14');
-      g.addColorStop(0.5, '#064e3b');
-      g.addColorStop(1, '#02100b');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, w, h);
+    if (window.ZionWorshipMotion && typeof window.ZionWorshipMotion.renderFrame === 'function') {
+      window.ZionWorshipMotion.renderFrame(ctx, w, h, t, bgId, particlePool);
     } else {
       ctx.fillStyle = '#0f172a';
       ctx.fillRect(0, 0, w, h);
@@ -3764,6 +4330,14 @@
     }
   }
 
+  function resolveBibleBookName(db, bookName) {
+    if (!db || !db.books || !bookName) return null;
+    if (window.ZionBibleSearch && typeof window.ZionBibleSearch.resolveBookInBible === 'function') {
+      return window.ZionBibleSearch.resolveBookInBible(db, bookName);
+    }
+    return db.books[bookName] ? bookName : null;
+  }
+
   function populateBibleDropdowns(preserveSelection = false) {
     if (!bibleDatabase || !bibleDatabase.books || !bibleBookSelect) return;
     const books = Object.keys(bibleDatabase.books);
@@ -3777,8 +4351,9 @@
       bibleBookSelect.appendChild(opt);
     });
 
-    if (preserveSelection && savedBook && bibleDatabase.books[savedBook]) {
-      bibleBookSelect.value = savedBook;
+    const resolvedSaved = preserveSelection ? resolveBibleBookName(bibleDatabase, savedBook) : null;
+    if (resolvedSaved) {
+      bibleBookSelect.value = resolvedSaved;
     } else if (bibleDatabase.books['John']) {
       bibleBookSelect.value = 'John';
     } else {
@@ -3837,6 +4412,214 @@
     }
   }
 
+  async function runBibleTopicResearch(rawQuery = '', opts = {}) {
+    if (!bibleDatabase || !bibleDatabase.books || !bibleVersesList) return;
+    let query = String(rawQuery || (bibleTopicSearch ? bibleTopicSearch.value : '')).trim();
+    if (query.length < 2) {
+      bibleResearchActiveQuery = '';
+      if (btnBibleTopicClear) btnBibleTopicClear.style.display = 'none';
+      document.querySelectorAll('.bible-topic-chip').forEach(c => c.classList.remove('active'));
+      doBibleLookup('');
+      return;
+    }
+
+    // Optional inline version suffix e.g. "light of the world rsv"
+    const verMatch = query.match(/\b(kjv|rsv|gnt)\b/i);
+    if (verMatch) {
+      const reqVer = verMatch[1].toLowerCase();
+      query = query.replace(/\b(kjv|rsv|gnt)\b/gi, '').trim();
+      if (reqVer !== currentBibleVersion) {
+        await loadBibleData(reqVer);
+      }
+    }
+    if (query.length < 2) return;
+
+    bibleResearchActiveQuery = query;
+    bibleResearchLimit = opts.limit || 50;
+    if (btnBibleTopicClear) btnBibleTopicClear.style.display = 'inline-flex';
+    document.querySelectorAll('.bible-topic-chip').forEach(c => {
+      c.classList.toggle('active', (c.dataset.bibleTopic || '').toLowerCase() === query.toLowerCase());
+    });
+
+    const versionAbbrSearch = bibleDatabase.abbreviation || currentBibleVersion.toUpperCase();
+    const searchResult = (window.ZionBibleSearch && typeof window.ZionBibleSearch.search === 'function')
+      ? window.ZionBibleSearch.search(bibleDatabase, query, { testament: bibleResearchTestament, limit: bibleResearchLimit })
+      : { query, normalizedTerms: [query], relatedTopics: [], totalFound: 0, results: [] };
+
+    const hits = searchResult.results || [];
+    bibleVersesList.innerHTML = '';
+
+    // Summary header bar
+    const summaryEl = document.createElement('div');
+    summaryEl.className = 'bible-search-summary';
+    const topicBadgeHtml = (searchResult.relatedTopics && searchResult.relatedTopics.length > 0)
+      ? `<div style="font-size: 0.68rem; color: #fcd34d;">Themes: ${escapeHtml(searchResult.relatedTopics.slice(0, 3).join(' • '))}</div>`
+      : '';
+    const testLabel = bibleResearchTestament === 'all' ? 'All Books' : (bibleResearchTestament === 'OT' ? 'Old Testament' : 'New Testament');
+    summaryEl.innerHTML = `
+      <div class="bible-search-summary-top">
+        <span>Found <strong>${searchResult.totalFound}</strong> related scripture${searchResult.totalFound === 1 ? '' : 's'} for "<strong>${escapeHtml(query)}</strong>" <span style="color: var(--text-dim);">(${escapeHtml(versionAbbrSearch)} • ${testLabel})</span></span>
+        <button type="button" class="btn-mini btn-bible-reset-chapter" style="color: var(--text-muted);" title="Back to chapter view">✕ Close</button>
+      </div>
+      ${topicBadgeHtml}
+      ${hits.length > 0 ? `<div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:2px;"><button type="button" class="btn-mini btn-bible-add-top5" style="color: var(--accent-gold); border-color: rgba(245,158,11,0.4);">+ Add Top ${Math.min(5, hits.length)} to Service</button></div>` : ''}
+    `;
+    summaryEl.querySelector('.btn-bible-reset-chapter')?.addEventListener('click', () => {
+      if (bibleTopicSearch) bibleTopicSearch.value = '';
+      bibleResearchActiveQuery = '';
+      if (btnBibleTopicClear) btnBibleTopicClear.style.display = 'none';
+      document.querySelectorAll('.bible-topic-chip').forEach(c => c.classList.remove('active'));
+      doBibleLookup('');
+    });
+    bibleVersesList.appendChild(summaryEl);
+
+    if (hits.length === 0) {
+      const emptyEl = document.createElement('div');
+      emptyEl.style.cssText = 'padding: 14px 12px; color: var(--text-muted); font-size: 0.78rem; line-height: 1.45;';
+      emptyEl.innerHTML = `No scriptures found for "<strong>${escapeHtml(query)}</strong>" in ${escapeHtml(versionAbbrSearch)} (${testLabel}).<br>Try another phrase, switch testament to <strong>All</strong>, or try a topic chip above.`;
+      bibleVersesList.appendChild(emptyEl);
+      return;
+    }
+
+    const matchLabels = {
+      exact: 'Exact Match',
+      related: 'Related',
+      'all-words': 'All Words',
+      topic: 'Theme',
+      keyword: 'Keyword'
+    };
+
+    const hitSlides = hits.map((h) => {
+      let secText = '';
+      let secAbbr = '';
+      if (isDualBibleCompare && secondaryBibleDatabase && secondaryBibleDatabase.books) {
+        const secBook = resolveBibleBookName(secondaryBibleDatabase, h.book);
+        const secCh = secBook ? secondaryBibleDatabase.books[secBook][h.chapter] : null;
+        secText = secCh ? (secCh[h.verse] || '') : '';
+        secAbbr = secondaryBibleDatabase.abbreviation || secondaryBibleVersion.toUpperCase();
+      }
+      if (isDualBibleCompare && secText) {
+        return {
+          label: `${h.book} ${h.chapter}:${h.verse} (${versionAbbrSearch} / ${secAbbr})`,
+          body: `[${versionAbbrSearch}] "${h.text}"\n\n[${secAbbr}] "${secText}"`,
+          isDualComparison: true,
+          dualPrimary: { label: `${h.book} ${h.chapter}:${h.verse} (${versionAbbrSearch})`, text: h.text },
+          dualSecondary: { label: `${h.book} ${h.chapter}:${h.verse} (${secAbbr})`, text: secText }
+        };
+      }
+      return {
+        label: `${h.book} ${h.chapter}:${h.verse} (${versionAbbrSearch})`,
+        body: `"${h.text}"\n\n— ${h.book} ${h.chapter}:${h.verse} (${versionAbbrSearch})`
+      };
+    });
+
+    const searchPres = {
+      id: `bible-research-${Date.now()}`,
+      title: `Scriptures: "${query}" (${versionAbbrSearch})`,
+      slides: hitSlides
+    };
+
+    const addTop5Btn = summaryEl.querySelector('.btn-bible-add-top5');
+    if (addTop5Btn) {
+      addTop5Btn.addEventListener('click', () => {
+        const topCount = Math.min(5, hits.length);
+        const topPres = {
+          id: `bible-topic-${Date.now()}`,
+          title: `Topic: ${query} (${topCount} Verses • ${versionAbbrSearch})`,
+          slides: hitSlides.slice(0, topCount)
+        };
+        addToServiceOrder('bible', topPres.title, topPres);
+      });
+    }
+
+    hits.forEach((h, idx) => {
+      const card = document.createElement('div');
+      card.className = 'lib-item-card bible-research-card';
+      card.dataset.ref = h.ref;
+      card.dataset.matchType = h.matchType || 'keyword';
+
+      const highlightedHtml = (window.ZionBibleSearch && typeof window.ZionBibleSearch.highlightText === 'function')
+        ? window.ZionBibleSearch.highlightText(h.text, query, h.matchedTerms, escapeHtml)
+        : escapeHtml(h.text);
+
+      let secPreviewHtml = '';
+      if (isDualBibleCompare && secondaryBibleDatabase && secondaryBibleDatabase.books) {
+        const secBook = resolveBibleBookName(secondaryBibleDatabase, h.book);
+        const secCh = secBook ? secondaryBibleDatabase.books[secBook][h.chapter] : null;
+        const secTxt = secCh ? (secCh[h.verse] || '') : '';
+        const secAbbr = secondaryBibleDatabase.abbreviation || secondaryBibleVersion.toUpperCase();
+        if (secTxt) {
+          secPreviewHtml = `<div style="font-size: 0.72rem; color: #7dd3fc; line-height: 1.3; margin-top: 4px; padding-top: 4px; border-top: 1px dashed rgba(56, 189, 248, 0.25);"><strong style="opacity:0.85;">${escapeHtml(secAbbr)}:</strong> ${escapeHtml(secTxt)}</div>`;
+        }
+      }
+
+      const matchCls = h.matchType || 'keyword';
+      const matchText = matchLabels[matchCls] || 'Related';
+
+      card.innerHTML = `
+        <div class="lib-item-header">
+          <span class="lib-item-title" style="color: var(--accent-gold);">${escapeHtml(h.book)} ${h.chapter}:${h.verse}</span>
+          <div style="display:flex; align-items:center; gap:4px;">
+            <span class="bible-match-pill ${matchCls}">${matchText}</span>
+            <span class="lib-item-badge">${h.testament} • ${escapeHtml(versionAbbrSearch)}</span>
+          </div>
+        </div>
+        <div class="bible-verse-snippet" style="font-size: 0.78rem; color: var(--text-main); line-height: 1.38;">${highlightedHtml}</div>
+        ${secPreviewHtml}
+        <div class="lib-item-actions">
+          <button type="button" class="btn-mini btn-verse-live" style="color: #34d399; border-color: rgba(16,185,129,0.4);" title="Project this verse live to TV">⚡ Live</button>
+          <button type="button" class="btn-mini btn-verse-chapter" style="color: #38bdf8;" title="Open full chapter in context">📖 Chapter</button>
+          <button type="button" class="btn-mini add-service" title="Add Verse to Order of Service">+ Service</button>
+        </div>
+      `;
+
+      const singlePres = {
+        id: `bible-${h.book}-${h.chapter}-${h.verse}-${currentBibleVersion}`,
+        title: `${h.book} ${h.chapter}:${h.verse} (${versionAbbrSearch})`,
+        slides: [hitSlides[idx]]
+      };
+
+      card.addEventListener('dblclick', () => loadPresentationItem(singlePres, 'bible', true));
+      card.addEventListener('click', (ev) => {
+        if (ev.target.closest('.btn-verse-live')) {
+          loadPresentationItem(singlePres, 'bible', true);
+          return;
+        }
+        if (ev.target.closest('.btn-verse-chapter')) {
+          bibleResearchActiveQuery = '';
+          if (btnBibleTopicClear) btnBibleTopicClear.style.display = 'none';
+          if (bibleQuickSearch) bibleQuickSearch.value = `${h.book} ${h.chapter}:${h.verse}`;
+          doBibleLookup(`${h.book} ${h.chapter}`);
+          return;
+        }
+        if (ev.target.closest('.add-service')) {
+          addToServiceOrder('bible', singlePres.title, singlePres);
+          return;
+        }
+        loadPresentationItem(searchPres, 'bible', false);
+        updateOperatorPreview(idx);
+      });
+
+      bibleVersesList.appendChild(card);
+    });
+
+    if (searchResult.totalFound > hits.length && bibleResearchLimit < 150) {
+      const moreBtn = document.createElement('button');
+      moreBtn.type = 'button';
+      moreBtn.className = 'btn-secondary';
+      moreBtn.style.cssText = 'width: 100%; margin: 6px 0; padding: 7px; font-size: 0.76rem; color: #38bdf8; border-color: rgba(56,189,248,0.35);';
+      moreBtn.textContent = `Show More Related Scriptures (${hits.length} of ${searchResult.totalFound} shown)`;
+      moreBtn.addEventListener('click', () => {
+        runBibleTopicResearch(query, { limit: Math.min(150, bibleResearchLimit + 50), silentPreview: true });
+      });
+      bibleVersesList.appendChild(moreBtn);
+    }
+
+    if (!opts.silentPreview) {
+      loadPresentationItem(searchPres, 'bible', false);
+    }
+  }
+
   async function doBibleLookup(quickQuery = '') {
     if (!bibleDatabase || !bibleDatabase.books) return;
     let targetBook = bibleBookSelect ? bibleBookSelect.value : 'John';
@@ -3871,10 +4654,11 @@
       if (match) {
         const rawBook = match[1].trim().toLowerCase().replace(/\./g, '');
         const aliasTarget = BOOK_ALIASES[rawBook];
-        const foundBook = Object.keys(bibleDatabase.books).find(b => {
-          const bl = b.toLowerCase();
-          return (aliasTarget && bl === aliasTarget.toLowerCase()) || bl === rawBook || bl.startsWith(rawBook);
-        });
+        const foundBook = resolveBibleBookName(bibleDatabase, aliasTarget || rawBook)
+          || Object.keys(bibleDatabase.books).find(b => {
+            const bl = b.toLowerCase();
+            return bl === rawBook || bl.startsWith(rawBook);
+          });
         if (foundBook && (match[2] || rawBook.length >= 3)) {
           matchedRef = true;
           targetBook = foundBook;
@@ -3891,69 +4675,20 @@
         }
       }
 
-      // If query was not a book/chapter reference, perform fast full-text Scripture phrase search!
+      // If query was not a book/chapter reference, perform smart related-scripture research!
       if (!matchedRef && queryClean.length >= 2 && bibleVersesList) {
-        const needle = queryClean.toLowerCase();
-        const versionAbbrSearch = bibleDatabase.abbreviation || currentBibleVersion.toUpperCase();
-        const keywordHits = [];
-        outerSearch:
-        for (const [bName, chMap] of Object.entries(bibleDatabase.books)) {
-          for (const [cNum, vMap] of Object.entries(chMap)) {
-            for (const [vNum, vTxt] of Object.entries(vMap)) {
-              if (String(vTxt).toLowerCase().includes(needle)) {
-                keywordHits.push({ book: bName, chapter: cNum, verse: vNum, text: vTxt });
-                if (keywordHits.length >= 40) break outerSearch;
-              }
-            }
-          }
+        if (bibleTopicSearch && bibleTopicSearch.value.trim() !== queryClean) {
+          bibleTopicSearch.value = queryClean;
         }
-        bibleVersesList.innerHTML = '';
-        if (keywordHits.length === 0) {
-          bibleVersesList.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 0.8rem;">No verses matching "<strong>${escapeHtml(queryClean)}</strong>" in ${escapeHtml(versionAbbrSearch)}.</div>`;
-          return;
-        }
-        const hitSlides = keywordHits.map(h => ({
-          label: `${h.book} ${h.chapter}:${h.verse} (${versionAbbrSearch})`,
-          body: `"${h.text}"\n\n— ${h.book} ${h.chapter}:${h.verse} (${versionAbbrSearch})`
-        }));
-        const searchPres = {
-          id: `bible-search-${Date.now()}`,
-          title: `Search: "${queryClean}" (${versionAbbrSearch})`,
-          slides: hitSlides
-        };
-        keywordHits.forEach((h, idx) => {
-          const card = document.createElement('div');
-          card.className = 'lib-item-card';
-          card.innerHTML = `
-            <div class="lib-item-header">
-              <span class="lib-item-title" style="color: var(--accent-gold);">${escapeHtml(h.book)} ${h.chapter}:${h.verse}</span>
-              <span class="lib-item-badge">${escapeHtml(versionAbbrSearch)}</span>
-            </div>
-            <div style="font-size: 0.78rem; color: var(--text-main); line-height: 1.35;">${escapeHtml(h.text)}</div>
-            <div class="lib-item-actions">
-              <button class="btn-mini add-service" title="Add Verse to Order of Service">+ Service</button>
-            </div>
-          `;
-          const singlePres = {
-            id: `bible-${h.book}-${h.chapter}-${h.verse}-${currentBibleVersion}`,
-            title: `${h.book} ${h.chapter}:${h.verse} (${versionAbbrSearch})`,
-            slides: [hitSlides[idx]]
-          };
-          card.addEventListener('dblclick', () => loadPresentationItem(singlePres, 'bible', true));
-          card.addEventListener('click', (ev) => {
-            if (ev.target.closest('.add-service')) {
-              addToServiceOrder('bible', singlePres.title, singlePres);
-              return;
-            }
-            loadPresentationItem(searchPres, 'bible', false);
-            updateOperatorPreview(idx);
-          });
-          bibleVersesList.appendChild(card);
-        });
-        loadPresentationItem(searchPres, 'bible', false);
+        await runBibleTopicResearch(queryClean, { limit: 50 });
         return;
       }
     }
+
+    // Standard Book/Chapter/Verse lookup clears any active topic research state
+    bibleResearchActiveQuery = '';
+    if (btnBibleTopicClear) btnBibleTopicClear.style.display = 'none';
+    document.querySelectorAll('.bible-topic-chip').forEach(c => c.classList.remove('active'));
 
     const versionAbbr = bibleDatabase.abbreviation || currentBibleVersion.toUpperCase();
     const chObj = bibleDatabase.books[targetBook] ? bibleDatabase.books[targetBook][targetChapter] : null;
@@ -3988,7 +4723,8 @@
         let secAbbr = '';
 
         if (isDualBibleCompare && secondaryBibleDatabase && secondaryBibleDatabase.books) {
-          const secCh = secondaryBibleDatabase.books[targetBook] ? secondaryBibleDatabase.books[targetBook][targetChapter] : null;
+          const secBook = resolveBibleBookName(secondaryBibleDatabase, targetBook);
+          const secCh = secBook ? secondaryBibleDatabase.books[secBook][targetChapter] : null;
           secText = secCh ? (secCh[vNum] || '') : '';
           secAbbr = secondaryBibleDatabase.abbreviation || secondaryBibleVersion.toUpperCase();
 
@@ -4100,6 +4836,15 @@
 
     if (presetsData && presetsData.presets) {
       backgroundPresets = presetsData.presets;
+      if (themeFormPreset) {
+        themeFormPreset.innerHTML = '';
+        backgroundPresets.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = p.category === 'SundayScreens Style' ? `✨ ${p.name}` : p.name;
+          themeFormPreset.appendChild(opt);
+        });
+      }
       renderThemeCards();
     }
   }
@@ -4108,40 +4853,108 @@
     if (!themesPresetContainer) return;
     themesPresetContainer.innerHTML = '';
 
-    // 1. Built-in Procedural Motion Presets
-    backgroundPresets.forEach(preset => {
+    const activeFilter = state.themeFilterCategory || 'all';
+    document.querySelectorAll('[data-theme-filter]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.themeFilter === activeFilter);
+    });
+
+    // 1. Built-in Procedural Motion Presets (SundayScreens Style first when viewing All)
+    const sortedPresets = [
+      ...backgroundPresets.filter(p => p.category === 'SundayScreens Style'),
+      ...backgroundPresets.filter(p => p.category !== 'SundayScreens Style')
+    ];
+
+    sortedPresets.forEach(preset => {
+      const isSS = preset.category === 'SundayScreens Style';
+      if (activeFilter === 'videos' || activeFilter === 'custom') return;
+      if (activeFilter === 'sundayscreens' && !isSS) return;
+      if (activeFilter === 'classic' && isSS) return;
+
       const card = document.createElement('div');
-      card.className = 'theme-card-preview';
+      card.className = 'theme-card-preview' + (isSS ? ' ss-style-card' : '');
+      card.dataset.presetId = preset.id;
+      card.dataset.category = preset.category || 'Built-in';
+      card.title = preset.description || preset.name;
       if (state.backgroundType === 'procedural' && state.backgroundId === preset.id && !state.customBgUrl) {
         card.classList.add('active');
       }
 
       const isCrossPreset = preset.id.includes('cross');
-      card.style.background = `linear-gradient(135deg, ${preset.primaryColor} 0%, ${preset.secondaryColor} 55%, ${preset.accentColor} 100%)`;
+      card.style.background = `radial-gradient(circle at 72% 28%, ${preset.accentColor}44 0%, transparent 55%), linear-gradient(135deg, ${preset.primaryColor} 0%, ${preset.secondaryColor} 58%, ${preset.accentColor} 100%)`;
       card.style.flexDirection = 'column';
       card.style.alignItems = 'flex-start';
       card.style.justifyContent = 'flex-end';
       card.style.gap = '2px';
       card.innerHTML = `
         ${isCrossPreset ? '<span style="position: absolute; top: 4px; right: 8px; font-size: 1.45rem; line-height: 1; color: #fde68a; opacity: 0.85; text-shadow: 0 0 12px rgba(251, 191, 36, 0.9); pointer-events: none;">✝</span>' : ''}
-        <span style="font-weight: 700; line-height: 1.15;">${escapeHtml(preset.name)}</span>
-        <span style="font-size: 0.6rem; opacity: 0.8; text-transform: uppercase; letter-spacing: 0.04em; color: #fde68a;">${escapeHtml(preset.category || 'Built-in')}</span>
+        <span style="font-weight: 700; line-height: 1.15; z-index: 2;">${escapeHtml(preset.name)}</span>
+        <span style="font-size: 0.58rem; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.04em; color: ${isSS ? '#67e8f9' : '#fde68a'}; z-index: 2;">${escapeHtml(preset.category || 'Built-in')}</span>
       `;
 
       card.addEventListener('click', () => {
+        if (state.cameraEnabled || state.cameraMode !== 'none') {
+          state.cameraEnabled = false;
+          state.cameraMode = 'none';
+          state.wirelessCamViewUrl = '';
+          if (typeof syncOperatorPreviewCameraOverlay === 'function') syncOperatorPreviewCameraOverlay();
+        }
         state.backgroundType = 'procedural';
         state.backgroundId = preset.id;
         state.customBgUrl = '';
+        state.youtubeActive = false;
+        state.youtubeVideoId = '';
+        if (activeYoutubeBar) activeYoutubeBar.style.display = 'none';
         document.querySelectorAll('.theme-card-preview').forEach(c => c.classList.remove('active'));
         card.classList.add('active');
         broadcastDisplayState();
+        triggerAutoSave();
       });
 
       themesPresetContainer.appendChild(card);
     });
 
-    // 2. Custom User Themes
-    customThemes.forEach((theme, index) => {
+    // 2. Imported Worship Video Loops (.mp4/.webm/.mov from Media Library)
+    if (activeFilter === 'all' || activeFilter === 'videos') {
+      const videoLoops = mediaLibrary.filter(m => m.type !== 'youtube' && !m.videoId && (m.type === 'video' || isVideoFile(m.url || m.title || '')));
+      videoLoops.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'theme-card-preview';
+        card.dataset.mediaId = item.id;
+        card.title = `Worship Video Loop: ${item.title}`;
+        card.style.flexDirection = 'column';
+        card.style.alignItems = 'flex-start';
+        card.style.justifyContent = 'flex-end';
+        card.style.gap = '2px';
+        card.style.background = '#090d16';
+        if (state.backgroundType === 'video' && state.customBgUrl === item.url) {
+          card.classList.add('active');
+        }
+        const vidUrl = formatLocalMediaUrl(item.url);
+        card.innerHTML = `
+          <video class="theme-card-video-el" src="${vidUrl}#t=0.5" muted playsinline preload="metadata"></video>
+          <span class="theme-card-video-badge">VIDEO LOOP</span>
+          <span style="font-weight: 700; line-height: 1.15; z-index: 2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(item.title)}</span>
+          <span style="font-size: 0.56rem; color: #34d399; z-index: 2;">Click for Worship BG</span>
+        `;
+        card.addEventListener('click', () => {
+          setMediaAsBackground(item);
+          document.querySelectorAll('.theme-card-preview').forEach(c => c.classList.remove('active'));
+          card.classList.add('active');
+        });
+        themesPresetContainer.appendChild(card);
+      });
+
+      if (activeFilter === 'videos' && videoLoops.length === 0) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'grid-column: 1 / -1; padding: 18px 12px; text-align: center; color: var(--text-dim); font-size: 0.76rem; border: 1px dashed rgba(255,255,255,0.12); border-radius: 10px;';
+        empty.innerHTML = `No local <code>.mp4</code> worship loops imported yet.<br>Click <strong style="color:#22d3ee;">+ Video Loops</strong> or drag &amp; drop downloaded loops from <strong style="color:#fbbf24;">SundayScreens.com</strong> here.`;
+        themesPresetContainer.appendChild(empty);
+      }
+    }
+
+    // 3. Custom User Themes
+    if (activeFilter === 'all' || activeFilter === 'custom') {
+      customThemes.forEach((theme, index) => {
       const card = document.createElement('div');
       card.className = 'theme-card-preview';
       if (state.customBgUrl === theme.customBgUrl && state.backgroundId === theme.bgId) {
@@ -4196,6 +5009,7 @@
 
       themesPresetContainer.appendChild(card);
     });
+    }
   }
 
   const renderThemeCards = renderThemesPresetGrid;
@@ -4419,6 +5233,7 @@
                 mediaLibrary = mediaLibrary.filter(m => m.id !== item.id);
                 saveStoredLibrary();
                 renderMediaGallery(mediaSearchInput ? mediaSearchInput.value : '');
+                renderThemesPresetGrid();
                 showToast(`Removed "${item.title}"`, 'info');
               }
             });
@@ -4657,20 +5472,43 @@
   }
 
   function setMediaAsBackground(item) {
+    if (!item || !item.url) return;
     const isVideo = isVideoFile(item.url || item.title || item.type) || item.type === 'video';
+    if (state.cameraEnabled || state.cameraMode !== 'none') {
+      state.cameraMode = 'none';
+      state.cameraEnabled = false;
+      state.wirelessCamViewUrl = '';
+      setMonitorWcamIframe(liveWcamIframe, '');
+      setMonitorVideoStream(liveVideoStream, null);
+      if (labelCameraStatus) labelCameraStatus.textContent = 'Camera: Standby';
+      if (typeof syncOperatorPreviewCameraOverlay === 'function') syncOperatorPreviewCameraOverlay();
+    }
     state.youtubeActive = false;
     state.youtubeVideoId = '';
     if (activeYoutubeBar) activeYoutubeBar.style.display = 'none';
     state.backgroundType = isVideo ? 'video' : 'image';
     state.customBgUrl = item.url;
+    state.clearText = false;
+    state.themeOnly = false;
+    if (btnFastClear) btnFastClear.classList.remove('active-clear');
+    if (btnFastTheme) btnFastTheme.classList.remove('active-theme');
+
     if (isVideo) {
+      state.videoLoop = true;
+      state.videoMuted = true;
       state.videoPaused = false;
       state.videoIsStandalone = false;
-      state.videoTitle = item.title || 'Video Background';
+      state.videoTitle = item.title || 'Worship Video Loop';
       if (typeof state.videoVolume !== 'number') state.videoVolume = 1.0;
+      if (typeof state.videoPlaybackRate !== 'number') state.videoPlaybackRate = 1.0;
+      if (typeof state.videoBgScrimOpacity !== 'number') state.videoBgScrimOpacity = 0.42;
     }
     broadcastDisplayState();
     triggerAutoSave();
+    if (isVideo) {
+      renderThemesPresetGrid();
+      showToast(`🎬 Worship Video BG: "${item.title || 'Video Loop'}" (Muted Loop)`, 'success');
+    }
   }
 
   function stopLocalVideoMedia() {
@@ -4682,6 +5520,7 @@
     }
     const activeVideoBar = document.getElementById('active-video-bar');
     if (activeVideoBar) activeVideoBar.style.display = 'none';
+    renderThemesPresetGrid();
     broadcastDisplayState();
     triggerAutoSave();
   }
@@ -5187,6 +6026,141 @@
         stopLocalVideoMedia();
       });
     }
+
+    const videoSpeedSelect = document.getElementById('video-speed-select');
+    if (videoSpeedSelect) {
+      videoSpeedSelect.addEventListener('change', (e) => {
+        state.videoPlaybackRate = Math.max(0.25, Math.min(2.0, parseFloat(e.target.value) || 1.0));
+        broadcastDisplayState();
+        triggerAutoSave();
+      });
+    }
+
+    const videoScrimSlider = document.getElementById('video-scrim-slider');
+    const badgeVideoScrim = document.getElementById('badge-video-scrim');
+    if (videoScrimSlider) {
+      videoScrimSlider.addEventListener('input', (e) => {
+        const pct = Math.max(0, Math.min(85, parseInt(e.target.value, 10) || 0));
+        state.videoBgScrimOpacity = pct / 100;
+        if (badgeVideoScrim) badgeVideoScrim.textContent = `${pct}%`;
+        broadcastDisplayState();
+        triggerAutoSave();
+      });
+    }
+
+    const btnVideoLyricsMode = document.getElementById('btn-video-lyrics-mode');
+    if (btnVideoLyricsMode) {
+      btnVideoLyricsMode.addEventListener('click', () => {
+        const currentlyCleared = !!(state.clearText || state.themeOnly);
+        state.clearText = !currentlyCleared;
+        state.themeOnly = !currentlyCleared;
+        if (btnFastClear) btnFastClear.classList.toggle('active-clear', state.clearText);
+        if (btnFastTheme) btnFastTheme.classList.toggle('active-theme', state.themeOnly);
+        broadcastDisplayState();
+      });
+    }
+
+    function importMediaPathsToLibrary(filePaths, autoUseFirstVideoAsBg = false) {
+      if (!Array.isArray(filePaths) || filePaths.length === 0) return 0;
+      let addedCount = 0;
+      let firstVideoItem = null;
+      filePaths.forEach((selectedPath) => {
+        if (!selectedPath) return;
+        const isVid = isVideoFile(selectedPath);
+        const isImg = isImageFile(selectedPath);
+        if (!isVid && !isImg) return;
+        const cleanTitle = (selectedPath.split(/[\\/]/).pop() || 'Media').replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
+        let existing = mediaLibrary.find(m => m.url === selectedPath);
+        if (!existing) {
+          existing = {
+            id: `media-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            title: cleanTitle || (isVid ? 'Worship Loop' : 'Church Image'),
+            type: isVid ? 'video' : 'image',
+            url: selectedPath
+          };
+          mediaLibrary.unshift(existing);
+          addedCount++;
+        }
+        if (isVid && !firstVideoItem) firstVideoItem = existing;
+      });
+      if (addedCount > 0 || firstVideoItem) {
+        saveStoredLibrary();
+        renderMediaGallery(mediaSearchInput ? mediaSearchInput.value : '');
+        renderThemesPresetGrid();
+      }
+      if (autoUseFirstVideoAsBg && firstVideoItem) {
+        setMediaAsBackground(firstVideoItem);
+      } else if (addedCount > 0) {
+        showToast(`Imported ${addedCount} media file${addedCount > 1 ? 's' : ''} into ZionCast`, 'success');
+      }
+      return addedCount;
+    }
+
+    async function promptBatchWorshipVideoImport(autoUseFirstAsBg = false) {
+      if (!window.zionApi || !window.zionApi.openFileDialog) return;
+      const res = await window.zionApi.openFileDialog({
+        title: 'Select Worship Background Video Loops (MP4, MOV, WebM)',
+        properties: ['openFile', 'multiSelections'],
+        filters: [
+          { name: 'Worship Video Loops (*.mp4, *.mov, *.webm, *.mkv)', extensions: [...ALL_VIDEO_EXTS] },
+          { name: 'All Files (*.*)', extensions: ['*'] }
+        ]
+      });
+      if (res && !res.canceled && Array.isArray(res.filePaths) && res.filePaths.length > 0) {
+        importMediaPathsToLibrary(res.filePaths, autoUseFirstAsBg);
+      }
+    }
+
+    const btnBatchImportVideos = document.getElementById('btn-batch-import-videos');
+    if (btnBatchImportVideos) {
+      btnBatchImportVideos.addEventListener('click', () => promptBatchWorshipVideoImport(false));
+    }
+    const btnThemesImportVideos = document.getElementById('btn-themes-import-videos');
+    if (btnThemesImportVideos) {
+      btnThemesImportVideos.addEventListener('click', () => promptBatchWorshipVideoImport(true));
+    }
+
+    const openSundayScreensFree = () => {
+      const url = 'https://sundayscreens.com/free-worship-backgrounds';
+      if (window.zionApi && window.zionApi.openExternalUrl) {
+        window.zionApi.openExternalUrl(url);
+      } else {
+        window.open(url, '_blank');
+      }
+      showToast('Opened SundayScreens.com — download any .mp4 loop then click "+ Loop Pack" or drop it into ZionCast', 'info');
+    };
+    const btnSundayScreensFree = document.getElementById('btn-sundayscreens-free');
+    if (btnSundayScreensFree) btnSundayScreensFree.addEventListener('click', openSundayScreensFree);
+    const btnThemesSundayScreens = document.getElementById('btn-themes-sundayscreens');
+    if (btnThemesSundayScreens) btnThemesSundayScreens.addEventListener('click', openSundayScreensFree);
+
+    document.querySelectorAll('[data-theme-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.themeFilterCategory = btn.dataset.themeFilter || 'all';
+        renderThemesPresetGrid();
+      });
+    });
+
+    ['tab-media', 'tab-themes'].forEach(tabId => {
+      const pane = document.getElementById(tabId);
+      if (!pane) return;
+      pane.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        pane.classList.add('media-drop-active');
+      });
+      pane.addEventListener('dragleave', (e) => {
+        if (!pane.contains(e.relatedTarget)) pane.classList.remove('media-drop-active');
+      });
+      pane.addEventListener('drop', (e) => {
+        e.preventDefault();
+        pane.classList.remove('media-drop-active');
+        const files = Array.from((e.dataTransfer && e.dataTransfer.files) || []);
+        const paths = files.map(f => f.path).filter(Boolean);
+        if (paths.length > 0) {
+          importMediaPathsToLibrary(paths, tabId === 'tab-themes');
+        }
+      });
+    });
   }
 
   // =========================================================================
@@ -5279,6 +6253,12 @@
     }
     if (btnPushLive) {
       btnPushLive.style.display = isShowingCleanCamInPreview ? 'none' : '';
+    }
+    const prevWatermarkEl = document.getElementById('preview-camera-watermark');
+    if (prevWatermarkEl) {
+      const cfg = normalizeCameraWatermarkConfig(state);
+      const showPrevWatermark = !!(cfg.scope === 'always' || isShowingCleanCamInPreview || (state.cameraEnabled && state.cameraMode !== 'none'));
+      applyCameraWatermarkToEl(prevWatermarkEl, cfg, showPrevWatermark);
     }
   }
 
@@ -5549,7 +6529,7 @@
       if (src.kind === 'vdo') {
         const cardIframe = document.createElement('iframe');
         cardIframe.className = 'camera-card-iframe';
-        cardIframe.src = getVdoViewUrl(src.slot);
+        cardIframe.src = getVdoViewUrl(src.slot, 1200);
         cardIframe.allow = 'camera; microphone; autoplay; fullscreen';
         cardIframe.style.pointerEvents = 'none';
         videoWrap.appendChild(cardIframe);
@@ -8197,6 +9177,9 @@
     if (bibleVersionSelect) {
       bibleVersionSelect.addEventListener('change', async (e) => {
         await loadBibleData(e.target.value);
+        if (bibleResearchActiveQuery) {
+          runBibleTopicResearch(bibleResearchActiveQuery, { limit: bibleResearchLimit, silentPreview: true });
+        }
         triggerAutoSave();
       });
     }
@@ -8209,6 +9192,68 @@
         if (e.key === 'Enter') doBibleLookup();
       });
     }
+
+    // Smart Scripture Research & Topic Search Controls
+    if (btnBibleTopicSearch) {
+      btnBibleTopicSearch.addEventListener('click', () => runBibleTopicResearch());
+    }
+    if (btnBibleTopicClear) {
+      btnBibleTopicClear.addEventListener('click', () => {
+        if (bibleTopicSearch) bibleTopicSearch.value = '';
+        bibleResearchActiveQuery = '';
+        btnBibleTopicClear.style.display = 'none';
+        document.querySelectorAll('.bible-topic-chip').forEach(c => c.classList.remove('active'));
+        doBibleLookup('');
+      });
+    }
+    if (bibleTopicSearch) {
+      bibleTopicSearch.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          if (bibleTopicDebounceTimer) clearTimeout(bibleTopicDebounceTimer);
+          runBibleTopicResearch();
+        } else if (e.key === 'Escape') {
+          bibleTopicSearch.value = '';
+          bibleResearchActiveQuery = '';
+          if (btnBibleTopicClear) btnBibleTopicClear.style.display = 'none';
+          document.querySelectorAll('.bible-topic-chip').forEach(c => c.classList.remove('active'));
+          doBibleLookup('');
+        }
+      });
+      bibleTopicSearch.addEventListener('input', () => {
+        const val = bibleTopicSearch.value.trim();
+        if (btnBibleTopicClear) btnBibleTopicClear.style.display = val.length > 0 ? 'inline-flex' : 'none';
+        if (bibleTopicDebounceTimer) clearTimeout(bibleTopicDebounceTimer);
+        if (val.length === 0) {
+          bibleResearchActiveQuery = '';
+          document.querySelectorAll('.bible-topic-chip').forEach(c => c.classList.remove('active'));
+          doBibleLookup('');
+          return;
+        }
+        if (val.length >= 3) {
+          bibleTopicDebounceTimer = setTimeout(() => {
+            runBibleTopicResearch(val, { limit: 50, silentPreview: true });
+          }, 260);
+        }
+      });
+    }
+    document.querySelectorAll('[data-bible-testament]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        bibleResearchTestament = btn.dataset.bibleTestament || 'all';
+        document.querySelectorAll('[data-bible-testament]').forEach(b => {
+          b.classList.toggle('active', (b.dataset.bibleTestament || 'all') === bibleResearchTestament);
+        });
+        if (bibleResearchActiveQuery) {
+          runBibleTopicResearch(bibleResearchActiveQuery, { limit: bibleResearchLimit, silentPreview: true });
+        }
+      });
+    });
+    document.querySelectorAll('[data-bible-topic]').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const topic = chip.dataset.bibleTopic || '';
+        if (bibleTopicSearch) bibleTopicSearch.value = topic;
+        runBibleTopicResearch(topic, { limit: 50 });
+      });
+    });
 
     // Camera hardware dropdown
     if (cameraDeviceSelect) {

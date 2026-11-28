@@ -208,6 +208,116 @@
       "primaryColor": "#140d04",
       "secondaryColor": "#713f12",
       "accentColor": "#fde047"
+    },
+    {
+      "id": "ss-ember-glow",
+      "name": "Ember Glow Sanctuary",
+      "category": "SundayScreens Style",
+      "description": "Cinematic glowing amber embers, anamorphic warmth streaks, and deep obsidian bokeh for modern worship.",
+      "type": "procedural-canvas",
+      "renderer": "ss-ember-glow",
+      "primaryColor": "#1a0704",
+      "secondaryColor": "#5c1d0c",
+      "accentColor": "#fb923c"
+    },
+    {
+      "id": "ss-light-curtains",
+      "name": "Light Curtains Indigo",
+      "category": "SundayScreens Style",
+      "description": "Vertical volumetric stage light curtains gently waving across royal indigo and violet hues.",
+      "type": "procedural-canvas",
+      "renderer": "ss-light-curtains",
+      "primaryColor": "#0b0820",
+      "secondaryColor": "#312e81",
+      "accentColor": "#a855f7"
+    },
+    {
+      "id": "ss-halo-rings",
+      "name": "Horizon Halo Rings",
+      "category": "SundayScreens Style",
+      "description": "Concentric glowing gold and cyan sacred halo rings expanding smoothly over deep sanctuary midnight.",
+      "type": "procedural-canvas",
+      "renderer": "ss-halo-rings",
+      "primaryColor": "#060e1c",
+      "secondaryColor": "#102a4a",
+      "accentColor": "#fbbf24"
+    },
+    {
+      "id": "ss-starfall",
+      "name": "Starfall Firmament",
+      "category": "SundayScreens Style",
+      "description": "Shimmering falling celestial starlight trails drifting peacefully over deep midnight nebula.",
+      "type": "procedural-canvas",
+      "renderer": "ss-starfall",
+      "primaryColor": "#030512",
+      "secondaryColor": "#141938",
+      "accentColor": "#7dd3fc"
+    },
+    {
+      "id": "ss-rushing-waters",
+      "name": "Rushing Waters Deep",
+      "category": "SundayScreens Style",
+      "description": "Kinetic ocean sapphire ribbons and shimmering caustic light ripples behind worship lyrics.",
+      "type": "procedural-canvas",
+      "renderer": "ss-rushing-waters",
+      "primaryColor": "#011521",
+      "secondaryColor": "#043850",
+      "accentColor": "#22d3ee"
+    },
+    {
+      "id": "ss-sunset-horizon",
+      "name": "Sunset Horizon Dusk",
+      "category": "SundayScreens Style",
+      "description": "Warm burnt amber, magenta dusk, and midnight indigo horizon gradients breathing smoothly.",
+      "type": "procedural-canvas",
+      "renderer": "ss-sunset-horizon",
+      "primaryColor": "#180826",
+      "secondaryColor": "#7e1d52",
+      "accentColor": "#f59e0b"
+    },
+    {
+      "id": "ss-liquid-gold",
+      "name": "Liquid Gold Silk",
+      "category": "SundayScreens Style",
+      "description": "Metallic antique gold silk folds flowing smoothly across deep charcoal velvet.",
+      "type": "procedural-canvas",
+      "renderer": "ss-liquid-gold",
+      "primaryColor": "#0b0803",
+      "secondaryColor": "#3b2407",
+      "accentColor": "#fbbf24"
+    },
+    {
+      "id": "ss-neon-praise",
+      "name": "Neon Praise Pulse",
+      "category": "SundayScreens Style",
+      "description": "Clean contemporary LED-wall cyan and magenta worship horizon glow with subtle bloom.",
+      "type": "procedural-canvas",
+      "renderer": "ss-neon-praise",
+      "primaryColor": "#07091b",
+      "secondaryColor": "#1b1442",
+      "accentColor": "#22d3ee"
+    },
+    {
+      "id": "ss-velvet-smoke",
+      "name": "Velvet Smoke Haze",
+      "category": "SundayScreens Style",
+      "description": "Calm dark atmospheric sanctuary haze plumes tailored for prayer, devotion, and altar calls.",
+      "type": "procedural-canvas",
+      "renderer": "ss-velvet-smoke",
+      "primaryColor": "#06080f",
+      "secondaryColor": "#1e2438",
+      "accentColor": "#94a3b8"
+    },
+    {
+      "id": "ss-alpha-prism",
+      "name": "Alpha & Omega Prism",
+      "category": "SundayScreens Style",
+      "description": "Reverent rotating cathedral prism light facets in warm gold and deep amethyst.",
+      "type": "procedural-canvas",
+      "renderer": "ss-alpha-prism",
+      "primaryColor": "#080614",
+      "secondaryColor": "#28194a",
+      "accentColor": "#eab308"
     }
   ]
 }

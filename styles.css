@@ -5421,3 +5421,783 @@ body.studio-mode .studio-comms-panel {
   background: #ef4444;
   color: #ffffff;
 }
+
+/* =========================================================================
+   CAMERA BROADCAST WATERMARK (TV DISPLAY + CONTROL MONITORS + STUDIO DRAWER)
+   ========================================================================= */
+.display-camera-watermark {
+  position: absolute;
+  z-index: 18;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px 7px 10px;
+  border-radius: 11px;
+  background: linear-gradient(155deg, rgba(10, 14, 22, 0.56), rgba(6, 9, 15, 0.64));
+  backdrop-filter: blur(14px) saturate(130%);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  font-family: var(--wm-font, 'Inter', 'Outfit', 'Segoe UI', system-ui, sans-serif);
+  color: var(--wm-color, rgba(248, 250, 252, 0.94));
+  scale: var(--wm-scale, 1);
+  pointer-events: none;
+  user-select: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.24s ease, visibility 0s linear 0.24s, top 0.22s ease, bottom 0.22s ease, left 0.12s ease;
+}
+
+.display-camera-watermark.visible {
+  visibility: visible;
+  transition: opacity 0.24s ease, visibility 0s linear 0s, top 0.22s ease, bottom 0.22s ease, left 0.12s ease;
+}
+
+.display-camera-watermark.layout-row { flex-direction: row; }
+.display-camera-watermark.layout-row-reverse { flex-direction: row-reverse; padding: 7px 10px 7px 14px; }
+.display-camera-watermark.layout-column { flex-direction: column; text-align: center; gap: 5px; padding: 9px 14px; }
+.display-camera-watermark.layout-column .watermark-text-col { align-items: center; }
+
+.display-camera-watermark.style-clean,
+.display-camera-watermark.image-only {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+.display-camera-watermark.style-light:not(.image-only) {
+  background: linear-gradient(155deg, rgba(248, 250, 252, 0.78), rgba(226, 232, 240, 0.72));
+  border-color: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.display-camera-watermark.style-light .watermark-text,
+.display-camera-watermark.style-light .watermark-subtext {
+  text-shadow: none;
+}
+
+.display-camera-watermark.style-solid:not(.image-only) {
+  background: rgba(6, 9, 15, 0.92);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.display-camera-watermark.style-gold:not(.image-only) {
+  background: linear-gradient(155deg, rgba(14, 16, 22, 0.78), rgba(10, 12, 18, 0.86));
+  border-color: rgba(251, 191, 36, 0.55);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.52), 0 0 18px rgba(245, 158, 11, 0.18);
+}
+
+.display-camera-watermark .watermark-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 7px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+}
+
+.display-camera-watermark.shape-square .watermark-logo { border-radius: 0 !important; }
+.display-camera-watermark.shape-rounded .watermark-logo { border-radius: 7px; }
+.display-camera-watermark.shape-circle .watermark-logo { border-radius: 999px !important; object-fit: cover; }
+
+.display-camera-watermark.image-only .watermark-logo {
+  width: auto;
+  height: auto;
+  max-width: 180px;
+  max-height: 74px;
+  filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.7));
+}
+
+.display-camera-watermark .watermark-text-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+}
+
+.display-camera-watermark .watermark-text {
+  font-family: var(--wm-font, 'Inter', 'Outfit', 'Segoe UI', system-ui, sans-serif);
+  font-size: clamp(15px, 1.38vw, 21px);
+  font-weight: var(--wm-weight, 400);
+  letter-spacing: 0.03em;
+  line-height: 1.15;
+  color: var(--wm-color, rgba(248, 250, 252, 0.94));
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+}
+
+.display-camera-watermark .watermark-subtext {
+  font-family: var(--wm-font, 'Inter', 'Outfit', 'Segoe UI', system-ui, sans-serif);
+  font-size: clamp(9px, 0.78vw, 11.5px);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1.1;
+  color: var(--wm-color, rgba(248, 250, 252, 0.94));
+  opacity: 0.74;
+  white-space: nowrap;
+}
+
+.display-camera-watermark.size-small { padding: 6px 12px 6px 9px; gap: 7px; border-radius: 10px; }
+.display-camera-watermark.size-small .watermark-logo { width: 22px; height: 22px; }
+.display-camera-watermark.size-small .watermark-text { font-size: clamp(13px, 1.1vw, 17px); }
+.display-camera-watermark.size-small.image-only { padding: 0; }
+.display-camera-watermark.size-small.image-only .watermark-logo { width: auto; height: auto; max-width: 130px; max-height: 52px; }
+
+.display-camera-watermark.size-large { padding: 10px 20px 10px 14px; gap: 12px; border-radius: 14px; }
+.display-camera-watermark.size-large .watermark-logo { width: 36px; height: 36px; }
+.display-camera-watermark.size-large .watermark-text { font-size: clamp(20px, 1.9vw, 28px); }
+.display-camera-watermark.size-large.image-only { padding: 0; }
+.display-camera-watermark.size-large.image-only .watermark-logo { width: auto; height: auto; max-width: 240px; max-height: 104px; }
+
+.display-camera-watermark.pos-top-left { top: var(--wm-margin-y, 28px); left: var(--wm-margin-x, 32px); transform-origin: top left; }
+.display-camera-watermark.pos-top-center { top: var(--wm-margin-y, 28px); left: 50%; transform: translateX(-50%); transform-origin: top center; }
+.display-camera-watermark.pos-top-right { top: var(--wm-margin-y, 28px); right: var(--wm-margin-x, 32px); transform-origin: top right; }
+.display-camera-watermark.pos-top-right.clock-offset { top: calc(var(--wm-margin-y, 28px) + 80px); }
+.display-camera-watermark.pos-bottom-left { bottom: var(--wm-margin-y, 30px); left: var(--wm-margin-x, 32px); transform-origin: bottom left; }
+.display-camera-watermark.pos-bottom-center { bottom: var(--wm-margin-y, 30px); left: 50%; transform: translateX(-50%); transform-origin: bottom center; }
+.display-camera-watermark.pos-bottom-right { bottom: var(--wm-margin-y, 30px); right: var(--wm-margin-x, 32px); transform-origin: bottom right; }
+.display-camera-watermark.pos-custom { transform: translate(-50%, -50%); transform-origin: center center; }
+.display-camera-watermark.pos-bottom-left.banner-offset,
+.display-camera-watermark.pos-bottom-center.banner-offset,
+.display-camera-watermark.pos-bottom-right.banner-offset { bottom: calc(var(--wm-margin-y, 30px) + 54px); }
+
+/* Control Desk Monitor & Drawer Mini Watermark */
+.monitor-camera-watermark {
+  position: absolute;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 6px;
+  background: rgba(10, 14, 22, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  font-family: var(--wm-font, 'Inter', 'Outfit', sans-serif);
+  color: var(--wm-color, rgba(248, 250, 252, 0.94));
+  scale: var(--wm-scale, 1);
+  pointer-events: none;
+  user-select: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+}
+
+.monitor-camera-watermark.visible {
+  visibility: visible;
+  transition: opacity 0.2s ease, visibility 0s linear 0s;
+}
+
+.monitor-camera-watermark.layout-row { flex-direction: row; }
+.monitor-camera-watermark.layout-row-reverse { flex-direction: row-reverse; padding: 3px 6px 3px 8px; }
+.monitor-camera-watermark.layout-column { flex-direction: column; text-align: center; gap: 2px; padding: 4px 7px; }
+.monitor-camera-watermark.layout-column .watermark-text-col { align-items: center; }
+
+.monitor-camera-watermark.style-clean,
+.monitor-camera-watermark.image-only {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+.monitor-camera-watermark.style-light:not(.image-only) {
+  background: rgba(241, 245, 249, 0.85);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.monitor-camera-watermark.style-solid:not(.image-only) {
+  background: rgba(6, 9, 15, 0.94);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.monitor-camera-watermark.style-gold:not(.image-only) {
+  background: rgba(12, 15, 22, 0.85);
+  border-color: rgba(251, 191, 36, 0.58);
+}
+
+.monitor-camera-watermark .watermark-logo {
+  width: 13px;
+  height: 13px;
+  object-fit: contain;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.monitor-camera-watermark.shape-square .watermark-logo { border-radius: 0 !important; }
+.monitor-camera-watermark.shape-rounded .watermark-logo { border-radius: 3px; }
+.monitor-camera-watermark.shape-circle .watermark-logo { border-radius: 999px !important; object-fit: cover; }
+
+.monitor-camera-watermark.image-only .watermark-logo {
+  width: auto;
+  height: auto;
+  max-width: 56px;
+  max-height: 24px;
+}
+
+.monitor-camera-watermark .watermark-text-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+}
+
+.monitor-camera-watermark .watermark-text {
+  font-family: var(--wm-font, 'Inter', 'Outfit', sans-serif);
+  font-size: 0.63rem;
+  font-weight: var(--wm-weight, 400);
+  letter-spacing: 0.025em;
+  line-height: 1.15;
+  color: var(--wm-color, rgba(248, 250, 252, 0.94));
+  white-space: nowrap;
+}
+
+.monitor-camera-watermark .watermark-subtext {
+  font-family: var(--wm-font, 'Inter', 'Outfit', sans-serif);
+  font-size: 0.44rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1.1;
+  color: var(--wm-color, rgba(248, 250, 252, 0.94));
+  opacity: 0.72;
+  white-space: nowrap;
+}
+
+.monitor-camera-watermark.pos-top-left { top: var(--wm-margin-y, 8px); left: var(--wm-margin-x, 9px); transform-origin: top left; }
+.monitor-camera-watermark.pos-top-center { top: var(--wm-margin-y, 8px); left: 50%; transform: translateX(-50%); transform-origin: top center; }
+.monitor-camera-watermark.pos-top-right { top: var(--wm-margin-y, 8px); right: var(--wm-margin-x, 9px); transform-origin: top right; }
+.monitor-camera-watermark.pos-bottom-left { bottom: var(--wm-margin-y, 8px); left: var(--wm-margin-x, 9px); transform-origin: bottom left; }
+.monitor-camera-watermark.pos-bottom-center { bottom: var(--wm-margin-y, 8px); left: 50%; transform: translateX(-50%); transform-origin: bottom center; }
+.monitor-camera-watermark.pos-bottom-right { bottom: var(--wm-margin-y, 8px); right: var(--wm-margin-x, 9px); transform-origin: bottom right; }
+.monitor-camera-watermark.pos-custom { transform: translate(-50%, -50%); transform-origin: center center; }
+
+#wmark-preview-stage #drawer-camera-watermark {
+  pointer-events: auto;
+  cursor: grab;
+  transition: opacity 0.15s ease;
+}
+
+#wmark-preview-stage.dragging #drawer-camera-watermark {
+  cursor: grabbing;
+}
+
+.wmark-tabs-bar {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.wmark-tab-btn {
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.67rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.14s ease;
+  white-space: nowrap;
+}
+
+.wmark-tab-btn:hover {
+  color: #e2e8f0;
+}
+
+.wmark-tab-btn.active {
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+.wmark-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wmark-two-inputs {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.wmark-field-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.wmark-field-lbl {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+
+.wmark-xy-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 4px 7px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.wmark-xy-pill.active {
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.38);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.wmark-color-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.12s ease;
+}
+
+.wmark-color-swatch:hover {
+  transform: scale(1.14);
+}
+
+/* Toolbar Watermark Status Pill & Studio Customizer Drawer */
+.cam-wmark-tb-badge {
+  font-size: 0.58rem;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  letter-spacing: 0.04em;
+}
+
+.cam-tb-btn.active .cam-wmark-tb-badge {
+  background: rgba(11, 15, 23, 0.14);
+  color: #0b0f17;
+  border-color: rgba(11, 15, 23, 0.25);
+}
+
+.cam-wmark-tb-badge.off {
+  background: rgba(148, 163, 184, 0.14);
+  color: #94a3b8;
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
+.cam-watermark-drawer {
+  align-items: stretch !important;
+}
+
+.wmark-preview-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.wmark-preview-stage {
+  position: relative;
+  width: 196px;
+  height: 110px;
+  border-radius: 9px;
+  background: radial-gradient(circle at 35% 30%, #1c2434 0%, #090d14 75%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wmark-stage-grid-label {
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(148, 163, 184, 0.45);
+  pointer-events: none;
+}
+
+.wmark-status-pill {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.wmark-status-pill.active {
+  color: #34d399;
+}
+
+.wmark-text-input {
+  font-family: inherit !important;
+  font-weight: 600 !important;
+  color: #f8fafc !important;
+}
+
+.wmark-controls-grid {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.wmark-pos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  gap: 4px;
+}
+
+.wmark-pos-pill {
+  font-size: 0.67rem !important;
+  padding: 4px 7px !important;
+  text-align: center;
+}
+
+.wmark-right-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-items: flex-end;
+  flex: 1;
+}
+
+.wmark-opacity-val {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  min-width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.wmark-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Camera Studio Anti-Shake Stabilizer Pill Bar */
+.cam-stabilizer-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 2px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.cam-stabilizer-group.active {
+  border-color: rgba(16, 185, 129, 0.45);
+  background: rgba(6, 78, 59, 0.24);
+}
+
+.cam-stab-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #64748b;
+  flex-shrink: 0;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cam-stab-indicator.active {
+  background: #10b981;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.75);
+}
+
+.cam-stabilizer-label {
+  font-size: 0.67rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  white-space: nowrap;
+}
+
+.cam-stabilizer-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cam-stab-pill {
+  padding: 2px 7px !important;
+  font-size: 0.65rem !important;
+  line-height: 1.25;
+}
+
+.cam-stab-pill.active {
+  background: #10b981 !important;
+  color: #04130d !important;
+  border-color: #34d399 !important;
+  font-weight: 800 !important;
+}
+
+/* Themes Filter Bar & Worship Video Loop Cards */
+.themes-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: rgba(10, 14, 22, 0.9);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.theme-filter-pill {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #94a3b8;
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.14s ease;
+}
+
+.theme-filter-pill:hover {
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.theme-filter-pill.active {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fbbf24;
+}
+
+.theme-card-preview {
+  overflow: hidden;
+}
+
+.theme-card-preview.ss-style-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 75% 22%, rgba(255, 255, 255, 0.18), transparent 55%);
+  pointer-events: none;
+}
+
+.theme-card-video-badge {
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  font-size: 0.54rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(6, 182, 212, 0.25);
+  border: 1px solid rgba(34, 211, 238, 0.5);
+  color: #67e8f9;
+  z-index: 2;
+}
+
+.theme-card-video-el {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.media-drop-active {
+  outline: 2px dashed #22d3ee !important;
+  outline-offset: -4px;
+  background: rgba(6, 182, 212, 0.08) !important;
+}
+
+/* Smart Scripture Research & Topic Search Box */
+.bible-research-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+}
+
+.bible-research-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.bible-research-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #38bdf8;
+  letter-spacing: 0.01em;
+}
+
+.bible-testament-group {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.bible-testament-pill {
+  padding: 2px 7px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.bible-testament-pill:hover {
+  border-color: rgba(56, 189, 248, 0.45);
+  color: var(--text-bright);
+}
+
+.bible-testament-pill.active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.6);
+  color: #7dd3fc;
+}
+
+.bible-research-row {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.bible-research-btn {
+  padding: 6px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #38bdf8;
+  white-space: nowrap;
+}
+
+.bible-research-clear {
+  padding: 5px 8px;
+  font-size: 0.82rem;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+.bible-topic-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.bible-topic-chip {
+  padding: 2px 7px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  background: rgba(245, 158, 11, 0.08);
+  color: #fcd34d;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+
+.bible-topic-chip:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.55);
+  color: #fef3c7;
+}
+
+.bible-topic-chip.active {
+  background: rgba(245, 158, 11, 0.28);
+  border-color: #f59e0b;
+  color: #fff;
+}
+
+.bible-search-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  font-size: 0.74rem;
+  color: var(--text-main);
+}
+
+.bible-search-summary-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.bible-match-pill {
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+.bible-match-pill.exact {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+}
+
+.bible-match-pill.related,
+.bible-match-pill.all-words {
+  background: rgba(56, 189, 248, 0.18);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.42);
+}
+
+.bible-match-pill.topic {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.42);
+}
+
+.bible-match-pill.keyword {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+mark.bible-hit-mark {
+  background: rgba(245, 158, 11, 0.34);
+  color: #fef3c7;
+  border-radius: 3px;
+  padding: 0 2px;
+  font-weight: 700;
+}

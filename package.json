@@ -36,6 +36,9 @@
       "styles.css",
       "renderer.js",
       "display.js",
+      "camera-stabilizer.js",
+      "worship-motion-engine.js",
+      "bible-search-engine.js",
       "remote-server.js",
       "assets/**/*"
     ],

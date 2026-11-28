@@ -50,11 +50,33 @@ let currentDisplayState = {
   videoLoop: true,
   videoVolume: 1.0,
   videoRestartSeq: 0,
+  videoPlaybackRate: 1.0,
+  videoBgScrimOpacity: 0.42,
   videoAudioSinkId: '',
   cameraEnabled: false,
   cameraMode: 'none',
   cameraDeviceId: '',
   cameraOpacity: 0.85,
+  cameraStabilization: 'off',
+  cameraWatermarkEnabled: true,
+  cameraWatermarkMode: 'default',
+  cameraWatermarkText: '',
+  cameraWatermarkSubtext: '',
+  cameraWatermarkImage: '',
+  cameraWatermarkLogoShape: 'rounded',
+  cameraWatermarkLayout: 'row',
+  cameraWatermarkStyle: 'glass',
+  cameraWatermarkPosition: 'bottom-right',
+  cameraWatermarkCustomX: 88,
+  cameraWatermarkCustomY: 88,
+  cameraWatermarkScale: 1.0,
+  cameraWatermarkMargin: 30,
+  cameraWatermarkFont: 'Inter',
+  cameraWatermarkWeight: 400,
+  cameraWatermarkColor: '#f8fafc',
+  cameraWatermarkOpacity: 0.88,
+  cameraWatermarkSize: 'medium',
+  cameraWatermarkScope: 'cameras',
   wirelessCamViewUrl: '',
   bannerText: '',
   bannerActive: false,
@@ -86,7 +108,7 @@ function createControlWindow() {
     }
   });
 
-  controlWindow.loadFile('index.html');
+  controlWindow.loadFile(path.join(__dirname, 'index.html'));
   Menu.setApplicationMenu(null);
 
   controlWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
@@ -191,7 +213,7 @@ function launchDisplayWindow(targetDisplayId = null) {
     }
   });
 
-  displayWindow.loadFile('display.html');
+  displayWindow.loadFile(path.join(__dirname, 'display.html'));
 
   displayWindow.webContents.on('console-message', (event, level, message, line) => {
     console.log(`[Display Console L${line}] ${message}`);

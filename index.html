@@ -247,8 +247,34 @@
             <select id="bible-verse-select" class="select-custom"></select>
           </div>
           <div class="bible-quick-search-box">
-            <input type="text" id="bible-quick-search" class="input-search" placeholder="Quick e.g. 'John 3:16', 'Psalm 23', or 'Rom 8:28 rsv'">
+            <input type="text" id="bible-quick-search" class="input-search" placeholder="Reference e.g. 'John 3:16', 'Psalm 23', or 'Rom 8:28 rsv'">
             <button id="btn-bible-lookup" class="btn-primary" style="padding: 6px 12px; font-size: 0.78rem;">Lookup</button>
+          </div>
+          <!-- Smart Scripture Research & Related Verses Search Box -->
+          <div class="bible-research-box">
+            <div class="bible-research-header">
+              <span class="bible-research-label">🔍 Research Related Scriptures</span>
+              <div class="bible-testament-group" id="bible-testament-filter">
+                <button type="button" class="bible-testament-pill active" data-bible-testament="all">All</button>
+                <button type="button" class="bible-testament-pill" data-bible-testament="OT">OT</button>
+                <button type="button" class="bible-testament-pill" data-bible-testament="NT">NT</button>
+              </div>
+            </div>
+            <div class="bible-research-row">
+              <input type="text" id="bible-topic-search" class="input-search" placeholder="Type phrase or topic e.g. 'light of the world', 'healing', 'faith'...">
+              <button type="button" id="btn-bible-topic-search" class="btn-secondary bible-research-btn" title="Find all related Bible scriptures">Search</button>
+              <button type="button" id="btn-bible-topic-clear" class="btn-secondary bible-research-clear" title="Clear research search &amp; return to chapter" style="display: none;">&times;</button>
+            </div>
+            <div class="bible-topic-chips" id="bible-topic-chips">
+              <button type="button" class="bible-topic-chip" data-bible-topic="light of the world">Light of the World</button>
+              <button type="button" class="bible-topic-chip" data-bible-topic="faith">Faith</button>
+              <button type="button" class="bible-topic-chip" data-bible-topic="healing">Healing</button>
+              <button type="button" class="bible-topic-chip" data-bible-topic="peace">Peace</button>
+              <button type="button" class="bible-topic-chip" data-bible-topic="love is patient">Love</button>
+              <button type="button" class="bible-topic-chip" data-bible-topic="strength">Strength</button>
+              <button type="button" class="bible-topic-chip" data-bible-topic="prayer">Prayer</button>
+              <button type="button" class="bible-topic-chip" data-bible-topic="grace">Grace</button>
+            </div>
           </div>
         </div>
         <div id="bible-verses-list" class="library-scroll-list">
@@ -265,6 +291,12 @@
           <button id="btn-upload-video" class="btn-secondary" style="padding: 6px 10px; font-size: 0.75rem;">
             + Upload Video
           </button>
+          <button id="btn-batch-import-videos" class="btn-secondary" style="padding: 6px 10px; font-size: 0.75rem; border-color: rgba(6, 182, 212, 0.45); color: #22d3ee; font-weight: 700;" title="Select one or multiple .mp4/.webm/.mov worship loops to import at once">
+            📥 + Loop Pack
+          </button>
+          <button id="btn-sundayscreens-free" class="btn-secondary" style="padding: 6px 10px; font-size: 0.75rem; border-color: rgba(245, 158, 11, 0.45); color: #fbbf24; font-weight: 700;" title="Open SundayScreens.com Free Worship Backgrounds in your browser to download .mp4 loops">
+            ✨ SundayScreens
+          </button>
           <button id="btn-open-youtube-modal" class="btn-secondary" style="padding: 6px 10px; font-size: 0.75rem; border-color: rgba(239, 68, 68, 0.45); color: #f87171; font-weight: 700;">
             🔴 + YouTube Live
           </button>
@@ -272,8 +304,9 @@
             + Announcement Slide
           </button>
         </div>
-        <div class="search-bar-wrap" style="padding: 6px 10px;">
+        <div class="search-bar-wrap" style="padding: 6px 10px; display: flex; flex-direction: column; gap: 4px;">
           <input type="text" id="media-search-input" class="input-search" placeholder="Filter media files & announcements...">
+          <div style="font-size: 0.65rem; color: var(--text-dim); padding-left: 2px;">Tip: Drop downloaded <strong style="color: #22d3ee;">.mp4 / .mov</strong> worship loops from SundayScreens here anytime.</div>
         </div>
         <div id="media-gallery-grid" class="media-gallery-grid">
           <!-- Media items rendered dynamically -->
@@ -282,11 +315,22 @@
 
       <!-- TAB 4: THEMES & STYLES (CUSTOM THEME CREATOR) -->
       <div id="tab-themes" class="tab-pane-content">
-        <div style="padding: 10px 12px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size: 0.82rem; font-weight: 700; color: var(--text-bright);">Sanctuary Themes</span>
-          <button id="btn-open-theme-builder" class="btn-primary" style="padding: 5px 10px; font-size: 0.74rem;">
-            + Create Custom Theme
-          </button>
+        <div style="padding: 9px 10px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap;">
+          <span style="font-size: 0.8rem; font-weight: 700; color: var(--text-bright);">Worship Themes</span>
+          <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+            <button id="btn-themes-import-videos" class="btn-secondary" type="button" style="padding: 4px 8px; font-size: 0.7rem; border-color: rgba(6, 182, 212, 0.45); color: #22d3ee; font-weight: 700;" title="Import MP4/MOV/WebM worship video loops from your computer">+ Video Loops</button>
+            <button id="btn-themes-sundayscreens" class="btn-secondary" type="button" style="padding: 4px 8px; font-size: 0.7rem; border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; font-weight: 700;" title="Browse & download free worship loops from SundayScreens.com">✨ SundayScreens</button>
+            <button id="btn-open-theme-builder" class="btn-primary" style="padding: 4px 9px; font-size: 0.7rem;">
+              + Custom
+            </button>
+          </div>
+        </div>
+        <div id="themes-filter-bar" class="themes-filter-bar">
+          <button class="theme-filter-pill active" type="button" data-theme-filter="all">All</button>
+          <button class="theme-filter-pill" type="button" data-theme-filter="sundayscreens">SundayScreens Style</button>
+          <button class="theme-filter-pill" type="button" data-theme-filter="videos">Video Loops</button>
+          <button class="theme-filter-pill" type="button" data-theme-filter="classic">Classic</button>
+          <button class="theme-filter-pill" type="button" data-theme-filter="custom">Custom</button>
         </div>
         <div class="library-scroll-list" style="padding: 10px;">
           <div class="themes-grid" id="themes-preset-container">
@@ -352,6 +396,13 @@
               <div id="preview-text-subtitle" class="monitor-slide-subtitle"></div>
               <div id="preview-text-body" class="monitor-slide-body">Select any song, scripture, or announcement to preview</div>
             </div>
+            <div id="preview-camera-watermark" class="monitor-camera-watermark pos-bottom-right size-medium style-glass layout-row shape-rounded" aria-hidden="true">
+              <img class="watermark-logo" src="assets/icon.png" alt="">
+              <div class="watermark-text-col">
+                <span class="watermark-text">ZionCast</span>
+                <span class="watermark-subtext" style="display: none;"></span>
+              </div>
+            </div>
             <button id="btn-push-live" class="btn-go-live-floating" title="Push this preview directly to Live TV">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
               GO LIVE
@@ -379,6 +430,13 @@
               <div id="live-text-title" class="monitor-slide-title">ZIONCAST BROADCAST</div>
               <div id="live-text-subtitle" class="monitor-slide-subtitle"></div>
               <div id="live-text-body" class="monitor-slide-body">Ready for Service</div>
+            </div>
+            <div id="live-camera-watermark" class="monitor-camera-watermark pos-bottom-right size-medium style-glass layout-row shape-rounded" aria-hidden="true">
+              <img class="watermark-logo" src="assets/icon.png" alt="">
+              <div class="watermark-text-col">
+                <span class="watermark-text">ZionCast</span>
+                <span class="watermark-subtext" style="display: none;"></span>
+              </div>
             </div>
             <div id="live-dimmer-overlay" class="monitor-dimmer-curtain"></div>
             <div id="live-banner-overlay" class="monitor-banner-overlay"></div>
@@ -429,6 +487,18 @@
           <button id="btn-toggle-video-loop" class="btn-fast" style="padding: 3px 8px; font-size: 0.7rem; background: var(--bg-card); color: var(--accent-cyan);" title="Toggle Video Loop">
             🔁 Loop: ON
           </button>
+          <select id="video-speed-select" class="select-custom" style="padding: 2px 6px; font-size: 0.69rem; max-width: 90px;" title="Worship Loop Playback Speed">
+            <option value="0.5">0.5× Slow</option>
+            <option value="0.75">0.75× Calm</option>
+            <option value="1" selected>1.0× Speed</option>
+            <option value="1.25">1.25× Fast</option>
+          </select>
+          <span style="font-size: 0.66rem; color: var(--text-dim); margin-left: 2px;" title="Darken bright worship videos behind white lyrics">Scrim</span>
+          <input type="range" id="video-scrim-slider" class="range-slider" style="width: 58px;" min="0" max="85" value="42" step="5" title="Worship Video Contrast Scrim (0% - 85%)">
+          <span id="badge-video-scrim" class="badge-value" style="min-width: 30px;">42%</span>
+          <button id="btn-video-lyrics-mode" class="btn-fast" style="padding: 3px 8px; font-size: 0.7rem; background: rgba(16, 185, 129, 0.16); border-color: rgba(16, 185, 129, 0.45); color: #34d399; font-weight: 700;" title="Toggle between Worship Background under lyrics vs Fullscreen standalone video">
+            🎵 Under Lyrics
+          </button>
           <select id="select-video-audio-sink" class="select-custom" style="padding: 2px 6px; font-size: 0.69rem; max-width: 145px;" title="Route Video Sound to TV (HDMI) or Church Mixer while keeping Google Meet in Headset">
             <option value="">🔊 Audio: Default</option>
           </select>
@@ -457,6 +527,21 @@
             <button id="btn-wcam-toggle" class="btn-fast btn-wcam-toggle cam-tb-btn" title="Connect iPhone/Android phone cameras over Wi-Fi without Iriun or Camo">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
               Phone Cam Setup
+            </button>
+            <div id="cam-stabilizer-group" class="cam-stabilizer-group" title="Software camera anti-shake stabilizer (Off / Light / Medium / Strong) synced to TV">
+              <span id="cam-stab-indicator" class="cam-stab-indicator" aria-hidden="true"></span>
+              <span class="cam-stabilizer-label">Anti-Shake</span>
+              <div class="cam-stabilizer-pills" role="group" aria-label="Camera Anti-Shake">
+                <button class="wcam-slot-pill cam-stab-pill active" type="button" data-cam-stab="off">Off</button>
+                <button class="wcam-slot-pill cam-stab-pill" type="button" data-cam-stab="light">Light</button>
+                <button class="wcam-slot-pill cam-stab-pill" type="button" data-cam-stab="medium">Med</button>
+                <button class="wcam-slot-pill cam-stab-pill" type="button" data-cam-stab="strong">Strong</button>
+              </div>
+            </div>
+            <button id="btn-cam-watermark-toggle" class="btn-fast cam-tb-btn" type="button" title="Customize, reposition, or clear the broadcast camera watermark">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              <span>Watermark</span>
+              <span id="cam-wmark-tb-badge" class="cam-wmark-tb-badge">ON</span>
             </button>
             <button id="btn-cam-view-refresh" class="btn-fast cam-tb-btn" title="Rescan for Connected Cameras">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
@@ -528,6 +613,160 @@
                 <button id="btn-wcam-fix-firewall" class="btn-fast cam-mini-btn danger" type="button" style="display: none;">Unblock Port 3443</button>
                 <button id="btn-wcam-copy-cert" class="btn-fast cam-mini-btn" type="button">Copy Cert URL</button>
                 <button id="btn-wcam-open-cert" class="btn-fast cam-mini-btn" type="button">Cert Link</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Collapsible Camera Broadcast Watermark Studio Drawer -->
+        <div id="cam-watermark-drawer" class="wcam-setup-drawer cam-watermark-drawer" style="display: none;">
+          <div class="wmark-preview-col">
+            <div id="wmark-preview-stage" class="wmark-preview-stage" title="Drag the watermark badge anywhere to set a custom position">
+              <span class="wmark-stage-grid-label">DRAG TO POSITION</span>
+              <div id="drawer-camera-watermark" class="monitor-camera-watermark pos-bottom-right size-medium style-glass layout-row shape-rounded visible" aria-hidden="true">
+                <img class="watermark-logo" src="assets/icon.png" alt="">
+                <div class="watermark-text-col">
+                  <span class="watermark-text">ZionCast</span>
+                  <span class="watermark-subtext" style="display: none;"></span>
+                </div>
+              </div>
+            </div>
+            <div id="wmark-status-pill" class="wmark-status-pill active">ZionCast Default • Bottom Right</div>
+            <div class="wmark-quick-actions" style="width: 100%; justify-content: center;">
+              <button id="btn-wmark-clear" class="btn-fast cam-mini-btn danger" type="button" title="Clear watermark from live camera output">Clear</button>
+              <button id="btn-wmark-reset" class="btn-fast cam-mini-btn" type="button" title="Restore default ZionCast watermark at Bottom-Right">Reset Default</button>
+            </div>
+          </div>
+
+          <div class="wcam-config-panel">
+            <div class="wcam-header-row">
+              <div class="wcam-title-wrap">
+                <span class="wcam-title">Camera Broadcast Watermark</span>
+                <div class="wmark-tabs-bar" role="tablist">
+                  <button class="wmark-tab-btn active" type="button" data-wmark-tab="content">Content &amp; Image</button>
+                  <button class="wmark-tab-btn" type="button" data-wmark-tab="position">Position &amp; Size</button>
+                  <button class="wmark-tab-btn" type="button" data-wmark-tab="style">Style &amp; Font</button>
+                </div>
+              </div>
+              <div class="wcam-mode-pills">
+                <button id="btn-wmark-mode-default" class="wcam-mode-pill active" type="button" data-wmark-mode="default" title="Use the default ZionCast logo watermark">ZionCast</button>
+                <button id="btn-wmark-mode-custom" class="wcam-mode-pill" type="button" data-wmark-mode="custom" title="Customize text, image, style, and position">Custom</button>
+                <button id="btn-wmark-mode-off" class="wcam-mode-pill" type="button" data-wmark-mode="off" title="Hide / clear watermark completely">Off</button>
+              </div>
+            </div>
+
+            <!-- TAB 1: Content & Image -->
+            <div id="wmark-panel-content" class="wmark-tab-panel active">
+              <div class="wmark-two-inputs">
+                <div class="wmark-field-col">
+                  <span class="wmark-field-lbl">Watermark Text</span>
+                  <input id="wmark-input-text" class="wcam-url-input wmark-text-input" type="text" maxlength="60" placeholder="e.g. Grace Sanctuary Live">
+                </div>
+                <div class="wmark-field-col" style="max-width: 210px;">
+                  <span class="wmark-field-lbl">Subtitle (Optional)</span>
+                  <input id="wmark-input-sub" class="wcam-url-input wmark-text-input" type="text" maxlength="40" placeholder="e.g. SUNDAY SERVICE">
+                </div>
+              </div>
+              <div class="wcam-url-row" style="justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                  <button id="btn-wmark-upload-logo" class="btn-fast cam-mini-btn" type="button" title="Upload a PNG/JPG/SVG image for your watermark">Upload Image</button>
+                  <button id="btn-wmark-clear-logo" class="btn-fast cam-mini-btn danger" type="button" style="display: none;" title="Remove custom watermark image">Remove</button>
+                  <span id="wmark-logo-label" class="wcam-ip-status" style="overflow: hidden; text-overflow: ellipsis;">Default ZionCast Logo</span>
+                </div>
+                <div class="wcam-control-group">
+                  <span class="wcam-lbl">Shape</span>
+                  <div class="wcam-slot-pills">
+                    <button class="wcam-slot-pill" type="button" data-wmark-shape="square">Square</button>
+                    <button class="wcam-slot-pill active" type="button" data-wmark-shape="rounded">Rounded</button>
+                    <button class="wcam-slot-pill" type="button" data-wmark-shape="circle">Circle</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 2: Position, Layout & Size -->
+            <div id="wmark-panel-position" class="wmark-tab-panel" style="display: none;">
+              <div class="wmark-controls-grid">
+                <div class="wcam-control-group" style="align-items: flex-start;">
+                  <span class="wcam-lbl" style="padding-top: 5px;">Position</span>
+                  <div class="wmark-pos-grid">
+                    <button class="wcam-slot-pill wmark-pos-pill" type="button" data-wmark-pos="top-left">↖ Top-L</button>
+                    <button class="wcam-slot-pill wmark-pos-pill" type="button" data-wmark-pos="top-center">⬆ Top-C</button>
+                    <button class="wcam-slot-pill wmark-pos-pill" type="button" data-wmark-pos="top-right">↗ Top-R</button>
+                    <button class="wcam-slot-pill wmark-pos-pill" type="button" data-wmark-pos="bottom-left">↙ Bot-L</button>
+                    <button class="wcam-slot-pill wmark-pos-pill" type="button" data-wmark-pos="bottom-center">⬇ Bot-C</button>
+                    <button class="wcam-slot-pill wmark-pos-pill active" type="button" data-wmark-pos="bottom-right">↘ Bot-R</button>
+                  </div>
+                  <span id="wmark-custom-xy-pill" class="wmark-xy-pill" title="Drag watermark in preview box on left to set free X/Y position">Drag: 88%, 88%</span>
+                </div>
+
+                <div class="wmark-right-opts">
+                  <div class="wcam-control-group">
+                    <span class="wcam-lbl">Layout</span>
+                    <div class="wcam-slot-pills">
+                      <button class="wcam-slot-pill active" type="button" data-wmark-layout="row">Logo Left</button>
+                      <button class="wcam-slot-pill" type="button" data-wmark-layout="row-reverse">Logo Right</button>
+                      <button class="wcam-slot-pill" type="button" data-wmark-layout="column">Stacked</button>
+                    </div>
+                  </div>
+                  <div class="wcam-control-group">
+                    <span class="wcam-lbl">Scale</span>
+                    <input id="wmark-scale-slider" class="range-slider" type="range" min="60" max="180" step="5" value="100" style="width: 82px;">
+                    <span id="wmark-scale-val" class="wmark-opacity-val">100%</span>
+                    <span class="wcam-lbl" style="margin-left: 6px;">Margin</span>
+                    <input id="wmark-margin-slider" class="range-slider" type="range" min="10" max="96" step="2" value="30" style="width: 72px;">
+                    <span id="wmark-margin-val" class="wmark-opacity-val">30px</span>
+                  </div>
+                  <div class="wcam-control-group">
+                    <span class="wcam-lbl">Show On</span>
+                    <div class="wcam-slot-pills">
+                      <button class="wcam-slot-pill active" type="button" data-wmark-scope="cameras">Cameras Only</button>
+                      <button class="wcam-slot-pill" type="button" data-wmark-scope="always">Cameras &amp; Slides</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- TAB 3: Frame Style, Font & Color -->
+            <div id="wmark-panel-style" class="wmark-tab-panel" style="display: none;">
+              <div class="wcam-control-group" style="flex-wrap: wrap;">
+                <span class="wcam-lbl">Frame</span>
+                <div class="wcam-slot-pills">
+                  <button class="wcam-slot-pill active" type="button" data-wmark-style="glass">Frosted</button>
+                  <button class="wcam-slot-pill" type="button" data-wmark-style="clean">No Box</button>
+                  <button class="wcam-slot-pill" type="button" data-wmark-style="light">Light Glass</button>
+                  <button class="wcam-slot-pill" type="button" data-wmark-style="solid">Solid Dark</button>
+                  <button class="wcam-slot-pill" type="button" data-wmark-style="gold">Gold Rim</button>
+                </div>
+                <span class="wcam-lbl" style="margin-left: 6px;">Opacity</span>
+                <input id="wmark-opacity-slider" class="range-slider" type="range" min="15" max="100" step="5" value="88" style="width: 82px;">
+                <span id="wmark-opacity-val" class="wmark-opacity-val">88%</span>
+              </div>
+
+              <div class="wcam-control-group" style="flex-wrap: wrap;">
+                <span class="wcam-lbl">Font</span>
+                <select id="wmark-font-select" class="wcam-ip-select" style="max-width: 150px;">
+                  <option value="Inter" selected>Inter (Clean)</option>
+                  <option value="Outfit">Outfit (Modern)</option>
+                  <option value="Cinzel">Cinzel (Sacred)</option>
+                  <option value="Playfair Display">Playfair (Serif)</option>
+                  <option value="monospace">Broadcast Mono</option>
+                </select>
+                <div class="wcam-slot-pills">
+                  <button class="wcam-slot-pill" type="button" data-wmark-weight="300">Light</button>
+                  <button class="wcam-slot-pill active" type="button" data-wmark-weight="400">Regular</button>
+                  <button class="wcam-slot-pill" type="button" data-wmark-weight="500">Medium</button>
+                  <button class="wcam-slot-pill" type="button" data-wmark-weight="700">Bold</button>
+                </div>
+                <div style="display: flex; align-items: center; gap: 5px; margin-left: auto;">
+                  <span class="wcam-lbl">Color</span>
+                  <input id="wmark-color-input" class="color-input" type="color" value="#f8fafc" style="width: 24px; height: 22px;">
+                  <button class="wmark-color-swatch" type="button" data-wmark-color="#f8fafc" style="background: #f8fafc;" title="White"></button>
+                  <button class="wmark-color-swatch" type="button" data-wmark-color="#fbbf24" style="background: #fbbf24;" title="Gold"></button>
+                  <button class="wmark-color-swatch" type="button" data-wmark-color="#38bdf8" style="background: #38bdf8;" title="Sky"></button>
+                  <button class="wmark-color-swatch" type="button" data-wmark-color="#34d399" style="background: #34d399;" title="Emerald"></button>
+                </div>
               </div>
             </div>
           </div>
@@ -1139,7 +1378,7 @@ My chains are gone, I've been set free..."></textarea>
       <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px;">
         <div id="update-modal-banner" style="padding: 12px 14px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-sm);">
           <div style="font-weight: 800; font-size: 0.95rem; color: var(--accent-gold);" id="update-modal-title">Checking for updates...</div>
-          <div style="font-size: 0.78rem; color: var(--text-dim); margin-top: 4px;" id="update-modal-subtitle">Current installed version: v1.3.1</div>
+          <div style="font-size: 0.78rem; color: var(--text-dim); margin-top: 4px;" id="update-modal-subtitle">Current installed version: v1.7.3</div>
         </div>
         <div id="update-modal-notes-wrap" style="display: none;">
           <label class="form-label" style="margin-bottom: 4px;">What's New in this Release:</label>
@@ -1565,6 +1804,9 @@ My chains are gone, I've been set free..."></textarea>
   <!-- Non-Blocking Toast Container -->
   <div id="zc-toast-container" class="zc-toast-container"></div>
 
+<script src="camera-stabilizer.js"></script>
+<script src="worship-motion-engine.js"></script>
+<script src="bible-search-engine.js"></script>
 <script src="renderer.js"></script>
 </body>
 </html>

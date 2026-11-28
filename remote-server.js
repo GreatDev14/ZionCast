@@ -13,6 +13,7 @@ const dgram = require('dgram');
 const { exec } = require('child_process');
 const QRCode = require('qrcode');
 const forge = require('node-forge');
+const ZionBibleSearch = require('./bible-search-engine');
 
 class RemoteServer {
   constructor() {
@@ -930,11 +931,23 @@ class RemoteServer {
       return;
     }
 
-    // 5d. Bible Lookup API for Mobile Phone Remote (Supports single verse, verse ranges & chapters)
+    // 5d. Bible Lookup API for Mobile Phone Remote (Supports single verse, verse ranges, chapters & related phrases)
     if (url.pathname === '/api/bible/lookup' && req.method === 'GET') {
       const q = url.searchParams.get('q') || url.searchParams.get('query') || '';
       const ver = url.searchParams.get('v') || url.searchParams.get('version') || 'kjv';
       const result = this.lookupBible(q, ver);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(result));
+      return;
+    }
+
+    // 5e. Smart Scripture Research & Related Verse Search API
+    if (url.pathname === '/api/bible/search' && req.method === 'GET') {
+      const q = url.searchParams.get('q') || url.searchParams.get('query') || '';
+      const ver = url.searchParams.get('v') || url.searchParams.get('version') || 'kjv';
+      const testament = url.searchParams.get('testament') || 'all';
+      const limit = parseInt(url.searchParams.get('limit') || '50', 10) || 50;
+      const result = this.searchBibleScriptures(q, ver, { testament, limit });
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(result));
       return;
@@ -3131,6 +3144,39 @@ renderCamerasUI(state);
     return null;
   }
 
+  searchBibleScriptures(query, version = 'kjv', options = {}) {
+    const qClean = String(query || '').trim();
+    if (qClean.length < 2) {
+      return { success: false, error: 'Please enter at least 2 characters to search scriptures' };
+    }
+    const verMatch = qClean.match(/\b(kjv|rsv|gnt)\b/i);
+    let targetVer = String(version || 'kjv').toLowerCase();
+    let finalQuery = qClean;
+    if (verMatch) {
+      targetVer = verMatch[1].toLowerCase();
+      finalQuery = qClean.replace(/\b(kjv|rsv|gnt)\b/gi, '').trim();
+    }
+    const bible = this.getBibleData(targetVer) || this.getBibleData('kjv');
+    if (!bible || !bible.books) {
+      return { success: false, error: 'Bible version not loaded' };
+    }
+    const versionAbbr = bible.abbreviation || targetVer.toUpperCase();
+    const res = ZionBibleSearch.search(bible, finalQuery, {
+      testament: options.testament || 'all',
+      limit: options.limit || 50
+    });
+    return {
+      success: true,
+      query: res.query,
+      version: targetVer,
+      versionAbbr,
+      normalizedTerms: res.normalizedTerms,
+      relatedTopics: res.relatedTopics,
+      totalFound: res.totalFound,
+      results: res.results
+    };
+  }
+
   lookupBible(query, version = 'kjv') {
     if (!query || typeof query !== 'string') return { success: false, error: 'Query required' };
     const bData = this.getBibleData(version);
@@ -3148,47 +3194,81 @@ renderCamerasUI(state);
     const versionAbbr = bible.abbreviation || targetVer.toUpperCase();
 
     // Parse e.g. "John 3:16", "Psalm 23:1-6", "1 Cor 13:4-8", "Song of Solomon 2:1", "Psalm 23"
-    const match = queryClean.match(/^([1-3]?\s*[a-zA-Z]+(?:\s+of\s+[a-zA-Z]+)?)\s*(\d+)?(?:\s*:\s*(\d+)(?:\s*-\s*(\d+))?)?/i);
-    if (!match) return { success: false, error: 'Could not parse reference (try e.g. John 3:16 or Psalm 23:1-6)' };
+    const match = queryClean.match(/^([1-3]?\s*[a-zA-Z]+(?:\s+of\s+[a-zA-Z]+)?)\s*(\d+)?(?:\s*:\s*(\d+)(?:\s*-\s*(\d+))?)?$/i);
+    let foundBook = null;
+    if (match) {
+      const rawBook = match[1].trim().toLowerCase().replace(/\s+/g, ' ');
+      const allBooks = Object.keys(bible.books);
 
-    const rawBook = match[1].trim().toLowerCase().replace(/\s+/g, ' ');
-    const allBooks = Object.keys(bible.books);
-
-    let foundBook = allBooks.find(b => b.toLowerCase() === rawBook);
-    if (!foundBook) {
-      foundBook = allBooks.find(b => b.toLowerCase().startsWith(rawBook));
+      foundBook = allBooks.find(b => b.toLowerCase() === rawBook);
+      if (!foundBook) {
+        foundBook = allBooks.find(b => b.toLowerCase().startsWith(rawBook));
+      }
+      if (!foundBook) {
+        const abbrMap = {
+          'gen': 'Genesis', 'exo': 'Exodus', 'lev': 'Leviticus', 'num': 'Numbers', 'deu': 'Deuteronomy', 'deut': 'Deuteronomy',
+          'jos': 'Joshua', 'josh': 'Joshua', 'jdg': 'Judges', 'judg': 'Judges', 'rut': 'Ruth',
+          '1sa': '1 Samuel', '1sam': '1 Samuel', '2sa': '2 Samuel', '2sam': '2 Samuel',
+          '1ki': '1 Kings', '1kgs': '1 Kings', '2ki': '2 Kings', '2kgs': '2 Kings',
+          '1ch': '1 Chronicles', '1chr': '1 Chronicles', '2ch': '2 Chronicles', '2chr': '2 Chronicles',
+          'ezr': 'Ezra', 'neh': 'Nehemiah', 'est': 'Esther', 'esth': 'Esther',
+          'psa': 'Psalms', 'ps': 'Psalms', 'psalms': 'Psalms', 'psalm': 'Psalms',
+          'pro': 'Proverbs', 'prov': 'Proverbs', 'ecc': 'Ecclesiastes', 'eccl': 'Ecclesiastes',
+          'sos': 'Song of Solomon', 'song': 'Song of Solomon',
+          'isa': 'Isaiah', 'jer': 'Jeremiah', 'lam': 'Lamentations',
+          'ezk': 'Ezekiel', 'ezek': 'Ezekiel', 'dan': 'Daniel', 'hos': 'Hosea', 'joe': 'Joel', 'amo': 'Amos',
+          'oba': 'Obadiah', 'jon': 'Jonah', 'mic': 'Micah', 'nah': 'Nahum', 'hab': 'Habakkuk',
+          'zep': 'Zephaniah', 'hag': 'Haggai', 'zec': 'Zechariah', 'mal': 'Malachi',
+          'mat': 'Matthew', 'matt': 'Matthew', 'mt': 'Matthew', 'mrk': 'Mark', 'mk': 'Mark',
+          'luk': 'Luke', 'lk': 'Luke', 'joh': 'John', 'jn': 'John', 'act': 'Acts',
+          'rom': 'Romans', '1co': '1 Corinthians', '1cor': '1 Corinthians', '2co': '2 Corinthians', '2cor': '2 Corinthians',
+          'gal': 'Galatians', 'eph': 'Ephesians', 'php': 'Philippians', 'phil': 'Philippians', 'col': 'Colossians',
+          '1th': '1 Thessalonians', '1thess': '1 Thessalonians', '2th': '2 Thessalonians', '2thess': '2 Thessalonians',
+          '1ti': '1 Timothy', '1tim': '1 Timothy', '2ti': '2 Timothy', '2tim': '2 Timothy',
+          'tit': 'Titus', 'phm': 'Philemon', 'heb': 'Hebrews', 'jas': 'James', 'jam': 'James',
+          '1pe': '1 Peter', '1pet': '1 Peter', '2pe': '2 Peter', '2pet': '2 Peter',
+          '1jo': '1 John', '1jn': '1 John', '2jo': '2 John', '2jn': '2 John', '3jo': '3 John', '3jn': '3 John',
+          'jde': 'Jude', 'rev': 'Revelation'
+        };
+        const mapped = abbrMap[rawBook.replace(/\s+/g, '')];
+        if (mapped) {
+          foundBook = ZionBibleSearch.resolveBookInBible(bible, mapped) || (bible.books[mapped] ? mapped : null);
+        }
+      }
     }
-    if (!foundBook) {
-      const abbrMap = {
-        'gen': 'Genesis', 'exo': 'Exodus', 'lev': 'Leviticus', 'num': 'Numbers', 'deu': 'Deuteronomy', 'deut': 'Deuteronomy',
-        'jos': 'Joshua', 'josh': 'Joshua', 'jdg': 'Judges', 'judg': 'Judges', 'rut': 'Ruth',
-        '1sa': '1 Samuel', '1sam': '1 Samuel', '2sa': '2 Samuel', '2sam': '2 Samuel',
-        '1ki': '1 Kings', '1kgs': '1 Kings', '2ki': '2 Kings', '2kgs': '2 Kings',
-        '1ch': '1 Chronicles', '1chr': '1 Chronicles', '2ch': '2 Chronicles', '2chr': '2 Chronicles',
-        'ezr': 'Ezra', 'neh': 'Nehemiah', 'est': 'Esther', 'esth': 'Esther',
-        'psa': 'Psalms', 'ps': 'Psalms', 'psalms': 'Psalms', 'psalm': 'Psalms',
-        'pro': 'Proverbs', 'prov': 'Proverbs', 'ecc': 'Ecclesiastes', 'eccl': 'Ecclesiastes',
-        'sos': 'Song of Solomon', 'song': 'Song of Solomon',
-        'isa': 'Isaiah', 'jer': 'Jeremiah', 'lam': 'Lamentations',
-        'ezk': 'Ezekiel', 'ezek': 'Ezekiel', 'dan': 'Daniel', 'hos': 'Hosea', 'joe': 'Joel', 'amo': 'Amos',
-        'oba': 'Obadiah', 'jon': 'Jonah', 'mic': 'Micah', 'nah': 'Nahum', 'hab': 'Habakkuk',
-        'zep': 'Zephaniah', 'hag': 'Haggai', 'zec': 'Zechariah', 'mal': 'Malachi',
-        'mat': 'Matthew', 'matt': 'Matthew', 'mt': 'Matthew', 'mrk': 'Mark', 'mk': 'Mark',
-        'luk': 'Luke', 'lk': 'Luke', 'joh': 'John', 'jn': 'John', 'act': 'Acts',
-        'rom': 'Romans', '1co': '1 Corinthians', '1cor': '1 Corinthians', '2co': '2 Corinthians', '2cor': '2 Corinthians',
-        'gal': 'Galatians', 'eph': 'Ephesians', 'php': 'Philippians', 'phil': 'Philippians', 'col': 'Colossians',
-        '1th': '1 Thessalonians', '1thess': '1 Thessalonians', '2th': '2 Thessalonians', '2thess': '2 Thessalonians',
-        '1ti': '1 Timothy', '1tim': '1 Timothy', '2ti': '2 Timothy', '2tim': '2 Timothy',
-        'tit': 'Titus', 'phm': 'Philemon', 'heb': 'Hebrews', 'jas': 'James', 'jam': 'James',
-        '1pe': '1 Peter', '1pet': '1 Peter', '2pe': '2 Peter', '2pet': '2 Peter',
-        '1jo': '1 John', '1jn': '1 John', '2jo': '2 John', '2jn': '2 John', '3jo': '3 John', '3jn': '3 John',
-        'jde': 'Jude', 'rev': 'Revelation'
-      };
-      const mapped = abbrMap[rawBook.replace(/\s+/g, '')];
-      if (mapped && bible.books[mapped]) foundBook = mapped;
-    }
 
-    if (!foundBook) return { success: false, error: 'Book "' + match[1].trim() + '" not found' };
+    if (!foundBook) {
+      // Fallback: smart related-scripture phrase/topic search (e.g. "light of the world")
+      const searchRes = this.searchBibleScriptures(queryClean, targetVer, { limit: 25 });
+      if (searchRes.success && searchRes.results && searchRes.results.length > 0) {
+        return {
+          success: true,
+          isSearch: true,
+          query: queryClean,
+          version: targetVer,
+          versionAbbr: searchRes.versionAbbr,
+          reference: `Related Scriptures: "${queryClean}" (${searchRes.versionAbbr})`,
+          totalFound: searchRes.totalFound,
+          relatedTopics: searchRes.relatedTopics,
+          verses: searchRes.results.map(r => ({
+            book: r.book,
+            chapter: r.chapter,
+            verse: r.verse,
+            ref: r.ref,
+            text: r.text,
+            matchType: r.matchType
+          })),
+          slides: searchRes.results.map(r => {
+            const lbl = `${r.book} ${r.chapter}:${r.verse} (${searchRes.versionAbbr})`;
+            return {
+              label: lbl,
+              body: `"${r.text}"\n\n— ${lbl}`
+            };
+          })
+        };
+      }
+      return { success: false, error: 'Book "' + match[1].trim() + '" not found and no related scriptures matched' };
+    }
 
     const bookObj = bible.books[foundBook];
     const chNum = match[2] || '1';
@@ -4946,6 +5026,11 @@ renderCamerasUI(state);
                 if (Array.isArray(tCaps.focusMode) && tCaps.focusMode.indexOf('continuous') !== -1) adv.focusMode = 'continuous';
                 if (Array.isArray(tCaps.exposureMode) && tCaps.exposureMode.indexOf('continuous') !== -1) adv.exposureMode = 'continuous';
                 if (Array.isArray(tCaps.whiteBalanceMode) && tCaps.whiteBalanceMode.indexOf('continuous') !== -1) adv.whiteBalanceMode = 'continuous';
+                if (tCaps.videoStabilization === true) adv.videoStabilization = true;
+                if (Array.isArray(tCaps.imageStabilizationMode)) {
+                  if (tCaps.imageStabilizationMode.indexOf('continuous') !== -1) adv.imageStabilizationMode = 'continuous';
+                  else if (tCaps.imageStabilizationMode.indexOf('auto') !== -1) adv.imageStabilizationMode = 'auto';
+                }
                 if (Object.keys(adv).length > 0) {
                   newVideoTrack.applyConstraints({ advanced: [adv] }).catch(function() {});
                 }
