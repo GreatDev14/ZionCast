@@ -9700,7 +9700,7 @@
             }
           }
           if (updateBadgeIcon) updateBadgeIcon.textContent = '🔄';
-          if (updateBadgeText) updateBadgeText.textContent = 'v1.7.3';
+          if (updateBadgeText) updateBadgeText.textContent = 'v1.7.4';
         }
       } catch (err) {
         console.warn('Update check warning:', err);
